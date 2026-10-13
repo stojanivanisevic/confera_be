@@ -3,7 +3,7 @@
 //
 //   node test/support/pdf-cold-start.cjs        (needs `pnpm build:dev`)
 //
-// Used by test/build/pdf-cold-start.spec.ts, the gate of NFR-PERF-03 for a cold start.
+// Used by test/timing/pdf-cold-start.spec.ts, the gate of NFR-PERF-03.
 // It runs in plain Node on purpose: that is what a server is. Inside Jest the PDF library
 // runs in Jest's sandbox, at the same time as the other test files, and a render takes
 // two to ten times as long.

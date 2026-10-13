@@ -1,8 +1,9 @@
-// Jest configuration (ADR-24). Four tiers, each a Jest project:
+// Jest configuration (ADR-24). Five tiers, each a Jest project:
 //
 //   unit          src/**/*.spec.ts, test/architecture,     no build, no Docker
 //                 test/tooling and test/qa
 //   build         test/build                               needs `pnpm build`
+//   timing        test/timing                              needs `pnpm build:dev`; runs alone
 //   integration   test/integration                         needs the Docker database
 //   e2e           test/e2e                                 needs the Docker stack
 //
@@ -41,6 +42,12 @@ module.exports = {
       ...base,
       displayName: 'build',
       testMatch: ['<rootDir>/test/build/**/*.spec.ts'],
+    },
+    {
+      ...base,
+      displayName: 'timing',
+      // Wall-clock gates. A step of its own, so that no other test runs beside them.
+      testMatch: ['<rootDir>/test/timing/**/*.spec.ts'],
     },
     {
       ...base,

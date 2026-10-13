@@ -13,12 +13,13 @@ import { embeddedFontPrograms, linesOf, rawFontNames, readPdf } from './testing/
  * - the fonts are embedded;
  * - a character that no font has stops the render with a message;
  * - a render takes under 5 seconds, the first one of the process included, with the PDF
- *   library and the fonts still to load (NFR-PERF-03). The same is asserted for a fresh
- *   process of plain Node, which is what a server is, by
- *   test/build/pdf-cold-start.spec.ts. Here the clock also measures Jest: the PDF library
- *   runs in Jest's sandbox, at the same time as the other test files. Measured on the
- *   development laptop, a table of 200 rows takes 0.1 s in plain Node, 0.25 s when this
- *   file runs alone and 0.5 to 1.6 s when the whole unit tier runs.
+ *   library and the fonts still to load (NFR-PERF-03). The gate of that criterion is
+ *   test/timing/pdf-cold-start.spec.ts: a fresh process of plain Node, which is what a
+ *   server is, with no other test beside it. Here the clock also measures Jest and the
+ *   machine: the PDF library runs in Jest's sandbox, at the same time as the other test
+ *   files. Measured on the development laptop, a table of 200 rows takes 0.1 s in plain
+ *   Node, 0.25 s when this file runs alone, and 0.5 to 3 s when the whole unit tier runs
+ *   on all processors.
  */
 
 const LIMIT_MS = 5000;

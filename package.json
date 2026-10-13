@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit",
     "test:build": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects build",
+    "test:timing": "node scripts/build.mjs tsconfig.build.dev.json && node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects timing --runInBand",
     "test:int": "node scripts/build.mjs tsconfig.build.json && node scripts/build.mjs tsconfig.build.dev.json && node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects integration --runInBand",
     "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects e2e --runInBand",
     "test:supply-chain": "node scripts/supply-chain-planted.mjs",

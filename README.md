@@ -125,30 +125,31 @@ and 5.
 
 ## 3. Commands
 
-| Command                                 | What it does                                                                                                                                                                            |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `corepack pnpm check`                   | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, supply-chain checks and their planted cases. Green before a change is handed over. |
-| `corepack pnpm test`                    | Unit and architecture tests. No build, no Docker.                                                                                                                                       |
-| `corepack pnpm test:build`              | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                                                      |
-| `corepack pnpm test:int`                | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                                                     |
-| `corepack pnpm test:e2e`                | End-to-end tests: HTTP requests against the real application on PostgreSQL in Docker, as the application role. Needs `stack:up`.                                                        |
-| `corepack pnpm test:supply-chain`       | Plants a fake secret, a vulnerable package and an unlisted build script in a copy under `tmp/` and expects the supply-chain checks to catch each. Part of `check`.                      |
-| `corepack pnpm build`                   | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                                        |
-| `corepack pnpm start`                   | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                                                |
-| `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                            |
-| `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                                              |
-| `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                                                  |
-| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker.                                                                                                                                      |
-| `corepack pnpm stubs`                   | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                             |
-| `corepack pnpm seed:e2e`                | Writes the invented organisations and people of the end-to-end tests into the development database. It refuses to run unless `STAGE` is `local` or `test`.                              |
-| `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                                            |
-| `corepack pnpm db:migrate`              | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                                           |
-| `corepack pnpm db:status`               | Says which migrations are applied.                                                                                                                                                      |
-| `corepack pnpm db:diff`                 | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                        |
-| `corepack pnpm openapi:generate`        | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                          |
-| `corepack pnpm openapi:check`           | Fails when those files differ from the code, or a response property is named like a secret.                                                                                             |
-| `corepack pnpm pdf:sample`              | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                        |
-| `corepack pnpm supply-chain`            | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                             |
+| Command                                 | What it does                                                                                                                                                                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `corepack pnpm check`                   | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, PDF timing, supply-chain checks and their planted cases. Green before a change is handed over. |
+| `corepack pnpm test`                    | Unit and architecture tests. No build, no Docker.                                                                                                                                                   |
+| `corepack pnpm test:build`              | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                                                                  |
+| `corepack pnpm test:timing`             | Makes PDFs in fresh Node processes and expects each kind in under 5 seconds. Builds by itself; run it alone.                                                                                        |
+| `corepack pnpm test:int`                | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                                                                 |
+| `corepack pnpm test:e2e`                | End-to-end tests: HTTP requests against the real application on PostgreSQL in Docker, as the application role. Needs `stack:up`.                                                                    |
+| `corepack pnpm test:supply-chain`       | Plants a fake secret, a vulnerable package and an unlisted build script in a copy under `tmp/` and expects the supply-chain checks to catch each. Part of `check`.                                  |
+| `corepack pnpm build`                   | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                                                    |
+| `corepack pnpm start`                   | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                                                            |
+| `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                                        |
+| `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                                                          |
+| `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                                                              |
+| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker.                                                                                                                                                  |
+| `corepack pnpm stubs`                   | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                         |
+| `corepack pnpm seed:e2e`                | Writes the invented organisations and people of the end-to-end tests into the development database. It refuses to run unless `STAGE` is `local` or `test`.                                          |
+| `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                                                        |
+| `corepack pnpm db:migrate`              | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                                                       |
+| `corepack pnpm db:status`               | Says which migrations are applied.                                                                                                                                                                  |
+| `corepack pnpm db:diff`                 | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                                    |
+| `corepack pnpm openapi:generate`        | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                                      |
+| `corepack pnpm openapi:check`           | Fails when those files differ from the code, or a response property is named like a secret.                                                                                                         |
+| `corepack pnpm pdf:sample`              | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                                    |
+| `corepack pnpm supply-chain`            | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                                         |
 
 ## 4. Configuration, STAGE and INSTANCE
 
@@ -289,6 +290,7 @@ To add one:
 | ------------ | --------------------------------------------------------------------- | -------------------- | --------------- |
 | unit         | `src/**/*.spec.ts`, `test/architecture/`, `test/tooling/`, `test/qa/` | nothing              | `pnpm check`    |
 | build        | `test/build/`                                                         | `dist/`, `dist-dev/` | `pnpm check`    |
+| timing       | `test/timing/`                                                        | builds by itself     | `pnpm check`    |
 | supply chain | `scripts/supply-chain-planted.mjs`                                    | the network          | `pnpm check`    |
 | integration  | `test/integration/`                                                   | PostgreSQL in Docker | `pnpm test:int` |
 | end to end   | `test/e2e/`                                                           | the stack in Docker  | `pnpm test:e2e` |
@@ -301,7 +303,11 @@ To add one:
   of single units (Serbian text and the glyph check in every field of a PDF).
 - **Build:** the built application refuses every bad stage, instance and `DEV_` key;
   no dev-tools code in `dist/`, and no seed or stub in any build; the committed OpenAPI
-  files equal the code; a fresh process makes its first PDF in under 5 seconds.
+  files equal the code.
+- **Timing:** a fresh process of plain Node makes its first PDF, the next ones and a
+  table of 200 rows in under 5 seconds each. It is a step of its own, so no other test
+  runs beside it, and the fastest of three processes counts: other work on the machine
+  can only add time to a measurement.
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),
@@ -397,10 +403,12 @@ Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
   (`data:image/png;base64,…`).
 - The PDF library and the fonts are loaded at the first use, once per process;
   `PdfRenderer.warmUp()` does it ahead of the first document.
-- A document must be made in under 5 seconds, the first one of a process included. That
-  is asserted in the unit tier and, for a fresh process of plain Node, in the build tier
-  (`test/build/pdf-cold-start.spec.ts`). On the development laptop the first document
-  takes about 0.3 s, the next ones under 0.1 s and a table of 200 rows about 0.1 s.
+- A document must be made in under 5 seconds, the first one of a process included. The
+  gate is the timing tier (`test/timing/pdf-cold-start.spec.ts`, section 8): fresh
+  processes of plain Node, which is what a server is. On the development laptop the
+  first document takes about 0.3 s, the next ones under 0.1 s and a table of 200 rows
+  about 0.1 s. The unit tier measures the same inside Jest, where the clock also
+  measures Jest and whatever else the machine is doing (the same table: 0.5 to 3 s).
 
 `corepack pnpm pdf:sample` writes the bilingual sample to look at.
 
@@ -466,6 +474,7 @@ test/architecture    rules that hold for the whole code base
 test/tooling         tests of the test tools (seed:e2e, the stub slot)
 test/qa              probes of single units by the test engineer (PDF fields)
 test/build           tests that start the built application
+test/timing          wall-clock gates, run alone (a PDF from a fresh process)
 test/integration     tests against PostgreSQL in Docker
 test/e2e             end-to-end tests of the API; factories and the seed of invented people
 test/support         helpers of the tests

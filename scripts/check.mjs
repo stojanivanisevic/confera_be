@@ -13,6 +13,8 @@ const steps = [
   ['production build', ['run', 'build']],
   ['development build; OpenAPI files current and schema lint', ['run', 'openapi:check']],
   ['tests of the built application (jest)', ['run', 'test:build']],
+  // Wall-clock time is measured in a step of its own: nothing else runs beside it.
+  ['a PDF in under 5 seconds from a fresh process (NFR-PERF-03)', ['run', 'test:timing']],
   [
     'supply chain (pins, frozen lockfile, audit, secret scan, image digests)',
     ['run', 'supply-chain'],
