@@ -1,127 +1,311 @@
 import { PRIMARY_FONT } from './fonts';
-import { type GlyphCoverage, MissingGlyphError, normaliseText } from './glyph-coverage';
+import type { GlyphCoverage } from './glyph-coverage';
 
 /**
- * Walks a pdfmake document definition and gives every piece of text its font
- * (ADR-16): what Manrope has stays as it is, what only the fallback has is marked with
- * the fallback font, and a character that no font has throws MissingGlyphError.
+ * Prepares a pdfmake document definition for rendering (ADR-16): every piece of text is
+ * checked against the embedded fonts and gets its font, and what cannot be checked is
+ * refused.
  *
- * The renderer runs this on every document, so a layout cannot forget the check.
+ * The renderer runs this on every document, so a layout cannot forget the check, and the
+ * check covers EVERY place where text can enter a document:
  *
- * Only values in a text position are touched: bare strings in the content, `text`, list
- * items, columns, stacks and table cells. Names of styles, colours, alignments, image
- * references and the like are left alone.
+ *   content, header, footer, page background   strings, `text`, lists, columns, stacks,
+ *                                              table cells, the title of a table of contents
+ *   watermark                                  one text in one font
+ *   numbered lists                             the separator after the number
+ *
+ * The walk is an allowlist. It knows the kinds of node that pdfmake 0.3.11 has (a test
+ * compares the list with pdfmake's own source) and the top-level properties of a
+ * definition. A kind or property it does not know is refused with
+ * `UnsupportedPdfFeatureError`, so that a later version of pdfmake cannot open a new door
+ * for unchecked text. Some known ones are refused as well, each with its reason: see
+ * `REFUSED_NODE_KINDS` and `REFUSED_DEFINITION_KEYS`.
+ *
+ * Every text leaf leaves here as `{ text, font }` with its font written out. Nothing a
+ * layout says about fonts (a `font` property, a style) can then draw a character with a
+ * font that lacks it, and a copy that pdfmake makes of a text (a table of contents)
+ * carries the fonts along.
  */
+
+export class UnsupportedPdfFeatureError extends Error {
+  constructor(
+    readonly feature: string,
+    reason: string,
+  ) {
+    super(`The PDF cannot be made: ${feature} is not supported by the PDF renderer. ${reason}`);
+    this.name = 'UnsupportedPdfFeatureError';
+  }
+}
+
+/** The kinds of content node the renderer accepts. The key names the kind, as in pdfmake. */
+export const SUPPORTED_NODE_KINDS = [
+  'text',
+  'stack',
+  'columns',
+  'ul',
+  'ol',
+  'table',
+  'toc',
+  'image',
+  'canvas',
+  'qr',
+  'pageReference',
+] as const;
+
+/** Kinds that pdfmake has and the renderer refuses, each with the reason. */
+export const REFUSED_NODE_KINDS: Readonly<Record<string, string>> = {
+  svg: 'The SVG library reads any file that an <image> element names, outside the access policy of the renderer, and draws text with fonts of its own choice. Use a PNG or JPEG image, or the canvas node for lines and shapes.',
+  section:
+    'A section brings its own header, footer, background and watermark; none is needed yet. Add it to the document walk, with tests, before using it.',
+  attachment: 'A PDF with files inside is not something Confera issues.',
+  textReference:
+    'It copies the text of another node into this one; use the text itself, or pageReference for a page number.',
+};
+
+/** The properties of a document definition the renderer accepts (pdfmake 0.3.11, Printer.js). */
+export const SUPPORTED_DEFINITION_KEYS = [
+  'content',
+  'header',
+  'footer',
+  'background',
+  'watermark',
+  'info',
+  'styles',
+  'defaultStyle',
+  'pageSize',
+  'pageOrientation',
+  'pageMargins',
+  'pageBreakBefore',
+  'images',
+  'language',
+  'compress',
+  'displayTitle',
+  'maxPagesNumber',
+  'subset',
+  'tagged',
+  'version',
+  'userPassword',
+  'ownerPassword',
+  'permissions',
+] as const;
+
+/** Properties of a definition that pdfmake has and the renderer refuses. */
+export const REFUSED_DEFINITION_KEYS: Readonly<Record<string, string>> = {
+  attachments: 'A PDF with files inside is not something Confera issues.',
+  files: 'A PDF with files inside is not something Confera issues.',
+  patterns:
+    'A fill pattern is raw PDF drawing code, which the renderer cannot read. Add it to the document walk, with tests, before using it.',
+};
 
 type Node = unknown;
 type NodeObject = Record<string, unknown>;
 
-const CONTAINERS = ['stack', 'columns', 'ul', 'ol'] as const;
+/** What a character reference beyond the end of Unicode stands for: nothing printable. */
+const NOT_A_CHARACTER = String.fromCodePoint(0xffff);
 
-/**
- * Ligatures are switched off: "fi" is drawn as "f" and "i", not as one joined glyph.
- * With a joined glyph some PDF readers copy and search only its first letter
- * ("digrafima" becomes "digrafma"), and a document about money must read back exactly
- * as it was written, in every reader.
- */
-export const NO_LIGATURES = Object.freeze({ liga: false, clig: false, dlig: false, hlig: false });
+const CONTAINERS = ['stack', 'columns', 'ul', 'ol'] as const;
 
 function isObject(value: unknown): value is NodeObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** A string in a text position: itself when Manrope draws all of it, else a list of runs. */
-function textOf(value: string, coverage: GlyphCoverage): Node {
-  const runs = coverage.split(value);
-  if (runs.every((run) => run.font === PRIMARY_FONT)) {
-    return normaliseText(value);
-  }
-  return runs.map((run) =>
-    run.font === PRIMARY_FONT ? run.text : { text: run.text, font: run.font },
+function isPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function isEmpty(value: unknown): boolean {
+  return (
+    value === null || value === undefined || (isObject(value) && Object.keys(value).length === 0)
   );
 }
 
-/** The value of a `text` property: a string, a list of pieces, or a nested text node. */
-function textValue(value: Node, coverage: GlyphCoverage): Node {
-  if (typeof value === 'string') {
-    return textOf(value, coverage);
+/**
+ * The characters of an SVG image that could be drawn as text: all of its source, and
+ * what its character references (`&#20013;`, `&#x4E2D;`) stand for.
+ */
+function svgCharacters(svg: string): string {
+  const referenced = [...svg.matchAll(/&#(x[0-9a-fA-F]+|[0-9]+);?/g)].map(([, reference = '']) => {
+    const codePoint = reference.startsWith('x')
+      ? Number.parseInt(reference.slice(1), 16)
+      : Number.parseInt(reference, 10);
+    return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : NOT_A_CHARACTER;
+  });
+  // Tabs and line breaks lay the source out; they are not text.
+  return `${svg}${referenced.join('')}`.replace(/[\t\r\n]/g, ' ');
+}
+
+class DocumentWalk {
+  constructor(private readonly coverage: GlyphCoverage) {}
+
+  /** A string in a text position: runs with their fonts written out. */
+  private runs(value: string | number | boolean): NodeObject[] {
+    return this.coverage.split(String(value)).map((run) => ({ text: run.text, font: run.font }));
   }
-  if (Array.isArray(value)) {
-    const pieces: Node[] = [];
-    for (const piece of value as Node[]) {
-      const converted = textValue(piece, coverage);
-      if (typeof piece === 'string' && Array.isArray(converted)) {
-        pieces.push(...(converted as Node[]));
-      } else {
-        pieces.push(converted);
+
+  private refuseKinds(node: NodeObject): void {
+    if (node.svg !== undefined) {
+      // The text inside is checked first, so that a character without a font is reported
+      // as what it is. The image is refused either way.
+      if (typeof node.svg === 'string') {
+        this.coverage.require(svgCharacters(node.svg), 'every');
       }
     }
-    return pieces;
-  }
-  if (isObject(value) && 'text' in value) {
-    return { ...value, text: textValue(value.text, coverage) };
-  }
-  return value;
-}
-
-function contentNode(node: Node, coverage: GlyphCoverage): Node {
-  if (typeof node === 'string') {
-    const converted = textOf(node, coverage);
-    return Array.isArray(converted) ? { text: converted } : converted;
-  }
-  if (Array.isArray(node)) {
-    return node.map((item: Node) => contentNode(item, coverage));
-  }
-  if (!isObject(node)) {
-    return node;
-  }
-  const result: NodeObject = { ...node };
-  if ('text' in result) {
-    result.text = textValue(result.text, coverage);
-  }
-  for (const key of CONTAINERS) {
-    if (Array.isArray(result[key])) {
-      result[key] = (result[key] as Node[]).map((item) => contentNode(item, coverage));
+    for (const [kind, reason] of Object.entries(REFUSED_NODE_KINDS)) {
+      if (node[kind] !== undefined) {
+        throw new UnsupportedPdfFeatureError(`a "${kind}" node`, reason);
+      }
     }
   }
-  if (isObject(result.table) && Array.isArray(result.table.body)) {
-    result.table = {
-      ...result.table,
-      body: (result.table.body as Node[]).map((row) =>
-        Array.isArray(row) ? row.map((cell: Node) => contentNode(cell, coverage)) : row,
-      ),
+
+  /** One piece of a `text`: a value, or an object that is itself a text or a page reference. */
+  private textPiece(piece: Node): Node[] {
+    if (isPrimitive(piece)) {
+      return this.runs(piece);
+    }
+    if (isEmpty(piece)) {
+      return [];
+    }
+    if (!isObject(piece)) {
+      throw new UnsupportedPdfFeatureError('this text', 'A text holds strings and text objects.');
+    }
+    this.refuseKinds(piece);
+    if ('text' in piece) {
+      return [{ ...piece, text: this.text(piece.text) }];
+    }
+    if (piece.pageReference !== undefined) {
+      return [piece];
+    }
+    throw new UnsupportedPdfFeatureError(
+      'a node of another kind inside a text',
+      'A text holds strings and text objects only.',
+    );
+  }
+
+  /** The value of a `text` property. */
+  private text(value: Node): Node[] {
+    return Array.isArray(value)
+      ? value.flatMap((piece: Node) => this.textPiece(piece))
+      : this.textPiece(value);
+  }
+
+  /** Content: a value, a list of content (a stack), or a node object. */
+  content(node: Node): Node {
+    if (isPrimitive(node)) {
+      return { text: this.runs(node) };
+    }
+    if (isEmpty(node)) {
+      return node;
+    }
+    if (Array.isArray(node)) {
+      return node.map((item: Node) => this.content(item));
+    }
+    if (!isObject(node)) {
+      throw new UnsupportedPdfFeatureError('this content', 'Content is text, a list or a node.');
+    }
+    return this.node(node);
+  }
+
+  private node(node: NodeObject): NodeObject {
+    this.refuseKinds(node);
+    if (
+      !SUPPORTED_NODE_KINDS.some((kind) => (kind === 'text' ? 'text' in node : Boolean(node[kind])))
+    ) {
+      throw new UnsupportedPdfFeatureError(
+        `a node with the properties ${Object.keys(node).join(', ')}`,
+        'It is not one of the kinds of node the renderer knows.',
+      );
+    }
+
+    const result: NodeObject = { ...node };
+    if ('text' in node) {
+      result.text = this.text(node.text);
+    }
+    for (const key of CONTAINERS) {
+      const items = node[key];
+      if (items === undefined) {
+        continue;
+      }
+      if (!Array.isArray(items)) {
+        throw new UnsupportedPdfFeatureError(`"${key}"`, 'It must be a list.');
+      }
+      result[key] = items.map((item: Node) => this.content(item));
+    }
+    if (node.ol !== undefined && node.separator !== undefined) {
+      result.separator = this.separator(node.separator);
+    }
+    if (node.table !== undefined) {
+      result.table = this.table(node.table);
+    }
+    if (node.toc !== undefined) {
+      result.toc = this.tableOfContents(node.toc);
+    }
+    return result;
+  }
+
+  /**
+   * What pdfmake puts after (or around) the number of a list item. pdfmake draws it with
+   * the font of the styles around the list, so every family must have its characters.
+   */
+  private separator(separator: Node): Node {
+    const parts: Node[] = Array.isArray(separator) ? separator : [separator];
+    const checked = parts.map((part) =>
+      typeof part === 'string' ? this.coverage.require(part, 'every') : part,
+    );
+    return Array.isArray(separator) ? checked : checked[0];
+  }
+
+  private table(table: Node): Node {
+    if (!isObject(table) || !Array.isArray(table.body)) {
+      throw new UnsupportedPdfFeatureError('this table', 'A table has a body of rows.');
+    }
+    return {
+      ...table,
+      body: table.body.map((row: Node) => {
+        if (!Array.isArray(row)) {
+          throw new UnsupportedPdfFeatureError(
+            'this table',
+            'A row of a table is a list of cells.',
+          );
+        }
+        return row.map((cell: Node) => this.content(cell));
+      }),
     };
   }
-  return result;
-}
 
-/** Header and footer are content, or a function that returns content for a page. */
-function pageContent(value: Node, coverage: GlyphCoverage): Node {
-  if (typeof value === 'function') {
-    const original = value as (...args: unknown[]) => Node;
-    return (...args: unknown[]) => contentNode(original(...args), coverage);
+  private tableOfContents(toc: Node): Node {
+    if (!isObject(toc)) {
+      throw new UnsupportedPdfFeatureError('this table of contents', 'It must be an object.');
+    }
+    if (toc.sortBy !== undefined) {
+      throw new UnsupportedPdfFeatureError(
+        'sorting a table of contents',
+        'pdfmake sorts by comparing texts as plain strings, which they no longer are once every run has its font.',
+      );
+    }
+    return toc.title === undefined ? toc : { ...toc, title: this.content(toc.title) };
   }
-  return value === undefined ? undefined : contentNode(value, coverage);
-}
 
-/** A watermark is one text in one font, so every character must be in the primary font. */
-function watermark(value: Node, coverage: GlyphCoverage): Node {
-  const text = typeof value === 'string' ? value : isObject(value) ? value.text : undefined;
-  if (typeof text !== 'string') {
-    return value;
+  /** Header, footer and background: content, or a function that returns content for a page. */
+  pageContent(value: Node): Node {
+    if (typeof value === 'function') {
+      const original = value as (...args: unknown[]) => Node;
+      return (...args: unknown[]) => this.content(original(...args));
+    }
+    return this.content(value);
   }
-  const outside = coverage
-    .split(text)
-    .filter((run) => run.font !== PRIMARY_FONT)
-    .flatMap((run) => Array.from(run.text.trim()))
-    .map((character) => ({
-      character,
-      codePoint: `U+${(character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')}`,
-    }));
-  if (outside.length > 0) {
-    throw new MissingGlyphError(outside);
+
+  /** A watermark is one text drawn in one font: the primary font must have all of it. */
+  watermark(value: Node): Node {
+    if (isEmpty(value)) {
+      return value;
+    }
+    const text = isObject(value) ? value.text : value;
+    if (!isPrimitive(text)) {
+      throw new UnsupportedPdfFeatureError('this watermark', 'A watermark is a text.');
+    }
+    const checked = this.coverage.require(String(text), 'primary');
+    return { ...(isObject(value) ? value : {}), text: checked, font: PRIMARY_FONT };
   }
-  return isObject(value) ? { ...value, text: normaliseText(text) } : normaliseText(text);
 }
 
 /**
@@ -130,18 +314,31 @@ function watermark(value: Node, coverage: GlyphCoverage): Node {
  */
 export function withFonts<T extends object>(definition: T, coverage: GlyphCoverage): T {
   const source = definition as NodeObject;
-  const result: NodeObject = { ...source };
-  result.content = contentNode(source.content, coverage);
-  for (const key of ['header', 'footer'] as const) {
-    if (key in source) {
-      result[key] = pageContent(source[key], coverage);
+  for (const key of Object.keys(source)) {
+    const refused = REFUSED_DEFINITION_KEYS[key];
+    if (refused !== undefined) {
+      throw new UnsupportedPdfFeatureError(`"${key}" in a document definition`, refused);
+    }
+    if (!(SUPPORTED_DEFINITION_KEYS as readonly string[]).includes(key)) {
+      throw new UnsupportedPdfFeatureError(
+        `"${key}" in a document definition`,
+        'It is not a property the renderer knows.',
+      );
     }
   }
-  if ('watermark' in source) {
-    result.watermark = watermark(source.watermark, coverage);
+
+  const walk = new DocumentWalk(coverage);
+  const result: NodeObject = { ...source };
+  result.content = walk.content(source.content);
+  for (const key of ['header', 'footer', 'background'] as const) {
+    if (source[key] !== undefined) {
+      result[key] = walk.pageContent(source[key]);
+    }
+  }
+  if (source.watermark !== undefined) {
+    result.watermark = walk.watermark(source.watermark);
   }
   const defaultStyle = isObject(source.defaultStyle) ? source.defaultStyle : {};
-  // A fresh copy: the layout engine writes its own defaults into the object it is given.
-  result.defaultStyle = { fontFeatures: { ...NO_LIGATURES }, ...defaultStyle, font: PRIMARY_FONT };
+  result.defaultStyle = { ...defaultStyle, font: PRIMARY_FONT };
   return result as T;
 }

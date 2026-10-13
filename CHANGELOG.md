@@ -26,3 +26,10 @@ version at every milestone (ADR-19).
 - `pnpm seed:e2e` (refuses to run outside the stages local and test) and `pnpm stubs`, the stub slot of the development stack.
 - `pnpm test:supply-chain`, part of `pnpm check`: planted fake secrets, a vulnerable package and an unlisted build script must each be caught.
 - Architecture tests: who reads the environment (syntax tree), no credential compared with a configuration value, no `DEV_` key in a compose or deploy file.
+
+### Fixed
+
+- The surface of a request is chosen by an exact match of a syntactically valid `Host` header against the configured host names; a header with a user part, a path, a query or an encoded character is not found.
+- The secret scan also catches a literal value assigned to a name like a secret (`…_PASSWORD=`, `…_SECRET=`, `…_KEY=`), which has no format a pattern scanner could know.
+- PDF: the glyph check covers every place where text can enter a document (page background, title of a table of contents, list separators); what cannot be checked (SVG images, sections, attachments, text references, fill patterns, unknown kinds) is refused.
+- PDF: the fonts are loaded once, from memory, with their ligature features removed, so the PDF library no longer shapes every text without its cache; a table of 200 rows renders three to four times faster, and the first document of a fresh process is timed in plain Node.

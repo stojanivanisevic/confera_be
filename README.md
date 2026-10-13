@@ -301,7 +301,7 @@ To add one:
   of single units (Serbian text and the glyph check in every field of a PDF).
 - **Build:** the built application refuses every bad stage, instance and `DEV_` key;
   no dev-tools code in `dist/`, and no seed or stub in any build; the committed OpenAPI
-  files equal the code.
+  files equal the code; a fresh process makes its first PDF in under 5 seconds.
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),
@@ -378,12 +378,29 @@ stops the start.
 (the design system's typeface; it has š č ć ž đ, Serbian Cyrillic and Greek) and Noto
 Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
 
-- Every character is checked before rendering. A character that no font can print stops
-  the render with a message that names it (`MissingGlyphError`).
+- Every character is checked before rendering, in every place where text can enter a
+  document: content, header, footer, page background, table cells, lists and the
+  separator after their numbers, the title of a table of contents, the watermark. A
+  character that no font can print stops the render with a message that names it
+  (`MissingGlyphError`).
+- What cannot be checked is refused (`UnsupportedPdfFeatureError`): SVG images, sections,
+  attachments, text references, fill patterns, and every kind of node or property of a
+  document definition that the renderer does not know. A test compares the renderer's
+  lists with the source of pdfmake, so an upgrade of pdfmake that brings a new kind fails
+  until the kind is added to the check or refused.
 - Invisible characters (zero-width space, direction overrides, controls) are refused too.
 - Ligatures are off, so that text copied from the PDF equals the text that went in, in
-  every reader.
-- A document cannot read a file or call an address: only the font files are readable.
+  every reader. The fonts are loaded with their ligature features removed; asking the PDF
+  library for "no ligatures" per text made a long table three to four times slower.
+- A document cannot read a file or call an address: the fonts are handed to pdfmake from
+  memory, and every path and every URL is refused. A picture is given as data
+  (`data:image/png;base64,…`).
+- The PDF library and the fonts are loaded at the first use, once per process;
+  `PdfRenderer.warmUp()` does it ahead of the first document.
+- A document must be made in under 5 seconds, the first one of a process included. That
+  is asserted in the unit tier and, for a fresh process of plain Node, in the build tier
+  (`test/build/pdf-cold-start.spec.ts`). On the development laptop the first document
+  takes about 0.3 s, the next ones under 0.1 s and a table of 200 rows about 0.1 s.
 
 `corepack pnpm pdf:sample` writes the bilingual sample to look at.
 

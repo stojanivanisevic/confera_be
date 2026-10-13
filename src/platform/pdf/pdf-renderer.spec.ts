@@ -12,7 +12,11 @@ import { embeddedFontPrograms, linesOf, rawFontNames, readPdf } from './testing/
  *   š č ć ž đ, Cyrillic and the letters that need the fallback font;
  * - the fonts are embedded;
  * - a character that no font has stops the render with a message;
- * - a render takes under 5 seconds.
+ * - a render takes under 5 seconds, the first one of the process included, with the PDF
+ *   library and the fonts still to load (NFR-PERF-03). The same is asserted for a fresh
+ *   process of plain Node, which is what a server is, by
+ *   test/build/pdf-cold-start.spec.ts: here the PDF library runs in Jest's sandbox, at
+ *   the same time as the other test files, and a render takes about twice as long.
  */
 
 const LIMIT_MS = 5000;
@@ -22,12 +26,17 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
 
   const renderer = new PdfRenderer();
   let sample: Buffer;
-  let firstRenderMs: number;
+  /** Loading the PDF library and the fonts: once per process, part of firstDocumentMs. */
+  let warmUpMs: number;
+  /** From the first use of the renderer to the bytes of the first document. */
+  let firstDocumentMs: number;
 
   beforeAll(async () => {
     const started = performance.now();
+    renderer.warmUp();
+    warmUpMs = performance.now() - started;
     sample = await renderer.render(BILINGUAL_SAMPLE);
-    firstRenderMs = performance.now() - started;
+    firstDocumentMs = performance.now() - started;
   });
 
   describe('the bilingual sample', () => {
@@ -90,7 +99,7 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
     });
 
     it(`renders in under ${String(LIMIT_MS / 1000)} seconds, the first time included`, async () => {
-      expect(firstRenderMs).toBeLessThan(LIMIT_MS);
+      expect(firstDocumentMs).toBeLessThan(LIMIT_MS);
 
       const times: number[] = [];
       for (let index = 0; index < 5; index += 1) {
@@ -101,7 +110,7 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
       expect(Math.max(...times)).toBeLessThan(LIMIT_MS);
       // Kept in the test output as the numbers of the spike.
       process.stdout.write(
-        `PDF spike: first render ${firstRenderMs.toFixed(0)} ms (fonts loaded), then ${times
+        `PDF spike: first document ${firstDocumentMs.toFixed(0)} ms (of which library and fonts ${warmUpMs.toFixed(0)} ms), then ${times
           .map((ms) => ms.toFixed(0))
           .join(', ')} ms; ${String(sample.length)} bytes\n`,
       );
@@ -232,16 +241,24 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
       expect(linesOf(await readPdf(pdf))).toEqual(['Prvi red: š', 'Drugi red: đ', 'Treći red: ǌ']);
     });
 
-    it('marks only the fallback runs with the fallback font', () => {
+    it('gives every run its font, the fallback font only where the primary one lacks the letter', () => {
       const prepared = withFonts(
         { content: ['samo latinica', { text: 'Ime: ǌegoš i Živana', bold: true }] },
         new GlyphCoverage(),
       ) as { content: unknown[]; defaultStyle: { font: string } };
       expect(prepared.defaultStyle.font).toBe(PRIMARY_FONT);
-      expect(prepared.content[0]).toBe('samo latinica');
+      // Every piece of text carries its font, so that nothing a layout says about fonts,
+      // and no copy pdfmake makes of a text, can draw a letter with a font that lacks it.
+      expect(prepared.content[0]).toEqual({
+        text: [{ text: 'samo latinica', font: PRIMARY_FONT }],
+      });
       expect(prepared.content[1]).toEqual({
         bold: true,
-        text: ['Ime: ', { text: 'ǌ', font: FALLBACK_FONT }, 'egoš i Živana'],
+        text: [
+          { text: 'Ime: ', font: PRIMARY_FONT },
+          { text: 'ǌ', font: FALLBACK_FONT },
+          { text: 'egoš i Živana', font: PRIMARY_FONT },
+        ],
       });
     });
 
