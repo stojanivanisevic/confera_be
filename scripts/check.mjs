@@ -17,6 +17,9 @@ const steps = [
     'supply chain (pins, frozen lockfile, audit, secret scan, image digests)',
     ['run', 'supply-chain'],
   ],
+  // Do those checks catch what they are there for? Plants a fake secret, a vulnerable
+  // package and an unlisted build script in a copy under tmp/ and expects each to be caught.
+  ['supply chain catches the planted cases (ST-11)', ['run', 'test:supply-chain']],
 ];
 
 const started = Date.now();
