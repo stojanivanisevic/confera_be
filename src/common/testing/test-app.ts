@@ -1,8 +1,12 @@
 import { Module, type Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { createApp } from '../../bootstrap';
+import { Test } from '@nestjs/testing';
+import { AppModule } from '../../app.module';
+import { configureHttp } from '../../bootstrap';
 import { type AppConfig, parseEnvironment, type RawEnvironment } from '../../config/config';
 import { validEnvironment } from '../../config/testing/valid-environment';
+import { DatabaseRoleCheck } from '../../platform/prisma/database-role-check';
+import { AppLogger, createRootLogger } from '../logging/app-logger';
 
 export interface LogEntry {
   readonly level: string;
@@ -32,22 +36,33 @@ export function configFrom(env: RawEnvironment): AppConfig {
 }
 
 /**
- * The real application (same middleware, filter, guard and pipe as the entries), with
- * extra controllers for the test and with the log captured in memory.
+ * The real application module with the middleware of the entries, for unit tests of the
+ * HTTP layer: extra controllers for the test, the log captured in memory, and NO
+ * database. The start-up role check is replaced by a no-op here and only here; the
+ * tests that need a database are the integration tests, which start the built
+ * application unchanged.
  */
 export async function createTestApp(
   options: { env?: RawEnvironment; controllers?: Type[] } = {},
 ): Promise<TestApp> {
   const config = configFrom(options.env ?? validEnvironment({ LOG_LEVEL: 'debug' }));
   let text = '';
+  const logger = new AppLogger(
+    createRootLogger(config.logLevel, { write: (chunk: string) => void (text += chunk) }),
+  );
 
   @Module({ controllers: options.controllers ?? [] })
   class TestControllersModule {}
 
-  const app = await createApp(config, {
-    extraImports: [TestControllersModule],
-    logDestination: { write: (chunk: string) => void (text += chunk) },
-  });
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule.register({ config, logger, extraImports: [TestControllersModule] })],
+  })
+    .overrideProvider(DatabaseRoleCheck)
+    .useValue({})
+    .compile();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
+  app.useLogger(logger);
+  configureHttp(app, logger);
   await app.init();
 
   return {

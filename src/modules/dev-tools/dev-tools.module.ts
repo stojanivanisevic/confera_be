@@ -1,4 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { AppLogger } from '../../common/logging/app-logger';
+import type { AppConfig } from '../../config/config';
+import { APP_CONFIG } from '../../config/config.module';
+import type { QueryObserver } from '../../platform/prisma/tenant-client';
+import { QUERY_OBSERVER } from '../../platform/prisma/tenant-database';
 import { DevInfoController } from './dev-info.controller';
 
 /**
@@ -11,5 +16,22 @@ import { DevInfoController } from './dev-info.controller';
  * - Each convenience is behind its own `DEV_*` variable, which the configuration guard
  *   accepts only on STAGE=local or dev.
  */
-@Module({ controllers: [DevInfoController] })
+@Global()
+@Module({
+  controllers: [DevInfoController],
+  providers: [
+    {
+      // DEV_LOG_QUERIES: every SQL statement goes to the log, without its parameter values.
+      provide: QUERY_OBSERVER,
+      inject: [APP_CONFIG, AppLogger],
+      useFactory: (config: AppConfig, logger: AppLogger): QueryObserver | undefined =>
+        config.devTools.logQueries
+          ? (event) => {
+              logger.info('db.query', { ...event });
+            }
+          : undefined,
+    },
+  ],
+  exports: [QUERY_OBSERVER],
+})
 export class DevToolsModule {}

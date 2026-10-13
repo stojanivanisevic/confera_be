@@ -21,12 +21,15 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest --selectProjects unit",
-    "test:build": "jest --selectProjects build",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit",
+    "test:build": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects build",
+    "test:int": "node scripts/build.mjs tsconfig.build.json && node scripts/build.mjs tsconfig.build.dev.json && node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects integration --runInBand",
     "supply-chain": "node scripts/supply-chain.mjs",
     "check": "node scripts/check.mjs",
     "stack:up": "docker compose up --detach --wait",
-    "stack:down": "docker compose down"
+    "stack:down": "docker compose down",
+    "db:provision": "node scripts/db-provision.mjs",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "0.4.2",

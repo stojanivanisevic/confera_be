@@ -157,6 +157,21 @@ describe('redaction of log entries (ADR-19, SEC-A-28)', () => {
       expect(JSON.stringify(out)).not.toContain('canary');
     });
 
+    it('withholds the message of an error that repeats the arguments of the call', () => {
+      const error = new Error(
+        [
+          'Invalid `prisma.user.create()` invocation:',
+          "{ data: { email: 'mila.petrovic@example.test', passwordHash: 'canary' } }",
+        ].join('\n'),
+      );
+      error.name = 'PrismaClientValidationError';
+      const out = redact(error) as Record<string, string>;
+      expect(out.type).toBe('PrismaClientValidationError');
+      expect(JSON.stringify(out)).not.toContain('example.test');
+      expect(JSON.stringify(out)).not.toContain('canary');
+      expect(out.stack).toContain('redact.spec');
+    });
+
     it('follows the cause', () => {
       const error = new Error('outer', { cause: new Error('inner password=canary-pw') });
       expect(JSON.stringify(redact(error))).not.toContain('canary-pw');

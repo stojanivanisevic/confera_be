@@ -10,6 +10,7 @@ import type { AppConfig } from './config/config';
 import { ConfigModule } from './config/config.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetaModule } from './modules/meta/meta.module';
+import { PrismaModule } from './platform/prisma/prisma.module';
 
 type Imports = NonNullable<ModuleMetadata['imports']>;
 
@@ -39,6 +40,7 @@ export class AppModule {
         // in bootstrap.ts, first in the chain.
         ClsModule.forRoot({ global: true, middleware: { mount: false } }),
         DiscoveryModule,
+        PrismaModule,
         HealthModule,
         MetaModule,
         ...extraImports,

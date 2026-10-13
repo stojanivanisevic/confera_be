@@ -9,6 +9,7 @@ import { securityHeaders } from './common/http/security-headers';
 import { requestContext } from './common/http/trace';
 import { AppLogger, createRootLogger } from './common/logging/app-logger';
 import { requestLog } from './common/logging/request-log.middleware';
+import { StartupRefusal } from './common/startup-refusal';
 import { type AppConfig, formatProblems } from './config/config';
 import { loadConfig } from './config/env';
 import { DEV_TOOL_STAGES } from './config/stage-guard';
@@ -17,6 +18,8 @@ import { DEV_TOOL_STAGES } from './config/stage-guard';
 export const EXIT_CODE = {
   /** The configuration is missing or invalid (EX_CONFIG of sysexits.h). */
   configuration: 78,
+  /** The application itself refused, for example on a database role that is too powerful (EX_NOPERM). */
+  refused: 77,
   /** Anything else that stopped the start. */
   failure: 1,
 } as const;
@@ -47,14 +50,19 @@ export async function createApp(
     AppModule.register({ config, logger, extraImports: options.extraImports }),
     { abortOnError: false, logger },
   );
+  configureHttp(app, logger);
+  await options.configure?.(app, config);
+  return app;
+}
+
+/** The middleware of every request, in order. Tests apply it to their own application too. */
+export function configureHttp(app: NestExpressApplication, logger: AppLogger): void {
   app.disable('x-powered-by');
   // Order matters: the request context first, so that everything after it has a trace id.
   app.use(requestContext());
   app.use(securityHeaders);
   app.use(requestLog(logger));
   app.use(refusePreflight);
-  await options.configure?.(app, config);
-  return app;
 }
 
 function refuse(variable: string, problem: string): void {
@@ -78,8 +86,9 @@ export async function start(options: StartOptions = {}): Promise<void> {
     );
     return;
   }
+  let app: NestExpressApplication | undefined;
   try {
-    const app = await createApp(config, options);
+    app = await createApp(config, options);
     app.enableShutdownHooks();
     await app.listen(config.http.port, config.http.listenHost);
     app.get(AppLogger).info('api.started', {
@@ -88,9 +97,21 @@ export async function start(options: StartOptions = {}): Promise<void> {
       port: config.http.port,
     });
   } catch (error) {
-    // The reason is named by its kind only: a message can hold an address or a value.
-    const reason = error instanceof Error ? error.name : 'unknown error';
-    process.stderr.write(`Confera API did not start: ${reason}.\n`);
-    process.exitCode = EXIT_CODE.failure;
+    if (error instanceof StartupRefusal) {
+      // A sentence written by us: safe to print.
+      process.stderr.write(`Confera API did not start: ${error.reason}
+`);
+      process.exitCode = EXIT_CODE.refused;
+    } else {
+      // Named by its kind only: a message can hold an address or a value.
+      const kind = error instanceof Error ? error.name : 'unknown error';
+      process.stderr.write(`Confera API did not start: ${kind}.
+`);
+      process.exitCode = EXIT_CODE.failure;
+    }
+    // Close what was opened (the database pools), so that the process ends by itself;
+    // and end it anyway if closing hangs. The timer does not keep the process alive.
+    setTimeout(() => process.exit(), 3000).unref();
+    await app?.close().catch(() => undefined);
   }
 }

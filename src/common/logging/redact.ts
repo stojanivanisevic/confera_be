@@ -69,17 +69,35 @@ export function scrubText(text: string): string {
   return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)}...[cut]` : scrubbed;
 }
 
+/**
+ * Errors whose message repeats the arguments of the call. Prisma's validation error
+ * prints the whole query object, with every value in it; the type and the stack say
+ * enough to find the mistake.
+ */
+const MESSAGE_WITHHELD = new Set(['PrismaClientValidationError']);
+
+const FIRST_FRAME = /^\s+at /m;
+
+/** The frames of a stack without the message it starts with. */
+function framesOnly(stack: string): string {
+  const start = stack.search(FIRST_FRAME);
+  return start < 0 ? '' : stack.slice(start);
+}
+
 function redactError(error: Error, depth: number, seen: WeakSet<object>): Record<string, unknown> {
   const out: Record<string, unknown> = {
     type: error.name,
-    message: scrubText(error.message),
+    message: MESSAGE_WITHHELD.has(error.name)
+      ? '[withheld: the message repeats the arguments of the call]'
+      : scrubText(error.message),
   };
   const code = (error as { code?: unknown }).code;
   if (typeof code === 'string' || typeof code === 'number') {
     out.code = code;
   }
   if (typeof error.stack === 'string') {
-    out.stack = scrubText(error.stack);
+    // A stack starts with the message; for a withheld message keep the frames only.
+    out.stack = scrubText(MESSAGE_WITHHELD.has(error.name) ? framesOnly(error.stack) : error.stack);
   }
   if (error.cause !== undefined) {
     out.cause = redactValue(error.cause, depth + 1, seen);
