@@ -22,3 +22,7 @@ version at every milestone (ADR-19).
 - Tenant database client (every operation inside the organisation of the request), resolvers of the system role, start-up check of the database roles, `GET /health/ready`.
 - Integration tests against PostgreSQL in Docker (`pnpm test:int`): tenant isolation, catalogue check, roles, clean production start.
 - PDF renderer on pdfmake with embedded Manrope and Noto Sans, glyph check, ligatures off; bilingual sample (`pnpm pdf:sample`).
+- End-to-end tests of the API (`pnpm test:e2e`): supertest against the real application on PostgreSQL in Docker as the application role, with factories for invented people.
+- `pnpm seed:e2e` (refuses to run outside the stages local and test) and `pnpm stubs`, the stub slot of the development stack.
+- `pnpm test:supply-chain`, part of `pnpm check`: planted fake secrets, a vulnerable package and an unlisted build script must each be caught.
+- Architecture tests: who reads the environment (syntax tree), no credential compared with a configuration value, no `DEV_` key in a compose or deploy file.

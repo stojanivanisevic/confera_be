@@ -26,7 +26,8 @@ needs none and does the same. If you did run `corepack enable`, plain `pnpm ...`
 The commands are the same in PowerShell, cmd, Git Bash, macOS and Linux.
 
 Ports used on your machine, all bound to 127.0.0.1: **3001** (API), **5432**
-(PostgreSQL), **8025** and **1025** (Mailpit). They must be free.
+(PostgreSQL), **8025** and **1025** (Mailpit), and **4010** when you start the stub slot
+(section 9). They must be free.
 
 ## 2. First start
 
@@ -49,7 +50,7 @@ corepack pnpm install
 ```
 
 **Step 3. Run all checks.** They need no database and no Docker, only the network (for
-the vulnerability audit). Two to four minutes.
+the vulnerability audit). Three to six minutes.
 
 ```
 corepack pnpm check
@@ -102,7 +103,17 @@ corepack pnpm test:int
 
 It ends with `Tests: ... passed` and no failure.
 
-**Step 8. Stop the stack when you are done.**
+**Step 8. Run the end-to-end tests.** They start the real application on a database of
+their own (`confera_e2e_test`), created with the same two commands as step 5, and send
+HTTP requests to it. They also talk to the mail catcher. About one minute.
+
+```
+corepack pnpm test:e2e
+```
+
+It ends with `Tests: ... passed` and no failure.
+
+**Step 9. Stop the stack when you are done.**
 
 ```
 corepack pnpm stack:down
@@ -114,26 +125,30 @@ and 5.
 
 ## 3. Commands
 
-| Command                                 | What it does                                                                                                                                                    |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `corepack pnpm check`                   | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, supply-chain checks. Green before a change is handed over. |
-| `corepack pnpm test`                    | Unit and architecture tests. No build, no Docker.                                                                                                               |
-| `corepack pnpm test:build`              | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                              |
-| `corepack pnpm test:int`                | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                             |
-| `corepack pnpm build`                   | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                |
-| `corepack pnpm start`                   | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                        |
-| `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                    |
-| `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                      |
-| `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                          |
-| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker.                                                                                                              |
-| `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                    |
-| `corepack pnpm db:migrate`              | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                   |
-| `corepack pnpm db:status`               | Says which migrations are applied.                                                                                                                              |
-| `corepack pnpm db:diff`                 | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                |
-| `corepack pnpm openapi:generate`        | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                  |
-| `corepack pnpm openapi:check`           | Fails when those files differ from the code, or a response property is named like a secret.                                                                     |
-| `corepack pnpm pdf:sample`              | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                |
-| `corepack pnpm supply-chain`            | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                     |
+| Command                                 | What it does                                                                                                                                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `corepack pnpm check`                   | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, supply-chain checks and their planted cases. Green before a change is handed over. |
+| `corepack pnpm test`                    | Unit and architecture tests. No build, no Docker.                                                                                                                                       |
+| `corepack pnpm test:build`              | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                                                      |
+| `corepack pnpm test:int`                | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                                                     |
+| `corepack pnpm test:e2e`                | End-to-end tests: HTTP requests against the real application on PostgreSQL in Docker, as the application role. Needs `stack:up`.                                                        |
+| `corepack pnpm test:supply-chain`       | Plants a fake secret, a vulnerable package and an unlisted build script in a copy under `tmp/` and expects the supply-chain checks to catch each. Part of `check`.                      |
+| `corepack pnpm build`                   | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                                        |
+| `corepack pnpm start`                   | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                                                |
+| `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                            |
+| `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                                              |
+| `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                                                  |
+| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker.                                                                                                                                      |
+| `corepack pnpm stubs`                   | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                             |
+| `corepack pnpm seed:e2e`                | Writes the invented organisations and people of the end-to-end tests into the development database. It refuses to run unless `STAGE` is `local` or `test`.                              |
+| `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                                            |
+| `corepack pnpm db:migrate`              | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                                           |
+| `corepack pnpm db:status`               | Says which migrations are applied.                                                                                                                                                      |
+| `corepack pnpm db:diff`                 | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                        |
+| `corepack pnpm openapi:generate`        | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                          |
+| `corepack pnpm openapi:check`           | Fails when those files differ from the code, or a response property is named like a secret.                                                                                             |
+| `corepack pnpm pdf:sample`              | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                        |
+| `corepack pnpm supply-chain`            | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                             |
 
 ## 4. Configuration, STAGE and INSTANCE
 
@@ -270,28 +285,78 @@ To add one:
 
 ## 8. Tests
 
-| Tier        | Where                                    | Needs                | Runs in         |
-| ----------- | ---------------------------------------- | -------------------- | --------------- |
-| unit        | `src/**/*.spec.ts`, `test/architecture/` | nothing              | `pnpm check`    |
-| build       | `test/build/`                            | `dist/`, `dist-dev/` | `pnpm check`    |
-| integration | `test/integration/`                      | PostgreSQL in Docker | `pnpm test:int` |
+| Tier         | Where                                                                 | Needs                | Runs in         |
+| ------------ | --------------------------------------------------------------------- | -------------------- | --------------- |
+| unit         | `src/**/*.spec.ts`, `test/architecture/`, `test/tooling/`, `test/qa/` | nothing              | `pnpm check`    |
+| build        | `test/build/`                                                         | `dist/`, `dist-dev/` | `pnpm check`    |
+| supply chain | `scripts/supply-chain-planted.mjs`                                    | the network          | `pnpm check`    |
+| integration  | `test/integration/`                                                   | PostgreSQL in Docker | `pnpm test:int` |
+| end to end   | `test/e2e/`                                                           | the stack in Docker  | `pnpm test:e2e` |
 
 - **Unit:** configuration and the STAGE guard, redaction, the HTTP layer (errors, host
-  separation, headers), the OpenAPI lint and drift check, the PDF golden test, and
-  architecture tests (lint rules on code samples, who imports the system client).
+  separation, headers), the OpenAPI lint and drift check, the PDF golden test,
+  architecture tests (lint rules on code samples, who imports the system client, who
+  reads the environment, no credential compared with configuration, no `DEV_` key in a
+  compose or deploy file), the test tools (`seed:e2e` refuses, the stub slot), and probes
+  of single units (Serbian text and the glyph check in every field of a PDF).
 - **Build:** the built application refuses every bad stage, instance and `DEV_` key;
-  no dev-tools code in `dist/`; the committed OpenAPI files equal the code.
+  no dev-tools code in `dist/`, and no seed or stub in any build; the committed OpenAPI
+  files equal the code.
+- **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),
   writes into another organisation, the catalogue check, what the roles cannot do, the
   start-up role check, and a clean production start with a canary in every secret.
+- **End to end:** supertest against the real application (`createApp` of
+  `src/bootstrap.ts`, nothing replaced) with the configuration of a server, connected as
+  the application role: every route of the OpenAPI files, the error format, the headers,
+  no CORS grant, odd `Host` headers, many requests at once, the request log; the harness
+  itself (schema from `migrate deploy`, the role, the factories); `seed:e2e`; the stack
+  (the three roles, the mail catcher).
 
-Test people are invented and live on `example.test`.
+Test people are invented and live on `example.test`. The end-to-end tests make them with
+the factories of `test/e2e/support/factories.ts`, which refuse any other domain and
+write each row inside its organisation, through row-level security.
 
 To run one file: `corepack pnpm test -- src/config` (any path part works), or for the
-integration tier `corepack pnpm test:int -- test/integration/catalogue`.
+integration tier `corepack pnpm test:int -- test/integration/catalogue`, or
+`corepack pnpm test:e2e -- test/e2e/api`.
 
-## 9. OpenAPI
+## 9. The stack for end-to-end tests of both repositories
+
+This repository owns the development stack and the seed (ADR-24); the end-to-end tests of
+`confera_fe` run against a backend started with these commands and nothing else. From a
+fresh clone, after steps 1 and 2 of section 2:
+
+```
+corepack pnpm stack:up       PostgreSQL and the mail catcher (Mailpit), in Docker
+corepack pnpm db:provision   the three database roles and the database
+corepack pnpm db:migrate     the schema
+corepack pnpm seed:e2e       the invented organisations and people
+corepack pnpm build
+corepack pnpm start          the API on http://localhost:3001      (its own terminal)
+corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own terminal)
+```
+
+- **The mail catcher** shows every mail the stack sends at <http://localhost:8025>; it
+  listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine.
+- **The stub slot** is where the stand-ins for outside services run: the PayPal stub
+  arrives with 0.7.0, the fixture rate provider with 0.5.0. In 0.1.0 it is empty:
+  `GET http://127.0.0.1:4010/health` answers `{"status":"ok","stubs":[]}` and everything
+  else 404. It listens on 127.0.0.1 only and refuses to start unless `STAGE` is `local`,
+  `dev` or `test`. Another port: `STUBS_PORT` in `.env`.
+- **`seed:e2e`** writes what `test/e2e/seed/e2e-seed.json` holds: two invented
+  organisations with an admin and a reviewer each, on `example.test`, with fixed ids and
+  no password (sign-in arrives with 0.2.0). It is safe to run again. **seed:e2e refuses to
+  run unless `STAGE` is exactly `local` or `test`** (exit code 78), before it opens a
+  connection; a `STAGE` of the environment wins over the one in `.env`, so on a server,
+  where every process runs `STAGE=prod`, it cannot run.
+- Neither the seed nor the stub slot is part of a build: they are scripts in `scripts/`,
+  and a test of the built application proves that `dist/` and `dist-dev/` hold neither.
+
+Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
+
+## 10. OpenAPI
 
 `openapi/openapi.json` (admin API) and `openapi/openapi.public.json` (public API) are
 generated from the code and **committed**; the frontend vendors `openapi.json`. Their
@@ -307,7 +372,7 @@ A controller declares its surface by its decorator: `@AdminController('users')` 
 `@OpsController('health')` is outside both and not in the documents. Plain `@Controller`
 stops the start.
 
-## 10. PDF
+## 11. PDF
 
 `src/platform/pdf` makes PDF files with pdfmake and two embedded font families: Manrope
 (the design system's typeface; it has š č ć ž đ, Serbian Cyrillic and Greek) and Noto
@@ -322,7 +387,7 @@ Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
 
 `corepack pnpm pdf:sample` writes the bilingual sample to look at.
 
-## 11. Dependencies and the supply chain
+## 12. Dependencies and the supply chain
 
 The rules of ADR-01 are settings in `pnpm-workspace.yaml`; `pnpm supply-chain` checks
 that they stay.
@@ -340,6 +405,12 @@ that they stay.
   credential fails. Build such a text from parts instead of writing it in one piece.
 - **Container images by digest.**
 
+`corepack pnpm test:supply-chain` (part of `check`) proves that these rules bite: in a
+copy of the repository under `tmp/` it plants fake secrets, a package version with a
+known vulnerability, a dependency with an unlisted build script, a `package.json` that
+disagrees with the lockfile and weakened settings, and expects each to be caught. It
+plants nothing in your working tree and removes its copy.
+
 To add or update a dependency on purpose:
 
 ```
@@ -350,7 +421,7 @@ If pnpm reports an ignored build script, decide `true` or `false` for it under
 `allowBuilds` in `pnpm-workspace.yaml`, with a comment that says why. If it reports that
 the version is too young, wait or take the one before.
 
-## 12. Layout
+## 13. Layout
 
 ```
 prisma/              schema and committed migrations
@@ -363,14 +434,17 @@ src/platform/tenancy the organisation of the current request
 src/platform/pdf     PDF renderer, fonts, glyph check
 src/modules/         one folder per feature; dev-tools is left out of the production build
 test/architecture    rules that hold for the whole code base
+test/tooling         tests of the test tools (seed:e2e, the stub slot)
+test/qa              probes of single units by the test engineer (PDF fields)
 test/build           tests that start the built application
 test/integration     tests against PostgreSQL in Docker
+test/e2e             end-to-end tests of the API; factories and the seed of invented people
 test/support         helpers of the tests
-scripts/             build, check, provisioning and supply-chain scripts (plain Node)
+scripts/             build, check, provisioning, supply-chain, seed and stub scripts (plain Node)
 eslint/              the lint rules with a security purpose
 ```
 
-## 13. Things a newcomer trips over
+## 14. Things a newcomer trips over
 
 - **`pnpm` is not recognised.** Use `corepack pnpm ...` (section 1).
 - **Scripts in `package.json` never call `pnpm` by name**, because it is often not on
@@ -389,11 +463,15 @@ eslint/              the lint rules with a security purpose
 - **"The database cannot be reached with DATABASE_URL"** (exit code 77). The stack is not
   up, or steps 4 and 5 of section 2 were skipped.
 - **`http://127.0.0.1:3001/api/v1/meta` answers 404.** Use `localhost` (section 5).
-- **`pnpm install` fails with "frozen lockfile".** You changed `package.json`; see section 11.
+- **`pnpm install` fails with "frozen lockfile".** You changed `package.json`; see section 12.
 - **A script stops with "dependencies are out of date".** Run `corepack pnpm install`.
   Scripts never install behind your back.
 - **`check` fails on the secret scan after you wrote a test.** A connection address with
-  a password stands in a file as one piece of text; see section 11.
+  a password stands in a file as one piece of text; see section 12.
 - **Port 3001 is in use.** An earlier `pnpm start` or `start:dev` is still running.
+- **`seed:e2e did not run`** (exit code 78). `STAGE` is not `local` or `test`: look at
+  `.env` and at the environment of your terminal, which wins over `.env`.
+- **`pnpm test:e2e` or `test:int` fails with "cannot connect to PostgreSQL as a
+  superuser".** The stack is not up: `corepack pnpm stack:up`.
 - **Never write `\uXXXX`-style invisible characters into a file as real characters.**
   Use the escape in the source, so that a reviewer can see them.
