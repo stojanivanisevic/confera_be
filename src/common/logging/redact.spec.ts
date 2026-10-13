@@ -225,9 +225,9 @@ describe('redaction of log entries (ADR-19, SEC-A-28)', () => {
     });
 
     it('never changes its argument', () => {
-      const entry = { password: 'canary', nested: { token: 'canary' } };
+      const entry = { password: 'invented-canary', nested: { token: 'invented-canary' } };
       redact(entry);
-      expect(entry).toEqual({ password: 'canary', nested: { token: 'canary' } });
+      expect(entry).toEqual({ password: 'invented-canary', nested: { token: 'invented-canary' } });
     });
   });
 });

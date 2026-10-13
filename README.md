@@ -447,20 +447,52 @@ that they stay.
 - **Vulnerability gate:** `pnpm audit` fails `check` on severity high or critical.
 - **Secret scan**, in two parts with one verdict:
   - secretlint finds credentials by their **format**: tokens of known services, private
-    keys, an address with a user and a password.
-  - `scripts/secret-assignments.mjs` finds a secret that has no format by the **name** it
-    is assigned to: a literal value of 8 characters or more assigned to a name with
-    `PASSWORD`, `SECRET`, `TOKEN`, `CREDENTIAL` or `KEY` in it. In an environment or
-    configuration file that is `NAME=value` or `NAME: value`; in source code and JSON a
-    quoted value (`clientSecret: '...'`).
-
-  An invented credential must start with `invented-` or `local-only-` (and an address
-  must point at 127.0.0.1); an empty value and a reference such as `${VAR}` are fine too.
-  Anything else fails, `changeme` included. In a test, build such a text from parts
-  instead of writing it in one piece. A name that ends in `FILE`, `PATH`, `URL`, `NAME`
-  or `HEADER` says where a secret is, not what it is, and is not reported.
-
+    keys, an address with a user and a password. An invented address must point at
+    127.0.0.1 or localhost and its password must start with `invented-` or `local-only-`.
+  - `scripts/secret-assignments/` finds a secret that has no format by the **name** it is
+    bound to. Its rule is the next paragraph, and it is the rule you write code by.
 - **Container images by digest.**
+
+**The rule for a secret-like name.** In every file that git tracks, no literal value is
+bound to a secret-like name.
+
+- **A secret-like name** is one whose words are, or end with: password, passwd, secret,
+  token, api key, private key, credential, credentials, data key, client secret, session
+  secret. The casing does not matter (`smtpPassword`, `SMTP_PASSWORD`, `smtp-password`),
+  and a number at the end does not hide it (`API_KEY_2`). A name that only contains such
+  a word is not secret-like: `passwordPolicy`, `tokenType`, `secretName`,
+  `PASSWORD_MIN_LENGTH`, `SESSION_SECRET_FILE`, a label, a message.
+- **Allowed values, and nothing else:**
+  - nothing: an empty value, `null`, `~`, `true` or `false`;
+  - a reference to something else as the whole value: `${VAR}`, `$VAR`, `$(command)`,
+    `${{ secrets.X }}`; in JavaScript anything that is not a literal (`process.env.X`,
+    a call, another variable);
+  - a placeholder: a literal that **starts with** `invented-` or `local-only-`.
+- **There is no guess by length or by randomness.** `'too_short'` under a secret-like
+  name is a finding, and so are `changeme` and `1`. A test that needs a password that is
+  too short uses `'invented-x'`.
+- **Where a name gets a value:**
+  - `NAME=value` at the start of a line, with or without `export`, quotes, a leading list
+    dash, `ENV` or `ARG` (environment files, shell, compose, Dockerfile, this README);
+  - `name: value` in YAML and `"name": value` in JSON, in any letter case;
+  - in JavaScript and TypeScript an assignment, a declaration (typed or not), a field of a
+    class, an object property, a default parameter, an attribute of a JSX element, and a
+    literal used as a fallback for such a name (`??`, `||`, a branch of a ternary).
+- **What is not read:** comments; lockfiles; and what this repository generates: the
+  OpenAPI documents in `openapi/` (generated from the code and committed) and the Prisma
+  client in `src/generated/` (not in git). Nothing is vendored. The list of what is left
+  out is `scripts/secret-scan.config.mjs`; a hand-written file with a finding is changed,
+  never added to that list.
+
+The scanner is one file without dependencies, `scripts/secret-assignments/secret-assignments.mjs`,
+with its two corpora beside it: shapes that must be reported (`…reported.mjs`) and ordinary
+lines that must not be (`…ordinary.mjs`). The unit tests run both. The three files hold
+nothing about this repository and are the same in `confera_fe`. On its own:
+
+```
+node scripts/secret-assignments/secret-assignments.mjs               scans the current directory
+node scripts/secret-assignments/secret-assignments.mjs --self-test   runs the two corpora
+```
 
 `corepack pnpm test:supply-chain` (part of `check`) proves that these rules bite: in a
 copy of the repository under `tmp/` it plants fake secrets, a package version with a
@@ -524,9 +556,9 @@ eslint/              the lint rules with a security purpose
 - **`pnpm install` fails with "frozen lockfile".** You changed `package.json`; see section 12.
 - **A script stops with "dependencies are out of date".** Run `corepack pnpm install`.
   Scripts never install behind your back.
-- **`check` fails on the secret scan after you wrote a test.** A connection address with
-  a password, or a quoted value assigned to a name like `password` or `token`, stands in
-  a file as one piece of text; see section 12.
+- **`check` fails on the secret scan after you wrote a test.** A literal value is bound
+  to a name like `password` or `token`, or a connection address holds a password. Start
+  the value with `invented-` (`password: 'invented-x'`); the rule is in section 12.
 - **Port 3001 is in use.** An earlier `pnpm start` or `start:dev` is still running.
 - **`seed:e2e did not run`** (exit code 78). `STAGE` is not `local` or `test`: look at
   `.env` and at the environment of your terminal, which wins over `.env`.

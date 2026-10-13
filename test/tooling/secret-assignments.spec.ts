@@ -1,189 +1,268 @@
-import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runNode } from '../support/run-node';
+import { repoRoot, runNode } from '../support/run-node';
 
 /**
- * The scan for literal values assigned to names like a secret
- * (scripts/lib/secret-assignments.mjs; defect D2 of the 0.1.0 verification: a mail
- * password, a PayPal client secret and a data key have no format that secretlint knows).
+ * The scan for literal values bound to secret-like names (scripts/secret-assignments/,
+ * README section 12; defect D2 of the 0.1.0 verification).
  *
- * Every fake secret is made at run time and every assignment is put together from its
- * parts, so that this file holds nothing the scan itself would report.
+ * The rule is set by the lead and written at the top of the scanner. What holds it in
+ * place are its two corpora, which lie beside it and are run here:
+ *
+ * - shapes that must be reported: every syntax in which a name gets a value;
+ * - ordinary lines that must not be: labels, messages, policies, types, references,
+ *   placeholders.
+ *
+ * The scanner and the corpora are copied unchanged into `confera_fe`, so they are run as
+ * the program they are (`--self-test`), not imported.
  */
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const SCANNER = join('scripts', 'secret-assignments', 'secret-assignments.mjs');
 
-function random(length: number): string {
-  return Array.from(randomBytes(length), (byte) => ALPHABET[byte % ALPHABET.length]).join('');
+interface SelfTest {
+  readonly ok: boolean;
+  readonly reported: {
+    readonly total: number;
+    readonly syntaxes: readonly string[];
+    readonly missed: readonly unknown[];
+  };
+  readonly ordinary: { readonly total: number; readonly wrong: readonly unknown[] };
 }
 
-/** `NAME=value` and the like, never written as one piece of text. */
-function assign(name: string, value: string, separator = '=', quote = ''): string {
-  return [name, separator, quote, value, quote].join('');
-}
+/** Every way of binding a value to a name that the rule lists. */
+const SYNTAXES_OF_THE_RULE = [
+  'NAME=value',
+  'export NAME=value',
+  'NAME="value" in quotes',
+  '- NAME=value after a list dash',
+  'ENV and ARG of a Dockerfile',
+  'name: value in YAML',
+  '"name": value in JSON',
+  'assignment in JavaScript',
+  'declaration in JavaScript',
+  'typed declaration in TypeScript',
+  'object property in JavaScript',
+  'default parameter in JavaScript',
+  'fallback with ?? in JavaScript',
+  'fallback with || in JavaScript',
+  'branch of a ternary in JavaScript',
+];
 
-interface Scan {
-  readonly exitCode: number | null;
-  readonly output: string;
-  /** `file:line name` of every finding. */
-  readonly findings: string[];
-}
-
-async function scan(files: Record<string, string>): Promise<Scan> {
-  const root = mkdtempSync(join(tmpdir(), 'confera-assignments-'));
-  try {
-    for (const [file, text] of Object.entries(files)) {
-      mkdirSync(dirname(join(root, file)), { recursive: true });
-      writeFileSync(join(root, file), text);
-    }
-    const result = await runNode([join('scripts', 'secret-assignments.mjs'), root]);
-    const findings: string[] = [];
-    let current = '';
-    for (const line of result.stdout.split(/\r?\n/)) {
-      const finding = /^ {2}(\d+) {2}error .*assigned to "([^"]+)"/.exec(line);
-      if (finding) {
-        findings.push(`${current}:${finding[1] ?? ''} ${finding[2] ?? ''}`);
-      } else if (line.trim() !== '') {
-        current = line.replaceAll('\\', '/').split('/').slice(-2).join('/');
-      }
-    }
-    return { exitCode: result.exitCode, output: result.output, findings };
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}
-
-describe('scan for values assigned to names like a secret', () => {
+describe('scan for literal values bound to secret-like names', () => {
   jest.setTimeout(120_000);
 
-  it('reports a mail password, a client secret and a data key in environment files', async () => {
-    const smtp = random(24);
-    const paypal = random(80);
-    const dataKey = randomBytes(32).toString('hex');
-    const result = await scan({
-      'deploy/server.env': ['STAGE=prod', assign('SMTP_PASSWORD', smtp), ''].join('\n'),
-      'deploy/payments.env': [
-        assign('PAYPAL_CLIENT_SECRET', paypal),
-        assign('DATA_KEY', dataKey),
-        '',
-      ].join('\n'),
+  describe('the two corpora', () => {
+    let result: SelfTest;
+
+    beforeAll(async () => {
+      const run = await runNode([SCANNER, '--self-test', '--json']);
+      if (run.stdout.trim() === '') {
+        throw new Error(`the self-test printed nothing:\n${run.output}`);
+      }
+      result = JSON.parse(run.stdout) as SelfTest;
     });
-    expect(result.exitCode).toBe(1);
-    expect(result.findings.sort()).toEqual([
-      'deploy/payments.env:1 PAYPAL_CLIENT_SECRET',
-      'deploy/payments.env:2 DATA_KEY',
-      'deploy/server.env:2 SMTP_PASSWORD',
-    ]);
-    // A finding names the variable and never shows the value.
-    for (const value of [smtp, paypal, dataKey]) {
-      expect(result.output).not.toContain(value);
-    }
-  });
 
-  it.each([
-    ['with export', (v: string) => `export ${assign('API_TOKEN', v)}`],
-    ['with spaces around the sign', (v: string) => assign('SIGNING_KEY ', ` ${v}`)],
-    ['in double quotes', (v: string) => assign('MAIL_PASSWD', v, '=', '"')],
-    ['in single quotes', (v: string) => assign('SERVICE_CREDENTIALS', v, '=', "'")],
-    ['with a comment after it', (v: string) => `${assign('WEBHOOK_SECRET', v)} # rotate yearly`],
-    ['as a YAML entry', (v: string) => `    ${assign('SMTP_PASSWORD', v, ': ')}`],
-    ['a short real password', () => assign('SMTP_PASSWORD', 'hunter2!')],
-    ['a word that is not the documented placeholder', () => assign('SMTP_PASSWORD', 'changeme')],
-  ])('reports an assignment %s', async (_name, build) => {
-    const result = await scan({ 'deploy/compose.env': `${build(random(20))}\n` });
-    expect(result.findings).toHaveLength(1);
-    expect(result.exitCode).toBe(1);
-  });
-
-  it('does not report placeholders, references, empty values and names that only look alike', async () => {
-    const result = await scan({
-      'deploy/template.env': [
-        assign('POSTGRES_PASSWORD', 'local-only-superuser'),
-        assign('SMTP_PASSWORD', 'invented-mail-password'),
-        assign('DATA_KEY', ''),
-        assign('API_TOKEN', '${API_TOKEN}'),
-        assign('PAYPAL_CLIENT_SECRET', '<set-on-the-server>'),
-        assign('SESSION_TOKEN_TTL', '86400000'),
-        assign('DATA_KEY_FILE', '/run/secrets/data_key'),
-        assign('TOKEN_URL', 'https://example.test/oauth/token'),
-        assign('KEYWORDS', 'conference,membership'),
-        assign('MONKEY_BUSINESS', random(20)),
-        assign('STAGE', 'production'),
-        assign('SMTP_PASSWORD', 'short'),
-        `# ${assign('SMTP_PASSWORD', 'is set on the server by the operator')}`,
-        '',
-      ].join('\n'),
+    it('every shape that must be reported is reported, by its name and nothing else', () => {
+      expect(result.reported.missed).toEqual([]);
     });
-    expect(result.findings).toEqual([]);
-    expect(result.exitCode).toBe(0);
+
+    it('no ordinary line is reported', () => {
+      expect(result.ordinary.wrong).toEqual([]);
+    });
+
+    it('the corpus of shapes covers every syntax of the rule', () => {
+      for (const syntax of SYNTAXES_OF_THE_RULE) {
+        expect(result.reported.syntaxes).toContain(syntax);
+      }
+      // The planted cases of `pnpm test:supply-chain` that are bindings, and more.
+      expect(result.reported.total).toBeGreaterThanOrEqual(40);
+    });
+
+    it('the corpus of ordinary lines holds at least twenty files of them', () => {
+      expect(result.ordinary.total).toBeGreaterThanOrEqual(20);
+    });
+
+    it('the program says so with its exit code', async () => {
+      const run = await runNode([SCANNER, '--self-test']);
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toMatch(
+        /shapes that must be reported: (\d+) of \1; ordinary lines left alone: (\d+) of \2/,
+      );
+    });
   });
 
-  describe('in source code', () => {
-    it('reports a quoted value assigned to a name like a secret', async () => {
-      const result = await scan({
-        'src/mail.ts': [
-          'export const config = {',
-          `  ${assign('smtpPassword', random(12), ': ', "'")},`,
-          `  ${assign('"client_secret"', random(40), ': ', '"')},`,
-          `  ${assign('dataKey', randomBytes(32).toString('hex'), ': ', "'")},`,
-          '};',
-          `const ${assign('apiToken', random(30), ' = ', "'")};`,
-          '',
-        ].join('\n'),
-        'config/settings.json': `{ ${assign('"webhookSecret"', random(32), ': ', '"')} }\n`,
-      });
-      expect(result.findings.sort()).toEqual([
-        'config/settings.json:1 webhookSecret',
-        'src/mail.ts:2 smtpPassword',
-        'src/mail.ts:3 client_secret',
-        'src/mail.ts:4 dataKey',
-        'src/mail.ts:6 apiToken',
+  describe('which names are secret-like', () => {
+    const SECRET_LIKE = [
+      'password',
+      'Password',
+      'smtpPassword',
+      'SMTP_PASSWORD',
+      'smtp-password',
+      'spring.datasource.password',
+      'MYSQL_PASSWD',
+      'secret',
+      'clientSecret',
+      'SESSION_SECRET',
+      'token',
+      'accessToken',
+      'csrf-token',
+      'apiKey',
+      'API_KEY',
+      'apikey',
+      'x-api-key',
+      'APIKey',
+      'privateKey',
+      'credential',
+      'AWS_CREDENTIALS',
+      'DATA_KEY',
+      'api key',
+      'API_KEY_2',
+      'password2',
+    ];
+    const ORDINARY = [
+      'passwordPolicy',
+      'tokenType',
+      'secretName',
+      'PASSWORD_MIN_LENGTH',
+      'passwordHash',
+      'passwordLabel',
+      'tokens',
+      'secrets',
+      'passwords',
+      'key',
+      'publicKey',
+      'primaryKey',
+      'cacheKey',
+      'tokenizer',
+      'secretary',
+      'TOKEN_TTL_SECONDS',
+      'SESSION_SECRET_FILE',
+      'credentialsPath',
+      'apiKeyHeader',
+      'monkey',
+      '',
+    ];
+
+    let verdicts: Record<string, boolean>;
+
+    beforeAll(async () => {
+      const program = `
+        import { isSecretLikeName } from './scripts/secret-assignments/secret-assignments.mjs';
+        const names = JSON.parse(process.argv[1]);
+        process.stdout.write(JSON.stringify(Object.fromEntries(names.map((n) => [n, isSecretLikeName(n)]))));
+      `;
+      const run = await runNode([
+        '--input-type=module',
+        '--eval',
+        program,
+        JSON.stringify([...SECRET_LIKE, ...ORDINARY]),
       ]);
+      if (run.exitCode !== 0) {
+        throw new Error(run.output);
+      }
+      verdicts = JSON.parse(run.stdout) as Record<string, boolean>;
     });
 
-    it('does not report expressions, references, short test values or other names', async () => {
-      const result = await scan({
-        'src/sample.ts': [
-          'export const settings = {',
-          '  POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,',
-          '  password: body.password,',
-          '  token: generateToken(),',
-          `  ${assign('password', 'canary', ': ', "'")},`,
-          `  ${assign('apiKey', 'invented-api-key-0001', ': ', "'")},`,
-          `  ${assign('passwordHash', 'local-only-hash', ': ', "'")},`,
-          '  clientSecret: `${prefix}-suffix-of-the-secret`,',
-          `  ${assign('keywords', 'conference, membership and a long text', ': ', "'")},`,
-          `  ${assign('primaryKey', 'organisation_id', ': ', "'")},`,
-          `  ${assign('tokenHeader', 'X-Form-Token-Name', ': ', "'")},`,
-          `  ${assign('passwordField', 'new_password_again', ': ', "'")},`,
-          '  secret: false,',
-          '};',
-          'const SECRET_LIKE = /password|secret|token/i;',
-          '',
-        ].join('\n'),
+    it.each(SECRET_LIKE)('"%s" is, or ends with, a secret word', (name) => {
+      expect(verdicts[name]).toBe(true);
+    });
+
+    it.each(ORDINARY)('"%s" is not: it only contains one, or none', (name) => {
+      expect(verdicts[name]).toBe(false);
+    });
+  });
+
+  describe('a directory', () => {
+    // Under tmp/ of the repository (ignored by git), not under the temporary folder of
+    // the system, where an antivirus may take files away.
+    const root = join(repoRoot, 'tmp');
+    let directory: string;
+
+    async function scan(files: Record<string, string>, ...args: string[]) {
+      for (const [file, text] of Object.entries(files)) {
+        mkdirSync(dirname(join(directory, file)), { recursive: true });
+        writeFileSync(join(directory, file), text);
+      }
+      const run = await runNode([SCANNER, directory, ...args]);
+      const findings = [
+        ...run.stdout.matchAll(/^(.+)\n {2}(\d+) {2}error .*bound to "([^"]+)"/gm),
+      ].map(
+        ([, file = '', line = '', name = '']) =>
+          `${file.replaceAll('\\', '/').slice(directory.replaceAll('\\', '/').length + 1)}:${line} ${name}`,
+      );
+      return { exitCode: run.exitCode, output: run.output, findings };
+    }
+
+    beforeEach(() => {
+      mkdirSync(root, { recursive: true });
+      directory = mkdtempSync(join(root, 'secret-scan-'));
+    });
+
+    afterEach(() => {
+      rmSync(directory, { recursive: true, force: true });
+    });
+
+    it('names the file, the line and the name, never the value, and fails', async () => {
+      const value = 'Zk3vN8qLm2Xw5Rt9Yb4Hc7Dg';
+      const { exitCode, output, findings } = await scan({
+        'deploy/server.env': `STAGE=prod\nSMTP_PASSWORD=${value}\n`,
+        'src/session.ts': `export const sessionSecret: string = '${value}';\n`,
+        'config/app.yml': `smtp:\n  host: mail.example.test\n  password: ${value}\n`,
       });
-      expect(result.findings).toEqual([]);
+      expect(exitCode).toBe(1);
+      expect(findings.sort()).toEqual([
+        'config/app.yml:3 password',
+        'deploy/server.env:2 SMTP_PASSWORD',
+        'src/session.ts:1 sessionSecret',
+      ]);
+      expect(output).not.toContain(value);
+      expect(output).toContain('3 literal value(s) bound to a name like a secret.');
+      expect(output).toContain('invented- or local-only-');
     });
-  });
 
-  it('scans what git would take and nothing else', async () => {
-    const result = await scan({
-      '.gitignore': ['.env', 'node_modules/', 'dist/', ''].join('\n'),
-      '.env': `${assign('SMTP_PASSWORD', random(20))}\n`,
-      'node_modules/pkg/config.env': `${assign('SMTP_PASSWORD', random(20))}\n`,
-      'dist/config.env': `${assign('SMTP_PASSWORD', random(20))}\n`,
-      'deploy/taken.env': `${assign('SMTP_PASSWORD', random(20))}\n`,
+    it('passes, and prints nothing, when every value follows the rule', async () => {
+      const { exitCode, output } = await scan({
+        '.env.example': 'SMTP_PASSWORD=invented-mail-password\nAPI_TOKEN=\nDATA_KEY=${DATA_KEY}\n',
+        'src/config.ts': 'export const password = process.env.SMTP_PASSWORD;\n',
+        'compose.yaml':
+          'services:\n  db:\n    environment:\n      POSTGRES_PASSWORD: local-only-owner\n',
+      });
+      expect({ exitCode, output }).toEqual({ exitCode: 0, output: '' });
     });
-    expect(result.findings).toEqual(['deploy/taken.env:1 SMTP_PASSWORD']);
-  });
 
-  it('finds nothing in this repository', async () => {
-    const result = await runNode([join('scripts', 'secret-assignments.mjs')]);
-    expect({ exitCode: result.exitCode, output: result.output }).toEqual({
-      exitCode: 0,
-      output: '',
+    it('reads what git tracks or would take: an ignored file is not read', async () => {
+      const { findings } = await scan({
+        '.gitignore': '.env\nnode_modules/\n',
+        '.env': 'SMTP_PASSWORD=hunter2\n',
+        'node_modules/x/index.js': "exports.token = 'hunter2';\n",
+        'kept.env': 'SMTP_PASSWORD=hunter2\n',
+      });
+      expect(findings).toEqual(['kept.env:1 SMTP_PASSWORD']);
+    });
+
+    it('never reads a lockfile, and leaves out what the caller excludes', async () => {
+      const files = {
+        'pnpm-lock.yaml': 'packages:\n  token: hunter2\n',
+        'package-lock.json': '{ "token": "hunter2" }\n',
+        'openapi/openapi.json': '{ "example": { "password": "hunter2" } }\n',
+        'vendor/lib/config.js': "module.exports = { apiKey: 'hunter2' };\n",
+        'src/config.js': "module.exports = { apiKey: 'hunter2' };\n",
+      };
+      expect((await scan(files)).findings.sort()).toEqual([
+        'openapi/openapi.json:1 password',
+        'src/config.js:1 apiKey',
+        'vendor/lib/config.js:1 apiKey',
+      ]);
+      expect(
+        (await scan(files, '--exclude', 'openapi/', '--exclude', 'vendor/**/*.js')).findings,
+      ).toEqual(['src/config.js:1 apiKey']);
+    });
+
+    it('steps over a file that is not a text', async () => {
+      const { exitCode } = await scan({
+        'image.bin': `\u0000\u0001\u0002SMTP_PASSWORD=hunter2\n`,
+      });
+      expect(exitCode).toBe(0);
     });
   });
 });

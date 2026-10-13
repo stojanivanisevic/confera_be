@@ -32,6 +32,6 @@ version at every milestone (ADR-19).
 ### Fixed
 
 - The surface of a request is chosen by an exact match of a syntactically valid `Host` header against the configured host names; a header with a user part, a path, a query or an encoded character is not found.
-- The secret scan also catches a literal value assigned to a name like a secret (`…_PASSWORD=`, `…_SECRET=`, `…_KEY=`), which has no format a pattern scanner could know.
+- The secret scan also reports every literal value bound to a secret-like name (a name whose words end with password, secret, token, api key and the like), in every syntax where a name gets a value: `NAME=value` lines, YAML, JSON, JavaScript and TypeScript. Empty values, references and placeholders that start with `invented-` or `local-only-` are the only allowed values; there is no guess by length. The scanner and its two corpora are in `scripts/secret-assignments/`.
 - PDF: the glyph check covers every place where text can enter a document (page background, title of a table of contents, list separators); what cannot be checked (SVG images, sections, attachments, text references, fill patterns, unknown kinds) is refused.
 - PDF: the fonts are loaded once, from memory, with their ligature features removed, so the PDF library no longer shapes every text without its cache; a table of 200 rows renders three to four times faster. The 5-second criterion is asserted by `pnpm test:timing`, a step of its own in `pnpm check`: fresh processes of plain Node, the first document included.

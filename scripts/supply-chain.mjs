@@ -4,8 +4,8 @@
 //   2. the pnpm settings that guard installs are still in place;
 //   3. the lockfile matches package.json and passes the release-age policy (frozen install);
 //   4. no known vulnerability of severity high or critical (`pnpm audit`);
-//   5. no secret in the files that git would take (secretlint for known formats, and a
-//      scan for literal values assigned to names like a secret);
+//   5. no secret in the files that git would take (secretlint for known formats, and the
+//      scan of scripts/secret-assignments/ for literal values bound to names like a secret);
 //   6. every container image is referenced by digest.
 //
 // Start it through pnpm: `corepack pnpm supply-chain`.
@@ -13,7 +13,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { repoRoot, runNode, runPnpm, tool } from './lib/process.mjs';
-import { formatFindings, scanDirectory } from './lib/secret-assignments.mjs';
+import { formatFindings, scanDirectory } from './secret-assignments/secret-assignments.mjs';
+import { SECRET_SCAN_EXCLUDE } from './secret-scan.config.mjs';
 
 /** Shortest waiting time for a new release that this repository accepts, in minutes (one day). */
 const MINIMUM_RELEASE_AGE_FLOOR = 1440;
@@ -152,18 +153,19 @@ await step(
 );
 
 await step(
-  'no secret in the files that git would take (secretlint, and values assigned to names like a secret)',
+  'no secret in the files that git would take (secretlint, and literal values bound to names like a secret)',
   async () => {
     // Two scans, one verdict. secretlint knows the format of many credentials; the second
-    // scan catches a secret that has no format and is given away by its name only.
+    // scan catches a secret that has no format and is given away by its name only
+    // (the rule is in scripts/secret-assignments/secret-assignments.mjs and in the README).
     const formats = await runNode([tool('secretlint', 'bin', 'secretlint.js'), '**/*']);
-    const assignments = scanDirectory(repoRoot);
+    const assignments = scanDirectory(repoRoot, { exclude: SECRET_SCAN_EXCLUDE });
     if (assignments.length > 0) {
       process.stdout.write(`${formatFindings(repoRoot, assignments)}\n`);
     }
     return formats !== 0 || assignments.length > 0 ? 1 : 0;
   },
-  'The secret scan failed: secretlint found something that looks like a secret, or a literal value is assigned to a name like a secret.',
+  'The secret scan failed: secretlint found something that looks like a secret, or a literal value is bound to a name like a secret.',
 );
 
 if (!existsSync(path.join(repoRoot, 'pnpm-lock.yaml'))) {
