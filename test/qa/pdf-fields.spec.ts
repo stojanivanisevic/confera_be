@@ -232,4 +232,154 @@ describe('Serbian text in every field of a PDF', () => {
       }
     });
   });
+
+  // Second round, after the fix of the glyph check: places the first tests did not contain.
+  // A fix that only closed the three doors those tests knocked on would leave these open.
+  describe('second round: more places where a layout can put text', () => {
+    const stops: [string, PdfDocument][] = [
+      ['the separator of a numbered list', { content: [{ ol: ['a', 'b'], separator: UNKNOWN }] }],
+      [
+        'the two separators of a numbered list',
+        { content: [{ ol: ['a'], separator: ['(', `${UNKNOWN})`] }] },
+      ],
+      [
+        'an entry of a table of contents',
+        { content: [{ toc: { title: { text: 'Sadržaj' } } }, { text: UNKNOWN, tocItem: true }] },
+      ],
+      [
+        'a text on a node of another kind',
+        { content: [{ columns: ['a', 'b'], text: UNKNOWN } as never] },
+      ],
+      [
+        'a cell that spans rows',
+        {
+          content: [
+            {
+              table: {
+                body: [
+                  [{ text: UNKNOWN, rowSpan: 2 }, 'b'],
+                  [{}, 'c'],
+                ],
+              },
+            },
+          ],
+        },
+      ],
+      [
+        'a header that differs on the second page',
+        {
+          header: (page: number) => (page === 2 ? `Strana ${UNKNOWN}` : 'Strana'),
+          content: [{ text: 'prva', pageBreak: 'after' }, 'druga'],
+        },
+      ],
+      [
+        'a background function that returns a stack in columns in a table',
+        {
+          background: () => ({
+            table: { body: [[{ columns: ['a', { stack: ['b', { text: ['c', UNKNOWN] }] }] }]] },
+          }),
+          content: ['a'],
+        },
+      ],
+      [
+        'a text that is a list of numbers and text',
+        { content: [{ text: [1, ' ', true, UNKNOWN] as never }] },
+      ],
+      [
+        'a letter given with the font that lacks it, by a style',
+        {
+          styles: { loud: { font: 'Manrope', bold: true } },
+          content: [{ text: UNKNOWN, style: 'loud' }],
+        },
+      ],
+      [
+        'a character reference inside an SVG image',
+        {
+          content: [
+            {
+              svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>&#x4E2D;</text></svg>',
+            },
+          ],
+        },
+      ],
+    ];
+
+    it.each(stops)(
+      'a character that no font has stops the render: %s',
+      async (_name, definition) => {
+        await expect(renderer.render(definition)).rejects.toThrow(MissingGlyphError);
+      },
+    );
+
+    it.each<[string, PdfDocument]>([
+      [
+        'a node of a kind the renderer does not know',
+        { content: [{ banner: 'Predračun' } as never] },
+      ],
+      [
+        'an SVG image, even one whose text every font can print',
+        {
+          content: [
+            {
+              svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>Predračun</text></svg>',
+            },
+          ],
+        },
+      ],
+      [
+        'a property of the document the renderer does not know',
+        { content: ['a'], banner: 'x' } as never,
+      ],
+      ['a list inside a text', { content: [{ text: ['a', { ul: ['b'] }] }] }],
+      ['files inside the PDF', { content: ['a'], attachments: {} }],
+    ])('what cannot be checked is refused, not printed: %s', async (_name, definition) => {
+      await expect(renderer.render(definition)).rejects.toThrow(/cannot be made/);
+    });
+
+    it('a letter that only the fallback font has reads back whatever font a layout names for it', async () => {
+      const pdf = await renderer.render({
+        styles: { loud: { font: 'Manrope', bold: true } },
+        content: [
+          { text: 'Stilom: ǌegoš i Živana', style: 'loud' },
+          { text: 'Svojstvom: ǅemal i Ђорђе', font: 'Manrope' },
+          { ol: ['Nabrajanje: ǈubica'], separator: ')' },
+          {
+            table: {
+              body: [
+                [{ text: 'Ćelija: ǌ', rowSpan: 2 }, 'đ'],
+                [{}, 'ž'],
+              ],
+            },
+          },
+        ],
+      });
+      const lines = linesOf(await readPdf(pdf)).join('\n');
+      for (const expected of [
+        'Stilom: ǌegoš i Živana',
+        'Svojstvom: ǅemal i Ђорђе',
+        'Nabrajanje: ǈubica',
+        'Ćelija: ǌ',
+      ]) {
+        expect(lines).toContain(expected);
+      }
+      expect(lines).not.toContain('\u0000');
+      for (const name of rawFontNames(pdf)) {
+        expect(name).toMatch(/^[A-Z]{6}\+(Manrope|NotoSans)-(Regular|Bold)$/);
+      }
+    });
+
+    it('a table of contents copies its entries with their fonts: the copy reads back too', async () => {
+      const pdf = await renderer.render({
+        content: [
+          { toc: { title: { text: 'Sadržaj šđčćž' } } },
+          { text: 'Poglavlje ǌegoš Ђорђе', tocItem: true, pageBreak: 'before' },
+        ],
+      });
+      const lines = linesOf(await readPdf(pdf));
+      expect(
+        lines.filter((line) => line.includes('Poglavlje ǌegoš Ђорђе')).length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(lines.join('\n')).not.toContain('\u0000');
+    });
+  });
 });
