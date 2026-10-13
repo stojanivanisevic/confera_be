@@ -1,12 +1,18 @@
-import { join } from 'node:path';
-import { repoRoot, runNode } from '../support/run-node';
+import { runNode } from '../support/run-node';
 
 /**
  * ST-09 (lint part) and ST-65 (no CORS grant, no static mount, by construction):
  * the lint rules with a security purpose fire on the code they are meant to stop.
  *
  * Each sample is linted as if it were a file at the given path, with the same rule
- * objects that eslint.config.mjs applies. All samples are linted in one child process.
+ * objects that eslint.config.mjs applies. The real configuration is then asked what it
+ * applies to two real paths.
+ *
+ * All of it happens in ONE child process (test/support/lint-samples.mjs). Starting ESLint
+ * with typescript-eslint is the expensive part: a second or two on a free machine, far
+ * longer while every processor compiles tests on a cold clone. It used to be started
+ * three times, each with a limit of 60 seconds, and a start that ran into the limit
+ * showed up as a JSON parse error.
  */
 
 interface LintMessage {
@@ -130,21 +136,46 @@ const samples: Sample[] = [
   })),
 ];
 
-const ESLINT = join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
+/** A rule as ESLint holds it: the severity, then the options. */
+type AppliedRule = [number | string, ...{ selector?: string }[]] | null;
+
+const APPLICATION_CODE = 'src/app.module.ts';
+const CONFIGURATION_MODULE = 'src/config/env.ts';
+const SYNTAX = 'no-restricted-syntax';
+const IMPORTS = 'no-restricted-imports';
+
+/**
+ * A guard against a child process that hangs, not a measure of speed: ESLint gets five
+ * minutes. A run that uses them up says that it was a timeout.
+ */
+const CHILD_LIMIT_MS = 300_000;
 
 describe('lint rules with a security purpose', () => {
-  jest.setTimeout(120_000);
+  jest.setTimeout(CHILD_LIMIT_MS + 30_000);
 
   let results: { filePath: string; messages: LintMessage[] }[] = [];
+  let configs: Record<string, Record<string, AppliedRule>> = {};
 
   beforeAll(async () => {
     const run = await runNode(['test/support/lint-samples.mjs'], {
-      input: JSON.stringify(samples.map(({ code, filePath }) => ({ code, filePath }))),
+      input: JSON.stringify({
+        samples: samples.map(({ code, filePath }) => ({ code, filePath })),
+        configs: { paths: [APPLICATION_CODE, CONFIGURATION_MODULE], rules: [SYNTAX, IMPORTS] },
+      }),
+      timeoutMs: CHILD_LIMIT_MS,
     });
+    if (run.timedOut) {
+      throw new Error(
+        `TIMEOUT: ESLint did not finish within ${String(CHILD_LIMIT_MS / 1000)} seconds. That is the time limit of the child process, not a finding of a lint rule.\n${run.output}`,
+      );
+    }
     if (run.exitCode !== 0) {
       throw new Error(`linting the samples failed:\n${run.output}`);
     }
-    results = JSON.parse(run.stdout) as typeof results;
+    ({ results, configs } = JSON.parse(run.stdout) as {
+      results: typeof results;
+      configs: typeof configs;
+    });
   });
 
   function check(group: Sample['group']): void {
@@ -189,35 +220,33 @@ describe('lint rules with a security purpose', () => {
   });
 
   describe('the real configuration applies these rules', () => {
-    interface PrintedConfig {
-      rules: Record<string, [number, ...{ selector?: string }[]] | undefined>;
+    /** The severity "error", as ESLint holds it once a configuration is worked out. */
+    const ERROR = 2;
+
+    function rule(filePath: string, name: string): AppliedRule {
+      return configs[filePath]?.[name] ?? null;
     }
 
-    async function printedConfig(filePath: string): Promise<PrintedConfig> {
-      const result = await runNode([ESLINT, '--print-config', filePath]);
-      return JSON.parse(result.stdout) as PrintedConfig;
-    }
-
-    function selectors(config: PrintedConfig): string[] {
-      const [, ...entries] = config.rules['no-restricted-syntax'] ?? [0];
+    function selectors(filePath: string): string[] {
+      const [, ...entries] = rule(filePath, SYNTAX) ?? [0];
       return entries.map((entry) => entry.selector ?? '');
     }
 
-    it('as errors, with the environment ban, for application code', async () => {
-      const config = await printedConfig('src/app.module.ts');
-      expect(config.rules['no-restricted-syntax']?.[0]).toBe(2);
-      expect(config.rules['no-restricted-imports']?.[0]).toBe(2);
-      expect(selectors(config).some((s) => s.includes("property.name='env'"))).toBe(true);
-      expect(selectors(config).some((s) => s.includes('queryRawUnsafe'))).toBe(true);
-      expect(selectors(config).some((s) => s.includes('enableCors'))).toBe(true);
-      expect(selectors(config).some((s) => s.includes('useStaticAssets'))).toBe(true);
+    it('as errors, with the environment ban, for application code', () => {
+      expect(rule(APPLICATION_CODE, SYNTAX)?.[0]).toBe(ERROR);
+      expect(rule(APPLICATION_CODE, IMPORTS)?.[0]).toBe(ERROR);
+      const applied = selectors(APPLICATION_CODE);
+      expect(applied.some((s) => s.includes("property.name='env'"))).toBe(true);
+      expect(applied.some((s) => s.includes('queryRawUnsafe'))).toBe(true);
+      expect(applied.some((s) => s.includes('enableCors'))).toBe(true);
+      expect(applied.some((s) => s.includes('useStaticAssets'))).toBe(true);
     });
 
-    it('without the environment ban, and with every other ban, for src/config', async () => {
-      const config = await printedConfig('src/config/env.ts');
-      expect(config.rules['no-restricted-syntax']?.[0]).toBe(2);
-      expect(selectors(config).some((s) => s.includes("property.name='env'"))).toBe(false);
-      expect(selectors(config).some((s) => s.includes('queryRawUnsafe'))).toBe(true);
+    it('without the environment ban, and with every other ban, for src/config', () => {
+      expect(rule(CONFIGURATION_MODULE, SYNTAX)?.[0]).toBe(ERROR);
+      const applied = selectors(CONFIGURATION_MODULE);
+      expect(applied.some((s) => s.includes("property.name='env'"))).toBe(false);
+      expect(applied.some((s) => s.includes('queryRawUnsafe'))).toBe(true);
     });
   });
 });

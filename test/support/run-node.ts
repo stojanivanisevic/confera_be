@@ -9,13 +9,21 @@ export interface ProcessResult {
   readonly stderr: string;
   /** stdout and stderr together, in the order they arrived. */
   readonly output: string;
+  /**
+   * True when the process was stopped because it ran longer than its time limit. The
+   * exit code is then null, and `stderr` and `output` end with a line that says so.
+   */
+  readonly timedOut: boolean;
 }
 
 export interface RunOptions {
   readonly env?: Record<string, string | undefined>;
   readonly input?: string;
+  /** The process is stopped after this long. 60 seconds when not given. */
   readonly timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
  * The few variables of the parent process that a child needs in order to run at all.
@@ -53,16 +61,26 @@ export function runNode(args: readonly string[], options: RunOptions = {}): Prom
       stderr += chunk;
       output += chunk;
     });
+    const limit = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    let timedOut = false;
     const timer = setTimeout(() => {
+      timedOut = true;
       child.kill();
-    }, options.timeoutMs ?? 60_000);
+    }, limit);
     child.on('error', (error) => {
       clearTimeout(timer);
       reject(error);
     });
     child.on('close', (exitCode) => {
       clearTimeout(timer);
-      resolve({ exitCode, stdout, stderr, output });
+      if (timedOut) {
+        // Said in the output itself, so that whatever a test prints of a failed run names
+        // the timeout, instead of an empty result that fails further on as something else.
+        const note = `\n[timeout] "node ${args.join(' ')}" was stopped after ${String(limit / 1000)} s: it ran into its time limit and did not finish.\n`;
+        stderr += note;
+        output += note;
+      }
+      resolve({ exitCode, stdout, stderr, output, timedOut });
     });
     child.stdin.end(options.input ?? '');
   });
