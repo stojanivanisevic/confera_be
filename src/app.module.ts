@@ -1,6 +1,7 @@
 import { type DynamicModule, Module, type ModuleMetadata } from '@nestjs/common';
 import type { AppConfig } from './config/config';
 import { ConfigModule } from './config/config.module';
+import { HealthModule } from './modules/health/health.module';
 
 type Imports = NonNullable<ModuleMetadata['imports']>;
 
@@ -16,7 +17,7 @@ export class AppModule {
   static register(config: AppConfig, extraImports: Imports = []): DynamicModule {
     return {
       module: AppModule,
-      imports: [ConfigModule.register(config), ...extraImports],
+      imports: [ConfigModule.register(config), HealthModule, ...extraImports],
     };
   }
 }

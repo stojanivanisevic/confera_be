@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from './lib/process.mjs';
 
-const ENTRY = path.join('dist-dev', 'main.js');
+const ENTRY = path.join('dist-dev', 'modules', 'dev-tools', 'main.dev.js');
 
 const compiler = spawn(
   process.execPath,

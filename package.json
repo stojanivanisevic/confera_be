@@ -20,7 +20,7 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --selectProjects unit",
-    "test:build": "jest --selectProjects build --passWithNoTests",
+    "test:build": "jest --selectProjects build",
     "supply-chain": "node scripts/supply-chain.mjs",
     "check": "node scripts/check.mjs",
     "stack:up": "docker compose up --detach --wait",
