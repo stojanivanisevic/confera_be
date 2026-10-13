@@ -102,7 +102,7 @@ describe('configuration', () => {
   describe('STAGE has no default and exact values (ADR-24, ST-01)', () => {
     it.each(['local', 'dev', 'test', 'prod'])('knows the value %s', (stage) => {
       const problems = problemsOf(validEnvironment({ STAGE: stage }));
-      expect(problems.filter((p) => p.problem.includes('must be exactly one of'))).toEqual([]);
+      expect(problems.filter((p) => p.variable === 'STAGE')).toEqual([]);
     });
 
     it.each([

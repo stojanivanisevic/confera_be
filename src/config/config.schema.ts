@@ -7,21 +7,31 @@ import { z } from 'zod';
  * - `src/config` is the only place that reads the environment; a lint rule enforces it.
  * - A missing or invalid value stops the start, and the message names the variable.
  *   A message never repeats a value, because values can be secrets.
- * - `STAGE` has no default.
+ * - `STAGE` and `INSTANCE` have no default.
+ * - A variable whose name starts with `DEV_` switches a development convenience on.
+ *   Such keys are listed here and nowhere else; the rules about them are in stage-guard.ts.
  *
- * `.env.example` documents the same variables; a unit test keeps the two in step.
+ * `.env.example` documents the same variables; a test keeps the two in step.
  */
 
 export const STAGES = ['local', 'dev', 'test', 'prod'] as const;
 export type Stage = (typeof STAGES)[number];
+
+/** Tells production from staging on a `prod` stage (ADR-24). Exactly two values, no default. */
+export const INSTANCES = ['production', 'staging'] as const;
+export type Instance = (typeof INSTANCES)[number];
 
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export const DEFAULT_PORT = 3001;
 
+/** Prefix of the variables that switch a development convenience on. */
+export const DEV_PREFIX = 'DEV_';
+
 const PROBLEM = {
   stage: `is required and must be exactly one of: ${STAGES.join(', ')} (there is no default)`,
+  instance: `must be exactly one of: ${INSTANCES.join(', ')} (there is no default)`,
   port: 'must be a whole number between 1 and 65535',
   listenHost: 'must be an IP address or a host name without spaces',
   origin:
@@ -29,6 +39,7 @@ const PROBLEM = {
   databaseUrl:
     'is required and must be a PostgreSQL address of the form postgresql://role:password@host:port/database',
   logLevel: `must be one of: ${LOG_LEVELS.join(', ')}`,
+  flag: 'must be exactly true or false',
 } as const;
 
 export function isOrigin(value: string): boolean {
@@ -61,8 +72,13 @@ const databaseUrl = z
   .string({ error: PROBLEM.databaseUrl })
   .refine(isPostgresUrl, { error: PROBLEM.databaseUrl });
 
+const flag = z
+  .enum(['true', 'false'], { error: PROBLEM.flag })
+  .transform((value) => value === 'true');
+
 export const environmentSchema = z.object({
   STAGE: z.enum(STAGES, { error: PROBLEM.stage }),
+  INSTANCE: z.enum(INSTANCES, { error: PROBLEM.instance }).optional(),
   PORT: z
     .string()
     .regex(/^[1-9]\d{0,4}$/, { error: PROBLEM.port })
@@ -78,6 +94,8 @@ export const environmentSchema = z.object({
   DATABASE_URL: databaseUrl,
   SYSTEM_DATABASE_URL: databaseUrl,
   LOG_LEVEL: z.enum(LOG_LEVELS, { error: PROBLEM.logLevel }).optional(),
+  DEV_API_DOCS: flag.optional(),
+  DEV_LOG_QUERIES: flag.optional(),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -96,6 +114,11 @@ export const VARIABLES = {
     description: `Where this process runs: ${STAGES.join(', ')}. No default; anything else stops the start.`,
     secret: false,
     required: true,
+  },
+  INSTANCE: {
+    description: `On STAGE=prod only, and required there: ${INSTANCES.join(' or ')}. No default.`,
+    secret: false,
+    required: false,
   },
   PORT: {
     description: `Port the API listens on. Default ${DEFAULT_PORT}.`,
@@ -133,7 +156,19 @@ export const VARIABLES = {
     required: true,
   },
   LOG_LEVEL: {
-    description: `Lowest level that is logged: ${LOG_LEVELS.join(', ')}. Default info.`,
+    description: `Lowest level that is logged: ${LOG_LEVELS.join(', ')}. Default info. On prod: info or higher.`,
+    secret: false,
+    required: false,
+  },
+  DEV_API_DOCS: {
+    description:
+      'Development convenience (STAGE=local or dev only): true serves the interactive API documentation.',
+    secret: false,
+    required: false,
+  },
+  DEV_LOG_QUERIES: {
+    description:
+      'Development convenience (STAGE=local or dev only): true logs every SQL statement. Never possible on a server.',
     secret: false,
     required: false,
   },
@@ -142,3 +177,6 @@ export const VARIABLES = {
 export const VARIABLE_NAMES = Object.keys(VARIABLES) as VariableName[];
 
 export const SECRET_VARIABLE_NAMES = VARIABLE_NAMES.filter((name) => VARIABLES[name].secret);
+
+/** Every `DEV_*` key the schema knows. The guard and its tests take the list from here. */
+export const DEV_VARIABLE_NAMES = VARIABLE_NAMES.filter((name) => name.startsWith(DEV_PREFIX));

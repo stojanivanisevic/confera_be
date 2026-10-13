@@ -2,15 +2,19 @@ import {
   DEFAULT_PORT,
   type Environment,
   environmentSchema,
+  type Instance,
   type LogLevel,
   type Stage,
   VARIABLE_NAMES,
 } from './config.schema';
 import { Secret } from './secret';
+import { stageGuardProblems } from './stage-guard';
 
 /** The validated configuration. Injected with `@Inject(APP_CONFIG)`; never read from the environment elsewhere. */
 export interface AppConfig {
   readonly stage: Stage;
+  /** `production` or `staging` on a `prod` stage; `null` on a developer machine. */
+  readonly instance: Instance | null;
   readonly http: {
     readonly port: number;
     readonly listenHost: string;
@@ -26,6 +30,15 @@ export interface AppConfig {
     readonly systemUrl: Secret;
   };
   readonly logLevel: LogLevel;
+  /**
+   * Development conveniences. Every flag is false unless STAGE is local or dev, because
+   * the guard refuses the `DEV_*` keys everywhere else; and the code that acts on them
+   * lives in the dev-tools module, which the production build does not contain.
+   */
+  readonly devTools: {
+    readonly apiDocs: boolean;
+    readonly logQueries: boolean;
+  };
 }
 
 export interface ConfigProblem {
@@ -43,6 +56,7 @@ export type RawEnvironment = Readonly<Record<string, string | undefined>>;
 function toConfig(env: Environment): AppConfig {
   return {
     stage: env.STAGE,
+    instance: env.INSTANCE ?? null,
     http: {
       port: env.PORT ?? DEFAULT_PORT,
       listenHost: env.LISTEN_HOST ?? (env.STAGE === 'prod' ? '0.0.0.0' : '127.0.0.1'),
@@ -56,6 +70,10 @@ function toConfig(env: Environment): AppConfig {
       systemUrl: new Secret(env.SYSTEM_DATABASE_URL),
     },
     logLevel: env.LOG_LEVEL ?? 'info',
+    devTools: {
+      apiDocs: env.DEV_API_DOCS ?? false,
+      logQueries: env.DEV_LOG_QUERIES ?? false,
+    },
   };
 }
 
@@ -77,6 +95,7 @@ export function parseEnvironment(env: RawEnvironment): ConfigResult {
       problems.push({ variable, problem: issue.message });
     }
   }
+  problems.push(...stageGuardProblems(env));
 
   if (!parsed.success || problems.length > 0) {
     return { ok: false, problems: sortProblems(problems) };
