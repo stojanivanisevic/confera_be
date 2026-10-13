@@ -17,6 +17,21 @@ import { ADMIN_HOST, type E2eApp, PUBLIC_HOST, startE2eApp } from './support/e2e
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CANARY = 'canary-e2e-7f3a91';
 
+/**
+ * The headers of every API response (ADR-28: "the API sets its own"), written out here
+ * and NOT taken from the application's own list: a header that is dropped from that list,
+ * or weakened, must fail a test.
+ */
+const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'cache-control': 'no-store',
+  'content-security-policy':
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'x-frame-options': 'DENY',
+  'cross-origin-resource-policy': 'same-origin',
+};
+
 interface OpenApiDocument {
   readonly paths: Record<string, Record<string, unknown>>;
 }
@@ -208,8 +223,8 @@ describe('the API, end to end', () => {
       '%s carries the security headers and a trace id',
       async (_n, method, path, host) => {
         const response = await e2e.http()[method.toLowerCase() as 'get'](path).set('Host', host);
-        for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
-          expect(response.headers[name.toLowerCase()]).toBe(value);
+        for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+          expect({ name, value: response.headers[name] }).toEqual({ name, value });
         }
         expect(response.headers['x-trace-id']).toMatch(UUID);
         expect(response.headers).not.toHaveProperty('x-powered-by');
@@ -217,6 +232,13 @@ describe('the API, end to end', () => {
         expect(response.headers).not.toHaveProperty('set-cookie');
       },
     );
+
+    it('the application sets exactly this list: a header added to it is added here, in a diff a reviewer sees', () => {
+      const own = Object.fromEntries(
+        Object.entries(API_SECURITY_HEADERS).map(([name, value]) => [name.toLowerCase(), value]),
+      );
+      expect(own).toEqual(SECURITY_HEADERS);
+    });
 
     it('a trace id sent by the client is never used', async () => {
       const response = await e2e

@@ -7,6 +7,7 @@ import {
   VARIABLE_NAMES,
   VARIABLES,
 } from '../../src/config/config.schema';
+import { TOOL_ONLY_VARIABLES } from '../../src/config/stage-guard';
 import {
   validEnvironment,
   validProductionEnvironment,
@@ -165,6 +166,20 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
         expect(parseEnvironment(validEnvironment({ STAGE: 'local', [name]: 'x' })).ok).toBe(false);
       }
     });
+
+    // Written out here, not taken from the guard's own list: a name dropped from that
+    // list must fail a test. The owner role exists only in the migration job (ADR-05).
+    it.each(['MIGRATION_DATABASE_URL', 'PROVISION_DATABASE_URL', 'POSTGRES_PASSWORD'])(
+      'a credential of the migration job in the environment of the API stops the start on prod: %s',
+      (name) => {
+        const result = parseEnvironment(validProductionEnvironment({ [name]: 'anything' }));
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.problems.map((problem) => problem.variable)).toContain(name);
+        }
+        expect(TOOL_ONLY_VARIABLES).toContain(name);
+      },
+    );
 
     it('a secret is unwrapped in two reviewed places, each handing it to the database driver', () => {
       const unwrapping = applicationFiles
