@@ -7,10 +7,11 @@ import { repoRoot, runNode } from '../support/run-node';
  * of a process included (defect D4 of the 0.1.0 verification).
  *
  * The measurement runs in a fresh Node process, test/support/pdf-cold-start.cjs, and not
- * inside Jest. A process of Confera is a plain Node process; inside Jest every module
- * runs in Jest's sandbox, at the same time as the other test files, where the same
- * render takes about twice as long and the first one starts from modules that Jest has
- * already read. The same criterion is also asserted inside Jest by
+ * inside Jest. A process of Confera is a plain Node process. Inside Jest the PDF library
+ * runs in Jest's sandbox, at the same time as the other test files, and the clock
+ * measures that too: on the development laptop a table of 200 rows takes 0.1 s in plain
+ * Node, 0.25 s in a Jest file that runs alone and 0.5 to 1.6 s when the whole unit tier
+ * runs. The same criterion is also asserted inside Jest by
  * src/platform/pdf/pdf-renderer.spec.ts.
  *
  * Needs `pnpm build:dev`; `pnpm check` runs it first.
