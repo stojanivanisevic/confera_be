@@ -18,3 +18,7 @@ version at every milestone (ADR-19).
 - One error format (`application/problem+json`); an unknown error answers with a code and a trace id only.
 - JSON log with redaction by field name; the request log holds the route, never the address.
 - OpenAPI files generated from the code and committed in `openapi/`, with a drift check and a schema lint.
+- Database roles and provisioning script; first migration with row-level security on every tenant table.
+- Tenant database client (every operation inside the organisation of the request), resolvers of the system role, start-up check of the database roles, `GET /health/ready`.
+- Integration tests against PostgreSQL in Docker (`pnpm test:int`): tenant isolation, catalogue check, roles, clean production start.
+- PDF renderer on pdfmake with embedded Manrope and Noto Sans, glyph check, ligatures off; bilingual sample (`pnpm pdf:sample`).

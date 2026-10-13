@@ -15,6 +15,7 @@
     "build:dev": "node scripts/build.mjs tsconfig.build.dev.json",
     "openapi:generate": "node scripts/build.mjs tsconfig.build.dev.json && node dist-dev/modules/dev-tools/openapi/generate.js --write",
     "openapi:check": "node scripts/build.mjs tsconfig.build.dev.json && node dist-dev/modules/dev-tools/openapi/generate.js --check",
+    "pdf:sample": "node scripts/build.mjs tsconfig.build.dev.json && node dist-dev/modules/dev-tools/pdf-sample.js",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "start:dev": "node scripts/dev.mjs",
     "format": "prettier --write .",
@@ -29,7 +30,9 @@
     "stack:up": "docker compose up --detach --wait",
     "stack:down": "docker compose down",
     "db:provision": "node scripts/db-provision.mjs",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:diff": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "0.4.2",
