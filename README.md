@@ -306,8 +306,9 @@ To add one:
   files equal the code.
 - **Timing:** a fresh process of plain Node makes its first PDF, the next ones and a
   table of 200 rows in under 5 seconds each. It is a step of its own, so no other test
-  runs beside it, and the fastest of five processes counts: other work on the machine
-  can only add time to a measurement.
+  runs beside it, and the middle one of five processes counts (three of the five must be
+  under the limit): other work on the machine can only add time to a measurement, but
+  the luckiest process alone must not meet a limit that a person waits for.
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),
