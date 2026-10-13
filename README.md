@@ -361,6 +361,24 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
 - Neither the seed nor the stub slot is part of a build: they are scripts in `scripts/`,
   and a test of the built application proves that `dist/` and `dist-dev/` hold neither.
 
+**The cross-repo smoke test.** With the API started this way (`.env` a copy of
+`.env.example`, so it listens on `127.0.0.1:3001` and knows `localhost:3000` and
+`127.0.0.1:3000` as its two host names), the browser tests of `confera_fe` run in front of
+it instead of their stub. In `..\confera_fe`:
+
+```
+corepack pnpm api:check --sibling     the contract vendored there is the one of this checkout
+```
+
+- PowerShell: `$env:CONFERA_E2E_API_ORIGIN = 'http://127.0.0.1:3001'; corepack pnpm e2e`
+- Git Bash, macOS, Linux: `CONFERA_E2E_API_ORIGIN=http://127.0.0.1:3001 corepack pnpm e2e`
+
+Add `--project=real-api` for the short form (about two minutes). The run first asks
+<http://127.0.0.1:3001/health/ready> and stops with one message when the API is not
+there. What it tests, and what the variable changes, is in the README of `confera_fe`
+(section 6, "Against the real API"). The stub slot (`pnpm stubs`) is not needed for it in
+0.1.0.
+
 Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 
 ## 10. OpenAPI

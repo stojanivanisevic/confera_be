@@ -25,6 +25,8 @@ version at every milestone (ADR-19).
 - End-to-end tests of the API (`pnpm test:e2e`): supertest against the real application on PostgreSQL in Docker as the application role, with factories for invented people.
 - `pnpm seed:e2e` (refuses to run outside the stages local and test) and `pnpm stubs`, the stub slot of the development stack.
 - `pnpm test:supply-chain`, part of `pnpm check`: planted fake secrets, a vulnerable package and an unlisted build script must each be caught.
+- Cross-repo smoke test (M1-QA-02): the browser tests of `confera_fe` run in front of this API, started by the commands of README section 9 and nothing else.
+- PDF timing gate: the middle one of five fresh processes must make each kind of document in under 5 seconds (not the fastest one).
 - Architecture tests: who reads the environment (syntax tree), no credential compared with a configuration value, no `DEV_` key in a compose or deploy file.
 
 ### Fixed
