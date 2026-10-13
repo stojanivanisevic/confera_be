@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isMatchableHost } from '../common/http/host-header';
 
 /**
  * The configuration schema: every environment variable the API understands.
@@ -45,7 +46,13 @@ const PROBLEM = {
 export function isOrigin(value: string): boolean {
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.origin === value;
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.origin === value &&
+      // The API tells the surfaces apart by the Host header, which it reads strictly:
+      // a host it could never match there is refused here, at the start.
+      isMatchableHost(url.host)
+    );
   } catch {
     return false;
   }

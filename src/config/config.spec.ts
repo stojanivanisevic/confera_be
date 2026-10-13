@@ -86,6 +86,8 @@ describe('configuration', () => {
       ['ADMIN_ORIGIN', 'http://user:pw@admin.confera.test'],
       ['ADMIN_ORIGIN', 'ftp://admin.confera.test'],
       ['ADMIN_ORIGIN', 'HTTP://ADMIN.CONFERA.TEST'],
+      ['ADMIN_ORIGIN', 'http://admin_host.confera.test'],
+      ['PUBLIC_ORIGIN', 'http://-forms.confera.test'],
       ['PUBLIC_ORIGIN', 'http://forms.confera.test?x=1'],
       ['DATABASE_URL', 'mysql://confera_app:pw@127.0.0.1:3306/confera'],
       ['DATABASE_URL', 'postgresql://127.0.0.1:5432/confera'],

@@ -15,6 +15,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
 import type { AppConfig } from '../../config/config';
 import { APP_CONFIG } from '../../config/config.module';
+import { parseHostHeader } from './host-header';
 
 /**
  * The two surfaces of Confera (ADR-02, finding SEC-A-50, test ST-66).
@@ -64,16 +65,12 @@ export function OpsController(path: string): ClassDecorator {
   );
 }
 
-/** Host name of a Host header, without the port and in lower case. Empty when it cannot be read. */
+/**
+ * Host name of a Host header, without the port and in lower case. Empty when the header
+ * is missing or is not a host: such a request belongs to no surface.
+ */
 export function hostnameOf(hostHeader: string | undefined): string {
-  if (hostHeader === undefined || hostHeader === '') {
-    return '';
-  }
-  try {
-    return new URL(`http://${hostHeader}`).hostname.toLowerCase();
-  } catch {
-    return '';
-  }
+  return parseHostHeader(hostHeader)?.hostname ?? '';
 }
 
 function violatesPrefix(surface: Surface, path: string): boolean {
