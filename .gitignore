@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output: dist/ is the production build, dist-dev/ the development build
+dist/
+dist-dev/
+*.tsbuildinfo
+
+# Generated Prisma client (created by `prisma generate`, which runs after install)
+src/generated/
+
+# Local environment: real values live here and never in git
+.env
+.env.*
+!.env.example
+
+# Test and tool output
+coverage/
+tmp/
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

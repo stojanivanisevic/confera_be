@@ -1,0 +1,48 @@
+# pnpm settings of confera_be (pnpm 11 reads its settings from this file).
+# The supply-chain rules of ADR-01 live here; `pnpm supply-chain` checks that they stay.
+
+packages:
+  - '.'
+
+# Installs never change the lockfile. To change a dependency on purpose:
+#   pnpm install --no-frozen-lockfile
+frozenLockfile: true
+
+# A script never installs behind your back: stale node_modules stop it instead.
+verifyDepsBeforeRun: error
+
+# A dependency that does not support the Node version in use stops the install.
+engineStrict: true
+
+# Exact versions only (no ^ or ~) when a dependency is added.
+savePrefix: ''
+
+# A version must be public for 3 days before it may be installed (4320 minutes).
+# Setting the value makes it strict: an install fails rather than fall back to a newer version.
+minimumReleaseAge: 4320
+
+# Sub-dependencies may only come from the registry (no git or tarball addresses).
+blockExoticSubdeps: true
+
+# Dependency build scripts run only for the packages named here with `true`.
+# A dependency with a build script that is not listed stops the install.
+strictDepBuilds: true
+allowBuilds:
+  # Prisma: checks the Node version and downloads the schema engine that `prisma migrate` needs.
+  prisma: true
+  '@prisma/engines': true
+  # Telemetry of swagger-ui-dist: never runs.
+  '@scarf/scarf': false
+  # Would compile a native file watcher from source; the prebuilt optional package is used instead.
+  '@parcel/watcher': false
+  # Would re-check the native resolver of Jest; the prebuilt optional package is used instead.
+  unrs-resolver: false
+
+# Versions forced because the vulnerability gate (`pnpm audit`, fails on high) refuses the
+# ones that prisma 7.10.0 pins. Both packages belong to the Prisma command line, not to
+# the running API. Remove an entry when Prisma itself pins a patched version.
+overrides:
+  # GHSA-3f6p-5ww8-9rcr (high), patched in 3.22.0. Confera never connects to MySQL.
+  'mysql2@<3.22.0': 3.24.5
+  # GHSA-ggr8-5vv4-36mx (high), patched in 8.0.0. Used by @prisma/config to merge prisma.config.ts.
+  'deepmerge-ts@<8.0.0': 8.0.2

@@ -1,0 +1,16 @@
+// Confera data model (ADR-06).
+// The schema changes only through committed migrations in prisma/migrations (NFR-OPS-02):
+// `prisma migrate deploy` applies them, `prisma db push` is never used.
+// Row-level security, grants and composite foreign keys are written by hand in the
+// migration SQL, because Prisma cannot express policies.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

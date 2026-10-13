@@ -1,0 +1,16 @@
+# One line ending in the repository and in the working tree, on every machine (ADR-01).
+* text=auto eol=lf
+
+# Scripts that a Linux container executes must never get CRLF.
+*.sh text eol=lf
+*.sql text eol=lf
+
+# Binary files.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
