@@ -9,6 +9,11 @@
 // secret is written by mistake: any text, short or long, with no format a scanner of
 // formats would know. None starts with a placeholder prefix, which is the point.
 //
+// What is NOT here, because no name gives it away: a private key in a file of its own, an
+// address with a user and a password (postgresql://user:password@host), a token of a
+// known service under an ordinary name. Those have a format, and a scanner of formats
+// finds them.
+//
 // `node secret-assignments.mjs --self-test` runs this corpus and the other one.
 
 /** A text of several lines. */
@@ -213,8 +218,21 @@ export const REPORTED = [
       'ENV SMTP_PASSWORD hunter2',
       'ENV STAGE=prod SESSION_SECRET=hunter2',
       'ARG NPM_TOKEN=hunter2',
+      'ONBUILD ENV API_KEY=hunter2',
     ),
-    names: ['SMTP_PASSWORD', 'SESSION_SECRET', 'NPM_TOKEN'],
+    names: ['SMTP_PASSWORD', 'SESSION_SECRET', 'NPM_TOKEN', 'API_KEY'],
+  },
+  {
+    syntax: 'NAME=value',
+    what: 'a pair inside the value of another pair, in a unit file of a service',
+    file: 'deploy/app.service',
+    text: lines(
+      '[Service]',
+      'Environment=STAGE=prod',
+      'Environment=SMTP_PASSWORD=hunter2',
+      'Environment="API_TOKEN=hunter2"',
+    ),
+    names: ['SMTP_PASSWORD', 'API_TOKEN'],
   },
   // --- YAML ---------------------------------------------------------------------------
   {
@@ -276,6 +294,17 @@ export const REPORTED = [
     file: 'config/next-line.yml',
     text: lines('smtp:', '  password:', '    hunter2', 'token: # as issued', '  "hunter2"'),
     names: ['password', 'token'],
+  },
+  {
+    syntax: 'name: value in YAML',
+    what: 'a value with its type or an anchor in front, and a list of mappings in one line',
+    file: 'config/tagged.yml',
+    text: lines(
+      'password: !!str hunter2',
+      'api_key: &shared hunter2',
+      'users: [{ name: a, password: hunter2 }, { name: b, token: hunter2 }]',
+    ),
+    names: ['password', 'api_key', 'password', 'token'],
   },
   // --- JSON ---------------------------------------------------------------------------
   {
@@ -486,8 +515,9 @@ export const REPORTED = [
       "const password = input ?? 'hunter2';",
       "const value = config.password ?? 'hunter2';",
       "send(env.API_TOKEN ?? 'hunter2');",
+      "const key = env['API_KEY'] ? env['API_KEY'] : 'hunter2';",
     ),
-    names: ['password', 'password', 'API_TOKEN'],
+    names: ['password', 'password', 'API_TOKEN', 'API_KEY'],
   },
   {
     syntax: 'fallback with || in JavaScript',

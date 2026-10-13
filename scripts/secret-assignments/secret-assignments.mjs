@@ -210,7 +210,7 @@ function plainValueIsAllowed(value) {
 
 const LINE_PREFIX =
   /^(?:(?:export|declare|local|readonly|typeset|set|setx|env)[ \t]+(?:-[A-Za-z]+[ \t]+)*|(?:ENV|ARG)[ \t]+)/;
-const DOCKERFILE_PREFIX = /^(?:ENV|ARG)[ \t]+/i;
+const DOCKERFILE_PREFIX = /^(?:ONBUILD[ \t]+)?(?:ENV|ARG)[ \t]+/i;
 const LINE_NAME = /^[A-Za-z0-9_.$:/@~+-]*[A-Za-z][A-Za-z0-9_.$:/@~+-]*/;
 
 /** The first word of a shell line: up to white space, with quotes and $( ) kept whole. */
@@ -302,10 +302,13 @@ function pairsOfLine(line) {
   return pairs;
 }
 
-function scanLine(line, number, report) {
+function scanLine(line, number, report, depth = 0) {
   for (const { name, value } of pairsOfLine(line)) {
     if (isSecretLikeName(name) && !plainValueIsAllowed(value)) {
       report(number, name);
+    } else if (depth < 2 && value.includes('=')) {
+      // Environment=SMTP_PASSWORD=value: the value is a pair of its own.
+      scanLine(value, number, report, depth + 1);
     }
   }
 }
@@ -386,14 +389,25 @@ const YAML_BLOCK = /^[|>][+-]?[0-9]?[+-]?[ \t]*(?:#.*)?$/;
 
 /** A value of YAML under a secret-like name. */
 function yamlValueIsAllowed(raw) {
-  const value = raw.replace(/^&\S+[ \t]*/, '');
+  // An anchor names the value and `!!str` says its type: neither changes what it is.
+  const value = raw.replace(/^(?:&\S+(?:[ \t]+|$)|!![A-Za-z]+(?:[ \t]+|$))+/, '');
   if (value === '' || /^[*!]/.test(value)) {
-    return true; // nothing, an alias, a tagged value
+    return true; // nothing, an alias, a value that a tag of the application looks up
   }
   const text = unquoted(value);
   return text === null
     ? plainValueIsAllowed(withoutComment(value).replace(/,$/, ''))
     : quotedValueIsAllowed(text);
+}
+
+/** A collection in one line, { a: b } or [a, b]: every entry of it, the nested ones too. */
+function scanYamlFlow(text, number, report) {
+  const end = closingIndex(text, 0, text[0], text[0] === '{' ? '}' : ']');
+  if (end !== -1) {
+    for (const item of flowItems(text.slice(1, end - 1))) {
+      scanYamlEntry(unquoted(item) ?? item, number, report, () => undefined);
+    }
+  }
 }
 
 /**
@@ -402,6 +416,10 @@ function yamlValueIsAllowed(raw) {
  * several lines after `|` or `>`, ('next', name) for a secret-like name with no value yet.
  */
 function scanYamlEntry(entry, number, report, follow) {
+  if (entry.startsWith('{') || entry.startsWith('[')) {
+    scanYamlFlow(entry, number, report);
+    return;
+  }
   const match = YAML_KEY.exec(entry);
   if (!match) {
     scanLine(entry, number, report);
@@ -417,12 +435,7 @@ function scanYamlEntry(entry, number, report, follow) {
       follow('next', name);
     }
   } else if (value.startsWith('{') || value.startsWith('[')) {
-    const end = closingIndex(value, 0, value[0], value[0] === '{' ? '}' : ']');
-    if (end !== -1) {
-      for (const item of flowItems(value.slice(1, end - 1))) {
-        scanYamlEntry(unquoted(item) ?? item, number, report, () => undefined);
-      }
-    }
+    scanYamlFlow(value, number, report);
   } else if (secret && !yamlValueIsAllowed(value)) {
     report(number, name);
   }
@@ -1181,6 +1194,25 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       : null;
   };
 
+  /** The name that a reference ends with at `index`: `a.b.name` or `a['name']`; or null. */
+  const nameEndingAt = (index) => {
+    const token = tokens[index];
+    if (isWord(token) && !NOT_A_NAME.has(token.value)) {
+      return token.value;
+    }
+    return isPunctuator(token, ']') ? computedName(index) : null;
+  };
+
+  /** The index after one operand: up to the next `??`, `||`, `?`, `:` or the end. */
+  const endOfOperand = (start) => {
+    const limit = endOfExpression(start);
+    let end = start;
+    while (end < limit && !(isPunctuator(tokens[end]) && ALTERNATIVES.has(tokens[end].value))) {
+      end = opens(end) ? partner[end] + 1 : end + 1;
+    }
+    return end;
+  };
+
   /** The name that the `=` at `index` gives a value to, and where it stands; or null. */
   const targetOf = (index) => {
     // NAME: Type = value, in a declaration, a parameter or a class: the name is before
@@ -1272,22 +1304,43 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       }
     } else if (token.value === '??' || token.value === '||') {
       // secretLike ?? 'literal': a literal as the fallback of a secret-like reference.
-      const left = tokens[index - 1];
-      const name =
-        isWord(left) && !NOT_A_NAME.has(left.value)
-          ? left.value
-          : isPunctuator(left, ']')
-            ? computedName(index - 1)
-            : null;
-      if (name !== null && isSecretLikeName(name)) {
-        const limit = endOfExpression(index + 1);
-        let end = index + 1;
-        while (end < limit && !(isPunctuator(tokens[end]) && ALTERNATIVES.has(tokens[end].value))) {
-          end = opens(end) ? partner[end] + 1 : end + 1;
+      const name = nameEndingAt(index - 1);
+      if (
+        name !== null &&
+        isSecretLikeName(name) &&
+        givesLiteral(index + 1, endOfOperand(index + 1))
+      ) {
+        report(tokens[index - 1].line, name);
+      }
+    } else if (token.value === '?' && !isPunctuator(tokens[index + 1], ':')) {
+      // secretLike ? secretLike : 'literal': the same fallback, written as a ternary.
+      let colon = -1;
+      for (let at = index + 1, nested = 0; at < tokens.length && colon === -1; at += 1) {
+        if (opens(at)) {
+          at = partner[at];
+        } else if (isPunctuator(tokens[at], '?')) {
+          nested += 1;
+        } else if (isPunctuator(tokens[at], ':')) {
+          if (nested === 0) {
+            colon = at;
+          }
+          nested -= 1;
+        } else if (
+          isPunctuator(tokens[at]) &&
+          (tokens[at].value === ',' || tokens[at].value === ';' || CLOSERS.has(tokens[at].value))
+        ) {
+          break;
         }
-        if (givesLiteral(index + 1, end)) {
-          report(left.line, name);
-        }
+      }
+      // The name is the one the first branch ends with; a condition alone
+      // (`password ? 'yes' : 'no'`) binds nothing to it.
+      const name = colon === -1 ? null : nameEndingAt(colon - 1);
+      if (
+        name !== null &&
+        isSecretLikeName(name) &&
+        givesLiteral(colon + 1, endOfOperand(colon + 1))
+      ) {
+        report(tokens[colon - 1].line, name);
       }
     }
   });

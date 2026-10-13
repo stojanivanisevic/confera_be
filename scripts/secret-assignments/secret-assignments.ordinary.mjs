@@ -236,6 +236,7 @@ export const ORDINARY = [
       'let token = undefined;',
       'const state = { token: null, password: undefined, credentials: false };',
       'const select = { password: true, token: false };',
+      "const shown = password ? 'set' : 'missing';",
     ),
   },
   // --- placeholders -----------------------------------------------------------------------
