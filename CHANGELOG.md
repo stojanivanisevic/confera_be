@@ -13,3 +13,8 @@ version at every milestone (ADR-19).
 - Configuration module with a schema: a missing or invalid variable stops the start and is named.
 - `pnpm check`: formatting, lint with security rules, typecheck, tests, builds and supply-chain checks.
 - Development stack in Docker: PostgreSQL 18 and Mailpit, images referenced by digest.
+- STAGE and INSTANCE guard; the dev-tools module exists only in the development build.
+- `GET /health` and `GET /api/v1/meta`; the admin API answers only under the admin host name.
+- One error format (`application/problem+json`); an unknown error answers with a code and a trace id only.
+- JSON log with redaction by field name; the request log holds the route, never the address.
+- OpenAPI files generated from the code and committed in `openapi/`, with a drift check and a schema lint.

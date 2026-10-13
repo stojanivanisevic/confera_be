@@ -1,4 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
+import { Get } from '@nestjs/common';
+import { OpsController } from '../../common/http/surface';
 
 export interface HealthStatus {
   readonly status: 'ok';
@@ -8,7 +9,7 @@ export interface HealthStatus {
  * Liveness: the process is up and answers. It touches nothing else, so it stays green
  * while a dependency is down; the proxy and the container health check call it.
  */
-@Controller('health')
+@OpsController('health')
 export class HealthController {
   @Get()
   live(): HealthStatus {

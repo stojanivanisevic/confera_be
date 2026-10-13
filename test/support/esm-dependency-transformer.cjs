@@ -8,10 +8,17 @@
 const { createHash } = require('node:crypto');
 const ts = require('typescript');
 
+const VERSION = 'esm-dependency-transformer-v3';
+
 const IMPORT_META_URL = 'require("node:url").pathToFileURL(__filename).href';
+
+// `const require = createRequire(import.meta.url);` in an ES module. CommonJS already has
+// a `require` that resolves from the same file, and declaring it twice is a syntax error.
+const OWN_REQUIRE = /^[ \t]*const require = createRequire\(import\.meta\.url\);?[ \t]*$/m;
 
 function toCommonJs(sourceText, sourcePath) {
   const patched = sourceText
+    .replace(OWN_REQUIRE, '')
     .replaceAll('import.meta.url', IMPORT_META_URL)
     .replaceAll('import.meta.dirname', '__dirname')
     .replaceAll('import.meta.filename', '__filename');
@@ -34,7 +41,7 @@ module.exports = {
   },
   getCacheKey(sourceText, sourcePath) {
     return createHash('sha256')
-      .update('esm-dependency-transformer-v1')
+      .update(VERSION)
       .update(ts.version)
       .update(sourcePath)
       .update(sourceText)

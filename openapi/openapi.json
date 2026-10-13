@@ -1,0 +1,112 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Confera admin API",
+    "description": "The API of the admin surface. It answers only under the admin host name.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "getMeta",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Name and version of the API.",
+        "tags": [
+          "Meta"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FieldError": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path of the field in the request, for example `authors.0.email`."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable code of the rule that failed, for example `isEmail`. Never the value."
+          }
+        },
+        "required": [
+          "path",
+          "code"
+        ]
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the service."
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the API (SemVer), the same as `info.version` of the OpenAPI document.\nA client built for another major version must stop and ask for a reload."
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable code, for example `not_found` or `validation_failed`."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Identifies this request in the server log."
+          },
+          "status": {
+            "type": "number",
+            "description": "HTTP status. Absent on an unknown error."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short English name of the status. Absent on an unknown error."
+          },
+          "errors": {
+            "description": "The refused fields, when the input was not valid.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "traceId"
+        ]
+      }
+    }
+  }
+}

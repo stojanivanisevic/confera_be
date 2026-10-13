@@ -11,7 +11,7 @@ const steps = [
   ['typecheck (tsc, strict)', ['run', 'typecheck']],
   ['unit and architecture tests (jest)', ['run', 'test']],
   ['production build', ['run', 'build']],
-  ['development build', ['run', 'build:dev']],
+  ['development build; OpenAPI files current and schema lint', ['run', 'openapi:check']],
   ['tests of the built application (jest)', ['run', 'test:build']],
   [
     'supply chain (pins, frozen lockfile, audit, secret scan, image digests)',

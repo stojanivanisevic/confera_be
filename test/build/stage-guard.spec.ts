@@ -44,8 +44,8 @@ function expectRefusal(result: Refusal, ...variables: string[]): void {
   for (const variable of variables) {
     expect(result.output).toContain(`  - ${variable}: `);
   }
-  // Nothing of the application ran, and nothing was written to stdout.
-  expect(result.output).not.toContain('Nest');
+  // Nothing of the application ran: no log line, and nothing at all on stdout.
+  expect(result.output).not.toContain('api.started');
   expect(result.stdout).toBe('');
 }
 

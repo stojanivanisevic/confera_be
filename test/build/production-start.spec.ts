@@ -116,6 +116,40 @@ describe('a clean production start', () => {
     );
   });
 
+  describe('the two surfaces (ST-66, routing part)', () => {
+    it('GET /api/v1/meta answers under the admin host name', async () => {
+      const response = await api.request('/api/v1/meta', { headers: { host: ADMIN_HOST } });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.text)).toEqual({
+        name: 'confera-api',
+        version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+      });
+    });
+
+    it.each([PUBLIC_HOST, 'evil.example', '127.0.0.1'])(
+      'GET /api/v1/meta under %s is not found',
+      async (host) => {
+        const response = await api.request('/api/v1/meta', { headers: { host } });
+        expect(response.status).toBe(404);
+        expect(JSON.parse(response.text)).toEqual(
+          expect.objectContaining({ code: 'not_found', status: 404 }),
+        );
+      },
+    );
+  });
+
+  it('writes its log as JSON lines and nothing else', () => {
+    const lines = api
+      .output()
+      .split(/\r?\n/)
+      .filter((line) => line !== '');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(() => JSON.parse(line) as unknown).not.toThrow();
+    }
+    expect(api.output()).toContain('api.started');
+  });
+
   it('shows no canary in the output or the logs (ST-03)', async () => {
     // Requests that fail and requests that succeed, so that every kind of log line exists.
     await api.request('/health');

@@ -1,4 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
+import { sendProblem, toProblem, ProblemException } from './problem';
+import { currentTraceId } from './trace';
 
 /**
  * Confera's APIs are same-origin only (ADR-07, ADR-08): no route ever grants
@@ -10,7 +12,7 @@ import type { NextFunction, Request, Response } from 'express';
  */
 export function refusePreflight(req: Request, res: Response, next: NextFunction): void {
   if (req.method === 'OPTIONS') {
-    res.status(405).end();
+    sendProblem(res, toProblem(new ProblemException(405, 'method_not_allowed'), currentTraceId()));
     return;
   }
   next();

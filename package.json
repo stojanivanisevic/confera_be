@@ -13,6 +13,8 @@
     "prisma:generate": "prisma generate",
     "build": "node scripts/build.mjs tsconfig.build.json",
     "build:dev": "node scripts/build.mjs tsconfig.build.dev.json",
+    "openapi:generate": "node scripts/build.mjs tsconfig.build.dev.json && node dist-dev/modules/dev-tools/openapi/generate.js --write",
+    "openapi:check": "node scripts/build.mjs tsconfig.build.dev.json && node dist-dev/modules/dev-tools/openapi/generate.js --check",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "start:dev": "node scripts/dev.mjs",
     "format": "prettier --write .",
