@@ -294,6 +294,13 @@ async function plantedSecrets() {
       file: 'src/planted/fallback-secret.ts',
       text: `export const sessionSecret = process.env.SESSION_SECRET ?? '${random(48, ALNUM)}';\n`,
     },
+    // Caught today. It holds the rule that a placeholder STARTS with `invented-` or
+    // `local-only-`: a rule that only looks for those words anywhere lets this one through.
+    {
+      what: 'a mail password that only contains the placeholder words, not at its start',
+      file: 'deploy/planted-not-a-placeholder.env',
+      text: `SMTP_PASSWORD=${random(6, ALNUM)}-invented-${random(6, ALNUM)}-local-only-${random(6, ALNUM)}\n`,
+    },
   ];
   const placeholders = {
     file: 'test/planted/placeholders.spec.ts',
