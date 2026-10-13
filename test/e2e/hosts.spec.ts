@@ -92,6 +92,65 @@ describe('odd Host headers', () => {
     });
   });
 
+  describe('more forms that are not the admin host name (second round, after the strict parser)', () => {
+    it.each([
+      ['the scheme in front', `http://${ADMIN_HOST}`],
+      ['the scheme and a port', `https://${ADMIN_HOST}:443`],
+      ['an empty port', `${ADMIN_HOST}:`],
+      ['a port with a sign', `${ADMIN_HOST}:+80`],
+      ['a port in another notation', `${ADMIN_HOST}:0x50`],
+      ['a port with a fraction', `${ADMIN_HOST}:80.0`],
+      ['a port of six digits', `${ADMIN_HOST}:000080`],
+      ['a port above the highest', `${ADMIN_HOST}:65536`],
+      ['two ports', `${ADMIN_HOST}:80:80`],
+      ['a parameter after the name', `${ADMIN_HOST};evil.example`],
+      ['a tab inside the name', 'admin.confera\t.test'],
+      ['a null escape after the name', `${ADMIN_HOST}%00`],
+      ['an encoded dot', 'admin%2Econfera.test'],
+      ['an encoded at sign', `evil.example%40${ADMIN_HOST}`],
+      ['an underscore in place of a dot', 'admin_confera.test'],
+      ['a double dot', 'admin..confera.test'],
+      ['a leading dot', `.${ADMIN_HOST}`],
+      ['a leading hyphen', `-${ADMIN_HOST}`],
+      ['the name in square brackets', `[${ADMIN_HOST}]`],
+      ['the name as the zone of an IPv6 address', `[::1%${ADMIN_HOST}]`],
+      [
+        'a name of 300 characters that ends with the admin name',
+        `${'a.'.repeat(140)}${ADMIN_HOST}`,
+      ],
+      ['an asterisk', '*'],
+      ['a wildcard name', '*.confera.test'],
+    ])('%s is not found', async (_name, host) => {
+      const response = await ask(host);
+      expect(response.status).toBe(404);
+    });
+
+    it.each([
+      ['with the highest port', `${ADMIN_HOST}:65535`],
+      ['with port zero', `${ADMIN_HOST}:0`],
+      ['with a port written with a leading zero', `${ADMIN_HOST}:080`],
+    ])('the admin host name %s is still the admin host name', async (_name, host) => {
+      expect((await ask(host)).status).toBe(200);
+    });
+
+    it('the public API is as strict: nothing of it answers under an odd form of the public host name', async () => {
+      for (const host of [
+        `evil.example@${PUBLIC_HOST}`,
+        `${PUBLIC_HOST}/x`,
+        `${PUBLIC_HOST}?x`,
+        `${PUBLIC_HOST}#x`,
+        `${PUBLIC_HOST}.`,
+        PUBLIC_HOST.replace('f', '%66'),
+      ]) {
+        const response = await ask(host, '/public/v1/forms/abc');
+        // No route exists there in 0.1.0, so "not found" is the answer under the right name as well;
+        // what must hold is that the answer is a problem of the API and never anything else.
+        expect({ host, status: response.status }).toEqual({ host, status: 404 });
+        expect(response.body).toEqual(expect.objectContaining({ code: 'not_found' }));
+      }
+    });
+  });
+
   describe('the public host name', () => {
     it('does not open the admin API through an odd header either', async () => {
       for (const host of [`${PUBLIC_HOST}@${ADMIN_HOST}.evil.example`, `${PUBLIC_HOST}:443`]) {
