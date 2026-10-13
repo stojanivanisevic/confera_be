@@ -1,24 +1,17 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import {
-  validEnvironment,
-  validProductionEnvironment,
-} from '../../src/config/testing/valid-environment';
 import { DEV_TOOLS_ROUTES } from '../../src/modules/dev-tools/dev-tools.routes';
-import {
-  DEVELOPMENT_ENTRY,
-  PRODUCTION_ENTRY,
-  type RunningApi,
-  startApi,
-} from '../support/api-process';
+import { DEVELOPMENT_ENTRY, PRODUCTION_ENTRY } from '../support/api-process';
 import { repoRoot } from '../support/run-node';
 
 /**
  * ST-02 (NFR-SEC-04): dev tools are absent from the production build, not switched off.
  *
  * - no path of dist/ belongs to the dev-tools module;
- * - no file of dist/ contains a dev-tools route or a name of that module;
- * - the running production build answers 404 on every dev-tools route.
+ * - no file of dist/ contains a dev-tools route or a name of that module.
+ *
+ * That the running production build answers 404 on every dev-tools route is tested in
+ * test/integration/dev-tools-runtime.spec.ts, because a start needs the database.
  *
  * The same search over dist-dev/ must find them, which proves that the search can see.
  */
@@ -95,45 +88,5 @@ describe('dev tools are absent from the production build (ST-02)', () => {
     for (const route of Object.values(DEV_TOOLS_ROUTES)) {
       expect(found.texts.some((text) => text.endsWith(`"${route}"`))).toBe(true);
     }
-  });
-
-  describe('at run time', () => {
-    let production: RunningApi;
-    let development: RunningApi;
-
-    beforeAll(async () => {
-      [production, development] = await Promise.all([
-        startApi(PRODUCTION_ENTRY, validProductionEnvironment()),
-        startApi(DEVELOPMENT_ENTRY, validEnvironment({ STAGE: 'local' })),
-      ]);
-    });
-
-    afterAll(async () => {
-      await Promise.all([production.stop(), development.stop()]);
-    });
-
-    it.each(Object.values(DEV_TOOLS_ROUTES))(
-      'the production build answers 404 on /%s',
-      async (route) => {
-        expect((await production.request(`/${route}`)).status).toBe(404);
-      },
-    );
-
-    it('the development build serves its dev-tools route, which proves the routes are real', async () => {
-      const response = await development.request(`/${DEV_TOOLS_ROUTES.info}`);
-      expect(response.status).toBe(200);
-      expect(JSON.parse(response.text)).toEqual({
-        stage: 'local',
-        devTools: { apiDocs: false, logQueries: false },
-      });
-    });
-
-    it('both builds answer on /health', async () => {
-      for (const api of [production, development]) {
-        const response = await api.request('/health');
-        expect(response.status).toBe(200);
-        expect(JSON.parse(response.text)).toEqual({ status: 'ok' });
-      }
-    });
   });
 });

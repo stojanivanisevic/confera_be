@@ -38,6 +38,8 @@ module.exports = {
       ...base,
       displayName: 'integration',
       testMatch: ['<rootDir>/test/integration/**/*.spec.ts'],
+      // Creates the test database with db:provision and prisma migrate deploy.
+      globalSetup: '<rootDir>/test/integration/support/global-setup.ts',
     },
   ],
 };
