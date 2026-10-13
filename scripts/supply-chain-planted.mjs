@@ -262,6 +262,28 @@ async function plantedSecrets() {
       file: 'deploy/planted-payments.env',
       text: `PAYPAL_CLIENT_SECRET=${random(80, ALNUM)}\nDATA_KEY=${randomBytes(32).toString('hex')}\n`,
     },
+    // Second round: the same kind of secret, written the other ways a secret is commonly
+    // written into the files of a server. None has a token format; the name gives each away.
+    {
+      what: 'a mail password as a list entry of a compose file (- NAME=value)',
+      file: 'deploy/planted-compose.yml',
+      text: `services:\n  api:\n    environment:\n      - STAGE=prod\n      - SMTP_PASSWORD=${random(24, ALNUM)}\n`,
+    },
+    {
+      what: 'a mail password in a Dockerfile (ENV NAME=value)',
+      file: 'deploy/planted.Dockerfile',
+      text: `ENV STAGE=prod\nENV SMTP_PASSWORD=${random(24, ALNUM)}\n`,
+    },
+    {
+      what: 'a generated password with a dollar sign in an environment file',
+      file: 'deploy/planted-generated.env',
+      text: `SMTP_PASSWORD=${random(8, ALNUM)}$${random(12, ALNUM)}\n`,
+    },
+    {
+      what: 'a password under a lower-case key of a configuration file (password: value)',
+      file: 'deploy/planted-config.yml',
+      text: `smtp:\n  host: mail.example.test\n  password: ${random(24, ALNUM)}\n`,
+    },
   ];
   const placeholders = {
     file: 'test/planted/placeholders.spec.ts',
