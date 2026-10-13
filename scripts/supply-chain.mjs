@@ -4,7 +4,8 @@
 //   2. the pnpm settings that guard installs are still in place;
 //   3. the lockfile matches package.json and passes the release-age policy (frozen install);
 //   4. no known vulnerability of severity high or critical (`pnpm audit`);
-//   5. no secret in the files that git would take (secretlint);
+//   5. no secret in the files that git would take (secretlint for known formats, and a
+//      scan for literal values assigned to names like a secret);
 //   6. every container image is referenced by digest.
 //
 // Start it through pnpm: `corepack pnpm supply-chain`.
@@ -12,6 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { repoRoot, runNode, runPnpm, tool } from './lib/process.mjs';
+import { formatFindings, scanDirectory } from './lib/secret-assignments.mjs';
 
 /** Shortest waiting time for a new release that this repository accepts, in minutes (one day). */
 const MINIMUM_RELEASE_AGE_FLOOR = 1440;
@@ -150,9 +152,18 @@ await step(
 );
 
 await step(
-  'no secret in the files that git would take (secretlint)',
-  () => runNode([tool('secretlint', 'bin', 'secretlint.js'), '**/*']),
-  'secretlint found something that looks like a secret.',
+  'no secret in the files that git would take (secretlint, and values assigned to names like a secret)',
+  async () => {
+    // Two scans, one verdict. secretlint knows the format of many credentials; the second
+    // scan catches a secret that has no format and is given away by its name only.
+    const formats = await runNode([tool('secretlint', 'bin', 'secretlint.js'), '**/*']);
+    const assignments = scanDirectory(repoRoot);
+    if (assignments.length > 0) {
+      process.stdout.write(`${formatFindings(repoRoot, assignments)}\n`);
+    }
+    return formats !== 0 || assignments.length > 0 ? 1 : 0;
+  },
+  'The secret scan failed: secretlint found something that looks like a secret, or a literal value is assigned to a name like a secret.',
 );
 
 if (!existsSync(path.join(repoRoot, 'pnpm-lock.yaml'))) {

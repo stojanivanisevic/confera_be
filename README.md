@@ -400,9 +400,21 @@ that they stay.
 - **Strict engines:** a dependency that does not support the Node version in use stops
   the install.
 - **Vulnerability gate:** `pnpm audit` fails `check` on severity high or critical.
-- **Secret scan** with secretlint. An invented credential in a test must start with
-  `invented-` or `local-only-` and point at 127.0.0.1; anything else that looks like a
-  credential fails. Build such a text from parts instead of writing it in one piece.
+- **Secret scan**, in two parts with one verdict:
+  - secretlint finds credentials by their **format**: tokens of known services, private
+    keys, an address with a user and a password.
+  - `scripts/secret-assignments.mjs` finds a secret that has no format by the **name** it
+    is assigned to: a literal value of 8 characters or more assigned to a name with
+    `PASSWORD`, `SECRET`, `TOKEN`, `CREDENTIAL` or `KEY` in it. In an environment or
+    configuration file that is `NAME=value` or `NAME: value`; in source code and JSON a
+    quoted value (`clientSecret: '...'`).
+
+  An invented credential must start with `invented-` or `local-only-` (and an address
+  must point at 127.0.0.1); an empty value and a reference such as `${VAR}` are fine too.
+  Anything else fails, `changeme` included. In a test, build such a text from parts
+  instead of writing it in one piece. A name that ends in `FILE`, `PATH`, `URL`, `NAME`
+  or `HEADER` says where a secret is, not what it is, and is not reported.
+
 - **Container images by digest.**
 
 `corepack pnpm test:supply-chain` (part of `check`) proves that these rules bite: in a
@@ -467,7 +479,8 @@ eslint/              the lint rules with a security purpose
 - **A script stops with "dependencies are out of date".** Run `corepack pnpm install`.
   Scripts never install behind your back.
 - **`check` fails on the secret scan after you wrote a test.** A connection address with
-  a password stands in a file as one piece of text; see section 12.
+  a password, or a quoted value assigned to a name like `password` or `token`, stands in
+  a file as one piece of text; see section 12.
 - **Port 3001 is in use.** An earlier `pnpm start` or `start:dev` is still running.
 - **`seed:e2e did not run`** (exit code 78). `STAGE` is not `local` or `test`: look at
   `.env` and at the environment of your terminal, which wins over `.env`.
