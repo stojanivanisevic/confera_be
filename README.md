@@ -306,7 +306,7 @@ To add one:
   files equal the code.
 - **Timing:** a fresh process of plain Node makes its first PDF, the next ones and a
   table of 200 rows in under 5 seconds each. It is a step of its own, so no other test
-  runs beside it, and the fastest of three processes counts: other work on the machine
+  runs beside it, and the fastest of five processes counts: other work on the machine
   can only add time to a measurement.
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
@@ -407,8 +407,9 @@ Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
   gate is the timing tier (`test/timing/pdf-cold-start.spec.ts`, section 8): fresh
   processes of plain Node, which is what a server is. On the development laptop the
   first document takes about 0.3 s, the next ones under 0.1 s and a table of 200 rows
-  about 0.1 s. The unit tier measures the same inside Jest, where the clock also
-  measures Jest and whatever else the machine is doing (the same table: 0.5 to 3 s).
+  about 0.1 s. Inside Jest the clock also measures Jest and whatever else the machine
+  is doing (the same table: 0.5 to 3 s in the unit tier), so the unit tier reports the
+  time of its first document and leaves the judgement to the timing tier.
 
 `corepack pnpm pdf:sample` writes the bilingual sample to look at.
 

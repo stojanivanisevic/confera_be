@@ -14,16 +14,18 @@ import { repoRoot, runNode } from '../support/run-node';
  *   laptop a table of 200 rows takes 0.1 s in plain Node, 0.25 s in a Jest file that
  *   runs alone, and 0.5 to 3 s when the whole unit tier runs on all processors;
  * - alone: this tier is a step of its own in `pnpm check`, with no other test beside it;
- * - three times, each in a new process, and the fastest counts. Other work on the
+ * - five times, each in a new process, and the fastest counts. Other work on the
  *   machine can only add time to a measurement, never take any away, so the fastest of
- *   three is the closest to what the code itself costs. Every one of the three is a cold
- *   start.
+ *   five is the closest to what the code itself costs. Every one of the five is a cold
+ *   start. (A laptop slows every thread down when several of its processors are busy:
+ *   with browser tests of the frontend running beside it, one process needed 1.6 to
+ *   4.6 s for a first document that takes 0.3 s on a free machine.)
  *
  * `corepack pnpm test:timing` builds `dist-dev/` first.
  */
 
 const LIMIT_MS = 5000;
-const ATTEMPTS = 3;
+const ATTEMPTS = 5;
 const SCRIPT = join('test', 'support', 'pdf-cold-start.cjs');
 const RENDERER = join(repoRoot, 'dist-dev', 'platform', 'pdf', 'pdf-renderer.js');
 
