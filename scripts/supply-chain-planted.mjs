@@ -284,6 +284,16 @@ async function plantedSecrets() {
       file: 'deploy/planted-config.yml',
       text: `smtp:\n  host: mail.example.test\n  password: ${random(24, ALNUM)}\n`,
     },
+    {
+      what: 'a session secret in source code, declared with a type (const name: string = value)',
+      file: 'src/planted/typed-secret.ts',
+      text: `export const sessionSecret: string = '${random(48, ALNUM)}';\n`,
+    },
+    {
+      what: 'a session secret in source code, as the fallback of an environment variable (?? value)',
+      file: 'src/planted/fallback-secret.ts',
+      text: `export const sessionSecret = process.env.SESSION_SECRET ?? '${random(48, ALNUM)}';\n`,
+    },
   ];
   const placeholders = {
     file: 'test/planted/placeholders.spec.ts',
