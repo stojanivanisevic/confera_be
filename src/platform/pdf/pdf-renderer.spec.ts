@@ -111,11 +111,11 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
         await renderer.render(BILINGUAL_SAMPLE);
         times.push(performance.now() - started);
       }
-      // The fastest of five counts: other work on the machine, and the other test files
-      // of this tier, can only add time to a measurement. The first document of a
-      // process is not judged here but in test/timing (see above), where a cold start is
-      // a real one; here its time is reported.
-      expect(Math.min(...times)).toBeLessThan(LIMIT_MS);
+      // Every one of the five must meet the limit: the slowest counts (ruling of the test
+      // engineer in the verification of 0.1.0). The first document of a process is not
+      // judged here but in test/timing (see above), where a cold start is a real one;
+      // here its time is reported.
+      expect(Math.max(...times)).toBeLessThan(LIMIT_MS);
       // Kept in the test output as the numbers of the spike.
       process.stdout.write(
         `PDF spike, inside Jest: first document ${firstDocumentMs.toFixed(0)} ms (of which library and fonts ${warmUpMs.toFixed(0)} ms), then ${times
