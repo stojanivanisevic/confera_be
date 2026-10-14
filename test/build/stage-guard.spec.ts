@@ -240,13 +240,14 @@ describe('the built application refuses to start on a bad stage (ADR-24)', () =>
     it('control: a start that the configuration allows does load the application', async () => {
       // A valid configuration whose database is not there: the start goes on, loads the
       // application, fails at the database and ends by itself.
-      const nowhere = (role: string) =>
-        `postgresql://${role}:invented-nowhere@127.0.0.1:1/confera_unit`;
+      // Written out in full, with an invented password on the loopback address: the form
+      // the secret scan accepts (README, section 12).
       const result = await loadedBy(
         PRODUCTION_ENTRY,
         validEnvironment({
-          DATABASE_URL: nowhere('confera_app'),
-          SYSTEM_DATABASE_URL: nowhere('confera_system'),
+          DATABASE_URL: 'postgresql://confera_app:invented-nowhere@127.0.0.1:1/confera_unit',
+          SYSTEM_DATABASE_URL:
+            'postgresql://confera_system:invented-nowhere@127.0.0.1:1/confera_unit',
         }),
         150_000,
       );
