@@ -301,6 +301,18 @@ async function plantedSecrets() {
       file: 'deploy/planted-not-a-placeholder.env',
       text: `SMTP_PASSWORD=${random(6, ALNUM)}-invented-${random(6, ALNUM)}-local-only-${random(6, ALNUM)}\n`,
     },
+    // Caught today. Two edges of the reader of lines that neither corpus of the scanner
+    // holds: the list dash outside a YAML file, and written text after a reference.
+    {
+      what: 'a mail password after a list dash in a text file that is not YAML (- NAME=value)',
+      file: 'deploy/planted-notes.md',
+      text: `Set on the server:\n\n- STAGE=prod\n- SMTP_PASSWORD=${random(24, ALNUM)}\n`,
+    },
+    {
+      what: 'a mail password that starts with a reference and goes on as written text ($PREFIX-value)',
+      file: 'deploy/planted-prefixed.env',
+      text: `SMTP_PASSWORD=$PREFIX-${random(24, ALNUM)}\n`,
+    },
     // Third round. The rule is written down now (README, "The rule for a secret-like name"):
     // a literal value bound to a secret-like name, in the syntaxes it lists, and no allowed
     // value but nothing, a reference and a placeholder. Each of these is inside that rule,
