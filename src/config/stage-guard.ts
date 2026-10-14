@@ -48,6 +48,8 @@ const PROBLEM = {
   instanceForbidden: 'must not be set unless STAGE=prod',
   developerMachineOnly:
     'on STAGE=local, dev or test the host must be localhost, a loopback address or a name ending in .test: these stages run only on a developer machine, and every server runs STAGE=prod',
+  loopbackOnly:
+    'on STAGE=local, dev or test the API must listen on a loopback address only (127.0.0.1, ::1 or localhost): these stages run only on a developer machine, and every server runs STAGE=prod',
   httpsRequired: 'must use https on STAGE=prod',
   sameHost: 'must have another host name than ADMIN_ORIGIN (ADR-02: two surfaces, two host names)',
   devKeyRefused: `is a development convenience and stops the start unless STAGE is one of: ${DEV_TOOL_STAGES.join(', ')}`,
@@ -56,6 +58,22 @@ const PROBLEM = {
   toolOnly:
     'must not be present in the environment of the API on STAGE=prod: it belongs to the migration or provisioning job only',
 } as const;
+
+/**
+ * An address to listen on that only this machine can reach: 127.0.0.0/8, ::1 or
+ * localhost. A `.test` name is no such address: it may resolve to any interface.
+ */
+export function isLoopbackAddress(listenHost: string): boolean {
+  const host = listenHost.toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    /^127\.(25[0-5]|2[0-4]\d|1?\d?\d)\.(25[0-5]|2[0-4]\d|1?\d?\d)\.(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(
+      host,
+    )
+  );
+}
 
 export function isLoopbackOrTestHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
@@ -145,6 +163,17 @@ export function stageGuardProblems(env: RawEnvironment): ConfigProblem[] {
       if (url !== undefined && !isLoopbackOrTestHost(url.hostname)) {
         add(name, PROBLEM.developerMachineOnly);
       }
+    }
+    // Who can reach the API is decided by the address it listens on, not by the origins:
+    // a dev stage listening on 0.0.0.0 answers anyone who sends `Host: localhost`.
+    // (A value that is no address at all is named by the schema already.)
+    const listenHost = env.LISTEN_HOST;
+    if (
+      listenHost !== undefined &&
+      /^[A-Za-z0-9.:-]+$/.test(listenHost) &&
+      !isLoopbackAddress(listenHost)
+    ) {
+      add('LISTEN_HOST', PROBLEM.loopbackOnly);
     }
   }
 
