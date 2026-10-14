@@ -10,19 +10,10 @@ import { requestContext } from './common/http/trace';
 import { AppLogger, createRootLogger } from './common/logging/app-logger';
 import { requestLog } from './common/logging/request-log.middleware';
 import { StartupRefusal } from './common/startup-refusal';
-import { type AppConfig, formatProblems } from './config/config';
-import { loadConfig } from './config/env';
-import { DEV_TOOL_STAGES } from './config/stage-guard';
+import type { AppConfig } from './config/config';
+import { EXIT_CODE } from './startup';
 
-/** Exit codes of a refused start, so that a script or a test can tell the reasons apart. */
-export const EXIT_CODE = {
-  /** The configuration is missing or invalid (EX_CONFIG of sysexits.h). */
-  configuration: 78,
-  /** The application itself refused, for example on a database role that is too powerful (EX_NOPERM). */
-  refused: 77,
-  /** Anything else that stopped the start. */
-  failure: 1,
-} as const;
+export { EXIT_CODE };
 
 export interface AppOptions {
   readonly extraImports?: NonNullable<ModuleMetadata['imports']>;
@@ -30,11 +21,6 @@ export interface AppOptions {
   readonly configure?: (app: NestExpressApplication, config: AppConfig) => void | Promise<void>;
   /** Where the log goes. Default: stdout. Tests pass a stream they can read. */
   readonly logDestination?: DestinationStream;
-}
-
-export interface StartOptions extends AppOptions {
-  /** Set by the development entry only. Such a process refuses to run outside local and dev. */
-  readonly developmentEntry?: boolean;
 }
 
 /**
@@ -65,27 +51,11 @@ export function configureHttp(app: NestExpressApplication, logger: AppLogger): v
   app.use(refusePreflight);
 }
 
-function refuse(variable: string, problem: string): void {
-  process.stderr.write(formatProblems([{ variable, problem }]));
-  process.exitCode = EXIT_CODE.configuration;
-}
-
-/** Reads the environment, refuses to start on a bad configuration, then listens. */
-export async function start(options: StartOptions = {}): Promise<void> {
-  const loaded = loadConfig();
-  if (!loaded.ok) {
-    process.stderr.write(formatProblems(loaded.problems));
-    process.exitCode = EXIT_CODE.configuration;
-    return;
-  }
-  const { config } = loaded;
-  if (options.developmentEntry === true && !DEV_TOOL_STAGES.includes(config.stage)) {
-    refuse(
-      'STAGE',
-      `this is the development entry; it starts only on: ${DEV_TOOL_STAGES.join(', ')}`,
-    );
-    return;
-  }
+/**
+ * Builds the application and listens. The configuration was read and accepted by the
+ * entry before this file was loaded (`configurationOrRefusal` of src/startup.ts).
+ */
+export async function start(config: AppConfig, options: AppOptions = {}): Promise<void> {
   let app: NestExpressApplication | undefined;
   try {
     app = await createApp(config, options);

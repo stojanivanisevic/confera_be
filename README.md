@@ -160,7 +160,9 @@ The API reads its configuration from environment variables, and only through the
   the Prisma commands and the scripts load `.env` if it exists. The application itself
   never reads a file; on a server the variables come from the container.
 - A missing or invalid variable **stops the start**. The message names each variable and
-  never repeats a value, because a value can be a secret.
+  never repeats a value, because a value can be a secret. The entry checks the
+  configuration first (`src/startup.ts`) and loads the framework and the application
+  only after it has passed, so a refused start runs no application code.
 - **`STAGE` has no default.** Its values are exactly `local`, `dev`, `test` and `prod`.
 - **`local`, `dev` and `test` run only on a developer machine:** both origins must be
   `localhost`, a loopback address or a name ending in `.test`. Every server runs `prod`,

@@ -205,4 +205,55 @@ describe('the built application refuses to start on a bad stage (ADR-24)', () =>
       expect(result.output).not.toContain(canary);
     });
   });
+
+  describe('a refused start ends before the application is loaded', () => {
+    // test/support/loaded-modules.cjs says, when the process ends, what it had loaded.
+    // A refusal that first loads the framework and every module costs ten times as much,
+    // and on a busy machine the many starts of this file then run into their time limit.
+    const PROBE = join(repoRoot, 'test', 'support', 'loaded-modules.cjs');
+
+    async function loadedBy(entry: string, env: Env, timeoutMs: number) {
+      const port = String(await freePort());
+      const result = await runNode(['--require', PROBE, entry], {
+        env: { PORT: port, LISTEN_HOST: '127.0.0.1', ...env },
+        timeoutMs,
+      });
+      return {
+        exitCode: result.exitCode,
+        loaded: /^LOADED .*$/m.exec(result.stdout)?.[0] ?? result.output,
+      };
+    }
+
+    it.each([
+      ['production', PRODUCTION_ENTRY, validProductionEnvironment({ STAGE: 'production' })],
+      ['development', DEVELOPMENT_ENTRY, validProductionEnvironment()],
+    ])(
+      'the %s entry reads the configuration and nothing of the application',
+      async (_name, entry, env) => {
+        expect(await loadedBy(entry, env, 20_000)).toEqual({
+          exitCode: EXIT_CONFIGURATION,
+          loaded: 'LOADED configuration=true application=false',
+        });
+      },
+    );
+
+    it('control: a start that the configuration allows does load the application', async () => {
+      // A valid configuration whose database is not there: the start goes on, loads the
+      // application, fails at the database and ends by itself.
+      const nowhere = (role: string) =>
+        `postgresql://${role}:invented-nowhere@127.0.0.1:1/confera_unit`;
+      const result = await loadedBy(
+        PRODUCTION_ENTRY,
+        validEnvironment({
+          DATABASE_URL: nowhere('confera_app'),
+          SYSTEM_DATABASE_URL: nowhere('confera_system'),
+        }),
+        150_000,
+      );
+      expect(result.loaded).toBe('LOADED configuration=true application=true');
+      expect(result.exitCode).not.toBe(EXIT_CONFIGURATION);
+      expect(result.exitCode).not.toBe(0);
+      // The one start of this file that loads the whole application: it gets the time.
+    }, 180_000);
+  });
 });
