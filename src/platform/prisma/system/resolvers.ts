@@ -3,6 +3,7 @@ import type { AppConfig } from '../../../config/config';
 import { APP_CONFIG } from '../../../config/config.module';
 import type { PrismaClient } from '../../../generated/prisma/client';
 import { type DatabaseRole, describeRole } from '../database-role';
+import { START_CHECK_TIMEOUT_MS, within } from '../tenant-client';
 import { createSystemClient } from './system-client';
 
 /** What a resolver returns: which organisation, and which record in it. Never more. */
@@ -52,7 +53,7 @@ export class SystemResolvers implements OnModuleDestroy {
 
   /** For the start-up check only: what the system role is allowed to do. No tenant data. */
   describeRole(): Promise<DatabaseRole> {
-    return describeRole(this.#client);
+    return within(describeRole(this.#client), START_CHECK_TIMEOUT_MS, 'the start-up role check');
   }
 
   async onModuleDestroy(): Promise<void> {

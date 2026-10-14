@@ -33,12 +33,56 @@ export interface ClientOptions {
  */
 const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 15_000 } as const;
 
+/**
+ * How long a new connection may take, from the first byte to an authenticated session.
+ * A database that accepts the connection and never answers fails here instead of
+ * holding the caller for ever (edge case E5 of M1-REV-01).
+ */
+export const CONNECT_TIMEOUT_MS = 10_000;
+
+/** The start-up role check: connect and query together. Past it the API exits with 77. */
+export const START_CHECK_TIMEOUT_MS = 20_000;
+
+/** Readiness answers 503 when the database has not answered within this. */
+export const READINESS_TIMEOUT_MS = 5_000;
+
+export class DatabaseTimeout extends Error {
+  constructor(
+    readonly what: string,
+    readonly ms: number,
+  ) {
+    super(`The database did not answer ${what} within ${String(ms / 1000)} s.`);
+    this.name = 'DatabaseTimeout';
+  }
+}
+
+/**
+ * Waits for `work` at most `ms`. A query whose answer never comes is left to finish
+ * on its own when the database answers again; the caller goes on. For the paths that must
+ * answer in time whatever the database does: the start-up check and readiness.
+ */
+export function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new DatabaseTimeout(what, ms));
+    }, ms);
+  });
+  return Promise.race([work, timeout]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 /** A plain client for one database role. It has no tenant behaviour of its own. */
 export function createBaseClient(
   connectionString: string,
   options: ClientOptions = {},
 ): PrismaClient {
-  const adapter = new PrismaPg({ connectionString, max: options.poolSize ?? 10 });
+  const adapter = new PrismaPg({
+    connectionString,
+    max: options.poolSize ?? 10,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+  });
   const { onQuery } = options;
   if (onQuery === undefined) {
     return new PrismaClient({ adapter, transactionOptions: TRANSACTION_OPTIONS });

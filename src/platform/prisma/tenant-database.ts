@@ -6,6 +6,9 @@ import { TenantContext } from '../tenancy/tenant-context';
 import { type DatabaseRole, describeRole } from './database-role';
 import {
   createBaseClient,
+  START_CHECK_TIMEOUT_MS,
+  READINESS_TIMEOUT_MS,
+  within,
   createTenantClient,
   type QueryObserver,
   restrict,
@@ -56,7 +59,7 @@ export class TenantDatabase implements OnModuleDestroy {
   /** True when the database answers. Reads no table. */
   async isReachable(): Promise<boolean> {
     try {
-      await this.#base.$queryRaw`SELECT 1`;
+      await within(this.#base.$queryRaw`SELECT 1`, READINESS_TIMEOUT_MS, 'the readiness check');
       return true;
     } catch {
       return false;
@@ -65,7 +68,7 @@ export class TenantDatabase implements OnModuleDestroy {
 
   /** For the start-up check only: what the application role is allowed to do. */
   describeRole(): Promise<DatabaseRole> {
-    return describeRole(this.#base);
+    return within(describeRole(this.#base), START_CHECK_TIMEOUT_MS, 'the start-up role check');
   }
 
   async onModuleDestroy(): Promise<void> {
