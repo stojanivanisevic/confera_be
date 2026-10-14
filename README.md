@@ -73,7 +73,8 @@ corepack pnpm db:migrate
 ```
 
 `db:provision` ends with `Database "confera" is provisioned.`, `db:migrate` with
-`All migrations have been successfully applied.` Both are safe to run again.
+`All migrations have been successfully applied.` Both are safe to run again, and two
+`db:provision` at the same moment wait for each other (an advisory lock on the server).
 
 **Step 6. Start the API.**
 
@@ -165,7 +166,9 @@ The API reads its configuration from environment variables, and only through the
   only after it has passed, so a refused start runs no application code.
 - **`STAGE` has no default.** Its values are exactly `local`, `dev`, `test` and `prod`.
 - **`local`, `dev` and `test` run only on a developer machine:** both origins must be
-  `localhost`, a loopback address or a name ending in `.test`. Every server runs `prod`,
+  `localhost`, a loopback address or a name ending in `.test`, and `LISTEN_HOST` must be
+  a loopback address (`127.0.0.1`, `::1` or `localhost`): a dev stage that listened on
+  `0.0.0.0` would answer anyone who sends `Host: localhost`. Every server runs `prod`,
   the staging server included.
 - **On `prod`, `INSTANCE` is required:** `production` or `staging`, no default. It must
   not be set on another stage. On `prod` the origins must be `https`, the log level
@@ -424,6 +427,11 @@ Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
   (`data:image/png;base64,…`).
 - The PDF library and the fonts are loaded at the first use, once per process;
   `PdfRenderer.warmUp()` does it ahead of the first document.
+- A render is synchronous work on the event loop, so its input is bounded. A run of more
+  than 24 letters without a space is cut into pieces of 12 before pdfmake sees it (pdfmake
+  breaks a word wider than its column letter by letter, at a cost that grows with the
+  square of its length); a line may break between two pieces. A document with more than
+  30 000 characters of text is refused (`PdfTooLargeError`): split it.
 - A document must be made in under 5 seconds, the first one of a process included. The
   gate is the timing tier (`test/timing/pdf-cold-start.spec.ts`, section 8): fresh
   processes of plain Node, which is what a server is. On the development laptop the
