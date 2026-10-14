@@ -157,10 +157,12 @@ describe('compose files, Dockerfiles and deploy/ (ST-04, govcore matrix row 3)',
     });
 
     it('publishes every port on the loopback address only', () => {
-      const published = [...compose.matchAll(/^\s*-\s*'(\S+:\d+)'/gm)].map((match) => match[1]);
+      // The host port is this checkout's own, a variable the stack script sets (M1-ISS-13);
+      // the address in front of it is always the loopback address.
+      const published = [...compose.matchAll(/^\s*-\s*'([^']+:\d+)'/gm)].map((match) => match[1]);
       expect(published.length).toBeGreaterThanOrEqual(3);
       for (const entry of published) {
-        expect(entry).toMatch(/^127\.0\.0\.1:\d+:\d+$/);
+        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
     });
 
