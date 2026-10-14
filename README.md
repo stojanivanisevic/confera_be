@@ -459,38 +459,59 @@ that they stay.
 bound to a secret-like name.
 
 - **A secret-like name** is decided by its last word, in any casing (`smtpPassword`,
-  `SMTP_PASSWORD`, `smtp-password`); a number at the end does not count (`API_KEY_2`):
-  - the last word is, or ends with: password, passwd, pwd, secret, token (`PGPASSWORD`,
-    `DBPASSWD`, `MYSQL_PWD`, `csrfToken`, `clientSecret`);
-  - the last word is credential or credentials;
+  `SMTP_PASSWORD`, `smtp-password`):
+  - the last word is, or ends with: password, passwd, pwd, passphrase, secret, token
+    (`PGPASSWORD`, `DBPASSWD`, `MYSQL_PWD`, `keyPassphrase`, `csrfToken`, `clientSecret`);
+  - the last word is pass, credential or credentials (`DB_PASS`, `smtpPass`; `bypass`
+    and `compass` are not the word pass);
   - the last word is `key` and the word before it is one of: api, private, data, access,
     secret, signing, encryption, master, client, session (`AWS_SECRET_ACCESS_KEY`,
     `DATA_KEY`, `signingKey`).
 
-  A name whose last word is another one is not secret-like: `passwordPolicy`,
-  `tokenType`, `secretName`, `PASSWORD_MIN_LENGTH`, `SESSION_SECRET_FILE`, a label, a
-  message; nor are `primaryKey`, `sortKey`, `cacheKey`, `publicKey`, `idempotencyKey`.
+  Qualifier words after the secret word, and a number at the end, do not count:
+  sandbox, live, prod, production, staging, test, dev, local, previous, prev, old, new,
+  current, next, primary, secondary, backup, rotated (`PAYPAL_CLIENT_SECRET_SANDBOX`,
+  `DATA_KEY_PREVIOUS`, `SMTP_PASSWORD_2`). A name whose last word is another one is not
+  secret-like: `passwordPolicy`, `tokenType`, `secretName`, `PASSWORD_MIN_LENGTH`,
+  `SESSION_SECRET_FILE`, a label, a message; nor are `primaryKey`, `sortKey`,
+  `cacheKey`, `publicKey`, `idempotencyKey`, nor a plural (`secrets:` of compose lists
+  names, not values).
 
-- **One fixed exception:** the option `credentials` of the Fetch API takes a mode, not a
-  credential. Under exactly that name, exactly `'include'`, `'same-origin'` and `'omit'`
-  are not a finding; any other literal is.
 - **Allowed values, and nothing else:**
   - nothing: an empty value, and also `null`, `~`, `true` and `false`, which are no
     value or a flag (`persist-credentials: false`);
-  - a reference to something else as the whole value: `${VAR}`, `$VAR`, `$(command)`,
-    `${{ secrets.X }}`; in JavaScript anything that is not a literal (`process.env.X`,
-    a call, another variable);
+  - a reference to something else as the whole value: `${VAR}`, `$VAR`, `$1`, `$@`,
+    references one after the other (`"$PREFIX$SUFFIX"`), `$(command)`,
+    `${{ secrets.X }}`; in JavaScript anything that is not a literal (`process.env.X`, a
+    call, another variable); in PowerShell a command or a call (`$p = Read-Host`);
   - a placeholder: a literal that **starts with** `invented-` or `local-only-`.
+
+  A list of values under a secret-like name is read value by value.
+
 - **There is no guess by length or by randomness.** `'too_short'` under a secret-like
   name is a finding, and so are `changeme` and `1`. A test that needs a password that is
   too short uses `'invented-x'`.
+- **The written exceptions, and no others:**
+  - the option `credentials` of the Fetch API takes a mode: under exactly that name,
+    exactly `'include'`, `'same-origin'` and `'omit'` are not a finding;
+  - versions under names of packages: the maps `dependencies`, `devDependencies`,
+    `optionalDependencies`, `peerDependencies`, `overrides`, `resolutions`, `catalog` and
+    `catalogs` of a package manifest or a pnpm workspace file (and `pnpm.overrides`);
+  - GitHub Actions: under `permissions`, the levels `read`, `write` and `none`
+    (`id-token: write`).
 - **Where a name gets a value:**
   - `NAME=value` at the start of a line, with or without `export`, quotes, a leading list
-    dash, `ENV` or `ARG` (environment files, shell, compose, Dockerfile, this README);
-  - `name: value` in YAML and `"name": value` in JSON, in any letter case;
-  - in JavaScript and TypeScript an assignment, a declaration (typed or not), a field of a
-    class, an object property, a default parameter, an attribute of a JSX element, and a
-    literal used as a fallback for such a name (`??`, `||`, a branch of a ternary).
+    dash, `ENV`, `ARG` or `RUN` (environment files, shell, compose, Dockerfile, this
+    README), and `-e NAME=value` or `--env NAME=value` anywhere in a line;
+  - `name: value` in YAML and `"name": value` in JSON, in any letter case, also in a file
+    with one more extension (`compose.yml.example`);
+  - in JavaScript and TypeScript an assignment (also `+=`), a declaration (typed or not),
+    a field of a class, an object property, a default parameter, an attribute of a JSX
+    element, and a literal used as a fallback for such a name (`??`, `||`, a branch of a
+    ternary), also inside the `${...}` of a template.
+
+  A file is read as UTF-8, or as UTF-16 when a byte-order mark says so.
+
 - **What is not read:** comments; lockfiles; and what this repository generates: the
   OpenAPI documents in `openapi/` (generated from the code and committed) and the Prisma
   client in `src/generated/` (not in git). Nothing is vendored. The list of what is left
@@ -500,11 +521,15 @@ bound to a secret-like name.
 The scanner is one file without dependencies, `scripts/secret-assignments/secret-assignments.mjs`,
 with its two corpora beside it: shapes that must be reported (`…reported.mjs`) and ordinary
 lines that must not be (`…ordinary.mjs`). The unit tests run both. The three files hold
-nothing about this repository and are the same in `confera_fe`. On its own:
+nothing about this repository and are copied unchanged into `confera_fe`, together with
+`secret-assignments.manifest.json`: the version of the scanner and the SHA-256 of each of
+the three files (over the text with LF line endings). `--self-test` compares the files
+with it, so a copy that was changed, or is of another version, fails. After a change here:
+a new `VERSION` in the scanner, then `--write-manifest`. On its own:
 
 ```
 node scripts/secret-assignments/secret-assignments.mjs               scans the current directory
-node scripts/secret-assignments/secret-assignments.mjs --self-test   runs the two corpora
+node scripts/secret-assignments/secret-assignments.mjs --self-test   runs the two corpora, checks the manifest
 ```
 
 `corepack pnpm test:supply-chain` (part of `check`) proves that these rules bite: in a

@@ -65,7 +65,12 @@ describe('redaction of log entries (ADR-19, SEC-A-28)', () => {
 
     it('redacts whatever the value is', () => {
       expect(
-        redact({ password: { nested: 'canary' }, token: ['canary'], cookie: 12345, body: null }),
+        redact({
+          password: { nested: 'canary' },
+          token: ['invented-canary'],
+          cookie: 12345,
+          body: null,
+        }),
       ).toEqual({ password: REDACTED, token: REDACTED, cookie: REDACTED, body: REDACTED });
     });
 

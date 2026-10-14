@@ -21,6 +21,12 @@ const SCANNER = join('scripts', 'secret-assignments', 'secret-assignments.mjs');
 
 interface SelfTest {
   readonly ok: boolean;
+  readonly version: string;
+  readonly manifest: {
+    readonly ok: boolean;
+    readonly version?: string;
+    readonly problems: string[];
+  };
   readonly reported: {
     readonly total: number;
     readonly syntaxes: readonly string[];
@@ -46,6 +52,8 @@ const SYNTAXES_OF_THE_RULE = [
   'fallback with ?? in JavaScript',
   'fallback with || in JavaScript',
   'branch of a ternary in JavaScript',
+  '-e NAME=value of a command',
+  'RUN NAME=value of a Dockerfile',
 ];
 
 describe('scan for literal values bound to secret-like names', () => {
@@ -88,6 +96,13 @@ describe('scan for literal values bound to secret-like names', () => {
       expect(run.stdout).toMatch(
         /shapes that must be reported: (\d+) of \1; ordinary lines left alone: (\d+) of \2/,
       );
+    });
+
+    it('the three files are the ones the manifest beside them records, of its version', async () => {
+      // The manifest is what a copy in another repository is compared with.
+      expect(result.manifest).toEqual({ ok: true, version: result.version, problems: [] });
+      const version = await runNode([SCANNER, '--version']);
+      expect(version.stdout.trim()).toBe(result.version);
     });
   });
 
@@ -134,6 +149,17 @@ describe('scan for literal values bound to secret-like names', () => {
       'CLIENT_KEY',
       'sessionKey',
       'secretkey',
+      // pass and passphrase as the last word.
+      'DB_PASS',
+      'smtpPass',
+      'keyPassphrase',
+      // Qualifier words, and a number, after the secret word.
+      'PAYPAL_CLIENT_SECRET_SANDBOX',
+      'DATA_KEY_PREVIOUS',
+      'SMTP_PASSWORD_2',
+      'apiKeyLive',
+      'TOKEN_PROD_2',
+      'SESSION_SECRET_ROTATED',
     ];
     const ORDINARY = [
       'passwordPolicy',
@@ -153,6 +179,12 @@ describe('scan for literal values bound to secret-like names', () => {
       'foreignKey',
       'idempotencyKey',
       'keyboard',
+      'bypass',
+      'compass',
+      'passport',
+      'TOKEN_TYPE_PROD',
+      'SECRET_NAME_OLD',
+      'test',
       'tokenizer',
       'secretary',
       'TOKEN_TTL_SECONDS',
