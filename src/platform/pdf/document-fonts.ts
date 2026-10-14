@@ -27,6 +27,58 @@ import type { GlyphCoverage } from './glyph-coverage';
  * carries the fonts along.
  */
 
+/**
+ * The most text one document may hold. The render is synchronous work on the event loop,
+ * and its time grows with the text; this bound keeps every render under the limit of
+ * NFR-PERF-03 (5 seconds). Measured in plain Node at 49 000 characters, the worst shape
+ * (one word in a column of 20 pt) took 2.6 s and prose 0.5 s; the bound is set lower, for
+ * a busy machine. A proforma or an invoice holds a few thousand characters.
+ */
+export const MAX_TEXT_CHARACTERS = 30_000;
+
+/**
+ * A run of letters without a space longer than this is cut into pieces of PIECE_LENGTH
+ * before pdfmake sees it. pdfmake breaks a word that is wider than its column one
+ * character at a time, at a cost that grows with the square of the length of the word
+ * (3 000 characters in a column of 20 pt: about a minute); pieces make it linear. A line
+ * may then break between two pieces of a long word, as it would inside the word anyway.
+ */
+export const LONG_WORD = 24;
+export const PIECE_LENGTH = 12;
+
+/** The pieces of a text: long runs without white space cut, everything else as it was. */
+export function piecesOf(text: string): string[] {
+  if (text.length <= LONG_WORD) {
+    return [text];
+  }
+  const pieces: string[] = [];
+  let current = '';
+  let runLength = 0;
+  for (const character of text) {
+    if (/\s/.test(character)) {
+      runLength = 0;
+    } else {
+      runLength += 1;
+      if (runLength > LONG_WORD && (runLength - 1) % PIECE_LENGTH === 0) {
+        pieces.push(current);
+        current = '';
+      }
+    }
+    current += character;
+  }
+  pieces.push(current);
+  return pieces;
+}
+
+export class PdfTooLargeError extends Error {
+  constructor(readonly characters: number) {
+    super(
+      `The PDF cannot be made: it holds more than ${String(MAX_TEXT_CHARACTERS)} characters of text. A document that large would take longer to make than a person waits; split it into several.`,
+    );
+    this.name = 'PdfTooLargeError';
+  }
+}
+
 export class UnsupportedPdfFeatureError extends Error {
   constructor(
     readonly feature: string,
@@ -135,11 +187,21 @@ function svgCharacters(svg: string): string {
 }
 
 class DocumentWalk {
+  /** The characters of text seen so far, against MAX_TEXT_CHARACTERS. */
+  private characters = 0;
+
   constructor(private readonly coverage: GlyphCoverage) {}
 
   /** A string in a text position: runs with their fonts written out. */
   private runs(value: string | number | boolean): NodeObject[] {
-    return this.coverage.split(String(value)).map((run) => ({ text: run.text, font: run.font }));
+    const text = String(value);
+    this.characters += text.length;
+    if (this.characters > MAX_TEXT_CHARACTERS) {
+      throw new PdfTooLargeError(this.characters);
+    }
+    return this.coverage
+      .split(text)
+      .flatMap((run) => piecesOf(run.text).map((piece) => ({ text: piece, font: run.font })));
   }
 
   private refuseKinds(node: NodeObject): void {

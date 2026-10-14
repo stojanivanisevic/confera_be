@@ -2,6 +2,11 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  LONG_WORD,
+  MAX_TEXT_CHARACTERS,
+  PdfTooLargeError,
+  PIECE_LENGTH,
+  piecesOf,
   REFUSED_DEFINITION_KEYS,
   REFUSED_NODE_KINDS,
   SUPPORTED_DEFINITION_KEYS,
@@ -397,5 +402,48 @@ describe('rendered documents', () => {
     await expect(renderer.render({ content: [{ svg }] })).rejects.toThrow(
       UnsupportedPdfFeatureError,
     );
+  });
+});
+
+describe('long words and large documents (edge case E6 of M1-REV-01)', () => {
+  it('a word longer than LONG_WORD is cut into pieces, and the text stays the same', () => {
+    const word = 'Šćepanović'.repeat(30);
+    const pieces = piecesOf(`Ime: ${word} kraj`);
+    expect(pieces.join('')).toBe(`Ime: ${word} kraj`);
+    expect(pieces.length).toBeGreaterThan(20);
+    // No piece holds more than LONG_WORD letters in a row.
+    for (const piece of pieces) {
+      for (const run of piece.split(/\s+/)) {
+        expect(Array.from(run).length).toBeLessThanOrEqual(LONG_WORD);
+      }
+    }
+    expect(PIECE_LENGTH).toBeLessThan(LONG_WORD);
+  });
+
+  it('short words and text with spaces are left as they are', () => {
+    expect(piecesOf('Proforma invoice no. 2026-000123')).toEqual([
+      'Proforma invoice no. 2026-000123',
+    ]);
+    const prose = 'reč '.repeat(500);
+    expect(piecesOf(prose)).toEqual([prose]);
+  });
+
+  it('every piece gets its font, and the glyph check still sees every character', () => {
+    const word = 'ǌ'.repeat(40);
+    const prepared = prepare({ content: word }).content as { text: { font: string }[] };
+    expect(prepared.text.length).toBeGreaterThan(1);
+    expect(prepared.text.every(({ font }) => font === FALLBACK_FONT)).toBe(true);
+    expect(() => withFonts({ content: [`${'a'.repeat(40)}${UNKNOWN}`] }, coverage)).toThrow(
+      MissingGlyphError,
+    );
+  });
+
+  it('a document with more text than MAX_TEXT_CHARACTERS is refused, and says why', () => {
+    const text = 'reč '.repeat(MAX_TEXT_CHARACTERS / 4 + 1);
+    expect(() => withFonts({ content: [text] }, coverage)).toThrow(PdfTooLargeError);
+    expect(() => withFonts({ content: [text] }, coverage)).toThrow(/split it into several/);
+    expect(() =>
+      withFonts({ content: ['reč '.repeat(MAX_TEXT_CHARACTERS / 8)] }, coverage),
+    ).not.toThrow();
   });
 });
