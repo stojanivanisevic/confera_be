@@ -301,6 +301,77 @@ async function plantedSecrets() {
       file: 'deploy/planted-not-a-placeholder.env',
       text: `SMTP_PASSWORD=${random(6, ALNUM)}-invented-${random(6, ALNUM)}-local-only-${random(6, ALNUM)}\n`,
     },
+    // Third round. The rule is written down now (README, "The rule for a secret-like name"):
+    // a literal value bound to a secret-like name, in the syntaxes it lists, and no allowed
+    // value but nothing, a reference and a placeholder. Each of these is inside that rule,
+    // and the scan does not report it today.
+    {
+      what: 'contract: export with the quotes around the pair (export "NAME=value")',
+      file: 'deploy/planted-export.sh',
+      text: `#!/bin/sh\nexport "SMTP_PASSWORD=${random(24, ALNUM)}"\nexec node dist/main.js\n`,
+    },
+    {
+      what: 'contract: name: value in a YAML file that has one more extension (.yml.example)',
+      file: 'deploy/planted-compose.yml.example',
+      text: `services:\n  db:\n    environment:\n      POSTGRES_PASSWORD: ${random(24, ALNUM)}\n`,
+    },
+    {
+      what: 'contract: "name": value in a JSON file that has one more extension (.json.example)',
+      file: 'deploy/planted-settings.json.example',
+      text: `{\n  "smtp": {\n    "host": "mail.example.test",\n    "password": "${random(24, ALNUM)}"\n  }\n}\n`,
+    },
+    {
+      what: 'contract: a list of literal texts as the value, in JSON ("token": ["value"])',
+      file: 'deploy/planted-list.json',
+      text: `{ "token": ["${random(24, ALNUM)}"] }\n`,
+    },
+    {
+      what: 'contract: a list of literal texts as the value, in YAML (credentials: - value)',
+      file: 'deploy/planted-list.yml',
+      text: `registry:\n  credentials:\n    - deploy\n    - ${random(24, ALNUM)}\n`,
+    },
+    {
+      what: 'contract: a list of literal texts as the value, in TypeScript (const credentials = [...])',
+      file: 'src/planted/list-secret.ts',
+      text: `export const credentials = ['deploy', '${random(24, ALNUM)}'];\n`,
+    },
+    {
+      what: 'contract: a literal fallback (??) inside the hole of a template text',
+      file: 'src/planted/template-fallback.ts',
+      text: `export const header = \`Bearer \${process.env.API_TOKEN ?? '${random(40, ALNUM)}'}\`;\n`,
+    },
+    {
+      what: 'contract: NAME=value in a text file written in UTF-16 (what PowerShell 5 writes with >)',
+      file: 'deploy/planted-utf16.env',
+      text: Buffer.concat([
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from(`STAGE=prod\r\nSMTP_PASSWORD=${random(24, ALNUM)}\r\n`, 'utf16le'),
+      ]),
+    },
+    {
+      what: 'contract: name: value in a YAML mapping in braces that goes over several lines',
+      file: 'deploy/planted-flow.yml',
+      text: `smtp: {\n  host: mail.example.test, password: ${random(24, ALNUM)}\n}\n`,
+    },
+    {
+      what: 'contract: an assignment that adds to the name (+=)',
+      file: 'src/planted/compound.ts',
+      text: `export let smtpPassword = '';\nsmtpPassword += '${random(24, ALNUM)}';\n`,
+    },
+  ];
+  // Third round, the other direction: ordinary files. No literal value is bound to a name
+  // in them, only references, so the rule excludes them. The scan reports them today.
+  const ordinary = [
+    {
+      what: 'contract: a positional parameter of a shell script is a reference (PASSWORD="$1")',
+      file: 'scripts/planted-arguments.sh',
+      text: ['#!/bin/sh', 'PASSWORD="$1"', 'TOKEN=$2', 'export API_KEY="$@"', ''].join('\n'),
+    },
+    {
+      what: 'contract: a value made of references only holds no literal (TOKEN="$PREFIX$SUFFIX")',
+      file: 'scripts/planted-joined.sh',
+      text: ['#!/bin/sh', 'TOKEN="$PREFIX$SUFFIX"', 'PASSWORD=$FIRST$SECOND', ''].join('\n'),
+    },
   ];
   const placeholders = {
     file: 'test/planted/placeholders.spec.ts',
@@ -311,10 +382,10 @@ async function plantedSecrets() {
     ].join('\n'),
   };
 
-  const planted = [...secrets.map(({ file }) => file), placeholders.file];
+  const planted = [...secrets, ...ordinary].map(({ file }) => file).concat(placeholders.file);
   const scanWithPlants = () => {
     try {
-      for (const { file, text } of secrets) {
+      for (const { file, text } of [...secrets, ...ordinary]) {
         plant(copy, file, text);
       }
       plant(copy, placeholders.file, placeholders.text);
@@ -359,6 +430,13 @@ async function plantedSecrets() {
       }
     },
   );
+  for (const { what, file } of ordinary) {
+    await testCase(`control, not reported: ${what}`, (miss) => {
+      if (named(file)) {
+        miss(`the secret scan reported ${file}, which holds references and no literal value`);
+      }
+    });
+  }
 }
 
 async function weakenedRules() {
