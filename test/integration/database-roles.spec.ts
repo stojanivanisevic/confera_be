@@ -151,6 +151,9 @@ describe('database roles', () => {
           createTemp: false,
           createInSchema: false,
           owner: false,
+          memberOfSuperuser: [],
+          memberOfBypassRls: [],
+          memberOfCreateRole: [],
         });
         expect(roleProblems('application', role)).toEqual([]);
       } finally {

@@ -13,6 +13,9 @@ const SAFE: DatabaseRole = {
   createTemp: false,
   createInSchema: false,
   owner: false,
+  memberOfSuperuser: [],
+  memberOfBypassRls: [],
+  memberOfCreateRole: [],
 };
 
 describe('roleProblems', () => {
@@ -53,5 +56,30 @@ describe('roleProblems', () => {
       createTemp: true,
     });
     expect(problems).toHaveLength(5);
+  });
+});
+
+describe('roleProblems: memberships (edge case E1 of M1-REV-01)', () => {
+  it('refuses a member of a superuser role, for both kinds', () => {
+    const role = { ...SAFE, memberOfSuperuser: ['postgres'] };
+    expect(roleProblems('application', role)).toEqual([
+      'is a member of a superuser role (postgres) and may become it with SET ROLE',
+    ]);
+    expect(roleProblems('system', role)).toHaveLength(1);
+  });
+
+  it('refuses an application role that is a member of a role that may bypass the policies', () => {
+    const role = { ...SAFE, memberOfBypassRls: ['confera_system'] };
+    expect(roleProblems('application', role)).toEqual([
+      'is a member of a role that may bypass row-level security (confera_system) and may become it with SET ROLE',
+    ]);
+    // The system role bypasses them itself; a membership changes nothing for it.
+    expect(roleProblems('system', role)).toEqual([]);
+  });
+
+  it('refuses a member of a role that may create roles or databases', () => {
+    const role = { ...SAFE, memberOfCreateRole: ['dba'] };
+    expect(roleProblems('application', role)).toHaveLength(1);
+    expect(roleProblems('system', role)).toHaveLength(1);
   });
 });

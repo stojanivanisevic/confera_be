@@ -21,6 +21,15 @@ export interface DatabaseRole {
   readonly createInSchema: boolean;
   /** Is, or is a member of, the role that owns the database, the schema or one of its tables. */
   readonly owner: boolean;
+  /**
+   * Roles this role is a member of, through any chain of memberships, that are a
+   * superuser; that may bypass row-level security (the system role among them); or that
+   * may create roles or databases, or replicate. A member may become such a role with one
+   * statement, SET ROLE, or holds its rights already by inheritance.
+   */
+  readonly memberOfSuperuser: readonly string[];
+  readonly memberOfBypassRls: readonly string[];
+  readonly memberOfCreateRole: readonly string[];
 }
 
 export async function describeRole(client: PrismaClient): Promise<DatabaseRole> {
@@ -48,7 +57,24 @@ export async function describeRole(client: PrismaClient): Promise<DatabaseRole> 
           SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE n.nspname = 'public' AND pg_has_role(current_user, c.relowner, 'MEMBER')
         )
-      ) AS "owner"
+      ) AS "owner",
+      ARRAY(
+        SELECT x.rolname::text FROM pg_roles x
+        WHERE x.oid <> r.oid AND x.rolsuper AND pg_has_role(current_user, x.oid, 'MEMBER')
+        ORDER BY 1
+      ) AS "memberOfSuperuser",
+      ARRAY(
+        SELECT x.rolname::text FROM pg_roles x
+        WHERE x.oid <> r.oid AND x.rolbypassrls AND pg_has_role(current_user, x.oid, 'MEMBER')
+        ORDER BY 1
+      ) AS "memberOfBypassRls",
+      ARRAY(
+        SELECT x.rolname::text FROM pg_roles x
+        WHERE x.oid <> r.oid
+          AND (x.rolcreaterole OR x.rolcreatedb OR x.rolreplication)
+          AND pg_has_role(current_user, x.oid, 'MEMBER')
+        ORDER BY 1
+      ) AS "memberOfCreateRole"
     FROM pg_roles r
     WHERE r.rolname = current_user
   `;
@@ -70,8 +96,23 @@ export function roleProblems(kind: RoleKind, role: DatabaseRole): string[] {
   if (role.superuser) {
     problems.push('is a superuser');
   }
+  if (role.memberOfSuperuser.length > 0) {
+    problems.push(
+      `is a member of a superuser role (${role.memberOfSuperuser.join(', ')}) and may become it with SET ROLE`,
+    );
+  }
   if (role.bypassRls && kind === 'application') {
     problems.push('may bypass row-level security (BYPASSRLS)');
+  }
+  if (role.memberOfBypassRls.length > 0 && kind === 'application') {
+    problems.push(
+      `is a member of a role that may bypass row-level security (${role.memberOfBypassRls.join(', ')}) and may become it with SET ROLE`,
+    );
+  }
+  if (role.memberOfCreateRole.length > 0) {
+    problems.push(
+      `is a member of a role that may create roles or databases, or replicate (${role.memberOfCreateRole.join(', ')})`,
+    );
   }
   if (role.owner) {
     problems.push('owns the database, the schema or a table, or is a member of the role that does');
