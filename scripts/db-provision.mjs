@@ -34,6 +34,9 @@ const APPLICATION_SETTINGS = {
 
 const RESETTABLE_DATABASE = /^confera_[a-z0-9_]*test[a-z0-9_]*$/;
 
+/** The name of the advisory lock that lets one provisioning run at a time on a server. */
+const LOCK_NAME = 'confera db:provision';
+
 function fail(message) {
   process.stderr.write(`db:provision failed: ${message}\n`);
   process.exit(1);
@@ -148,6 +151,11 @@ async function main() {
   const superuser = superuserConnection(owner.url);
   const server = await connect(superuser);
   try {
+    // One provisioning at a time on a server: the runs share the three roles, and two runs
+    // that alter a role at the same moment make PostgreSQL refuse one of them ("tuple
+    // concurrently updated"). The lock is held by this connection until it closes.
+    await server.query('SELECT pg_advisory_lock(hashtext($1))', [LOCK_NAME]);
+
     // 1. Roles and their attributes.
     for (const role of [owner, application, system]) {
       await provisionRole(server, role);
@@ -181,23 +189,23 @@ async function main() {
       await server.query(`REVOKE ALL ON DATABASE ${db} FROM ${name}`);
       await server.query(`GRANT CONNECT ON DATABASE ${db} TO ${name}`);
     }
-  } finally {
-    await server.end();
-  }
 
-  // 3. The schema: the owner owns it; the runtime roles may use it and create nothing in it.
-  const inside = await connect(superuser, database);
-  try {
-    const ownerName = inside.escapeIdentifier(owner.name);
-    await inside.query(`ALTER SCHEMA public OWNER TO ${ownerName}`);
-    await inside.query('REVOKE ALL ON SCHEMA public FROM PUBLIC');
-    for (const role of [application, system]) {
-      const name = inside.escapeIdentifier(role.name);
-      await inside.query(`REVOKE ALL ON SCHEMA public FROM ${name}`);
-      await inside.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
+    // 3. The schema: the owner owns it; the runtime roles may use it and create nothing in it.
+    const inside = await connect(superuser, database);
+    try {
+      const ownerName = inside.escapeIdentifier(owner.name);
+      await inside.query(`ALTER SCHEMA public OWNER TO ${ownerName}`);
+      await inside.query('REVOKE ALL ON SCHEMA public FROM PUBLIC');
+      for (const role of [application, system]) {
+        const name = inside.escapeIdentifier(role.name);
+        await inside.query(`REVOKE ALL ON SCHEMA public FROM ${name}`);
+        await inside.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
+      }
+    } finally {
+      await inside.end();
     }
   } finally {
-    await inside.end();
+    await server.end();
   }
 
   process.stdout.write(
@@ -212,4 +220,12 @@ async function main() {
   );
 }
 
-await main();
+try {
+  await main();
+} catch (error) {
+  // A plain sentence, not a stack trace. The code of PostgreSQL says what kind of failure it was.
+  const code = typeof error?.code === 'string' ? ` (PostgreSQL ${error.code})` : '';
+  fail(
+    `provisioning did not finish: ${error instanceof Error ? error.message : 'unknown error'}${code}. It is safe to run again.`,
+  );
+}
