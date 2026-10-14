@@ -76,7 +76,12 @@ describe('data access architecture', () => {
 
     it('the class offers only the resolvers of ADR-05 that exist so far', () => {
       /** The resolvers named by ADR-05. A name is added here in the change that adds the resolver. */
-      const RESOLVERS = ['userByEmail'];
+      const RESOLVERS = [
+        'userByEmail',
+        'sessionByTokenHash',
+        'linkByTokenHash',
+        'organisationsWithUsers',
+      ];
       /** Not resolvers: the start-up self-description and Nest's shutdown hook. They return no tenant data. */
       const INFRASTRUCTURE = ['constructor', 'describeRole', 'onModuleDestroy'];
       const members = Object.getOwnPropertyNames(resolversModule.SystemResolvers.prototype).sort();
@@ -85,9 +90,13 @@ describe('data access architecture', () => {
       expect(Object.keys(resolversModule.SystemResolvers.prototype)).toEqual([]);
     });
 
-    it('is used through SystemResolvers by the start-up check and by nothing else yet', () => {
+    it('is used through SystemResolvers by the start-up check, sign-in, sessions and secure links, and by nothing else', () => {
       // Every new user of the resolvers shows up here, in a diff a reviewer sees.
       expect(importers((specifier) => /(^|\/)system\/resolvers$/.test(specifier))).toEqual([
+        'src/modules/access/account.service.ts',
+        'src/modules/access/session.service.ts',
+        'src/modules/access/sign-in.service.ts',
+        'src/modules/links/secure-links.ts',
         'src/platform/prisma/database-role-check.ts',
         'src/platform/prisma/prisma.module.ts',
       ]);

@@ -56,6 +56,19 @@ export class TenantDatabase implements OnModuleDestroy {
     return tenantTransaction(this.#base, this.context.requireOrganisationId(), work);
   }
 
+  /**
+   * Several statements in one transaction OUTSIDE any organisation: for the instance
+   * tables only (security_events), whose policy admits a statement only while no
+   * organisation is set. The transaction sets the empty organisation itself, so a tenant
+   * table returns nothing and takes nothing here, whatever the request context holds.
+   */
+  instance<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.#base.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT set_config('app.org_id', '', true)`;
+      return work(tx);
+    });
+  }
+
   /** True when the database answers. Reads no table. */
   async isReachable(): Promise<boolean> {
     try {

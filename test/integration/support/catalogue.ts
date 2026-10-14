@@ -17,6 +17,35 @@ export const REVIEWED_GLOBAL_TABLES: Readonly<Record<string, string>> = {
     'The tenant itself: it has no organisation_id, its policy compares its own id. Checked like a tenant table otherwise.',
 };
 
+/**
+ * Reference tables (0.2.0): no organisation, the same for every organisation, seeded by
+ * migration. Their rules: row-level security enabled and forced, a policy that lets every
+ * role read, every policy that lets a role write restricted to the owner role, and the
+ * run-time roles may read them and nothing else. A new entry is a decision, with a reason.
+ */
+export const REVIEWED_REFERENCE_TABLES: Readonly<Record<string, string>> = {
+  roles:
+    'The two roles of the MVP (ADR-05, FR-USR-01), seeded by migration. The same for every organisation; the run-time roles only read it.',
+  role_permissions:
+    'What each role may do (ADR-05, FR-USR-01), seeded by migration. The same for every organisation; the run-time roles only read it.',
+};
+
+/**
+ * Instance tables (0.2.0): what happens before an organisation is known, such as a failed
+ * sign-in for an unknown address (ADR-06). Their rules: row-level security enabled and
+ * forced, and a policy for every command whose read and write checks admit a statement only
+ * while NO organisation is set, so that code working inside an organisation can never read
+ * or write them. The system role has no right on them. A new entry is a decision.
+ */
+export const REVIEWED_INSTANCE_TABLES: Readonly<Record<string, string>> = {
+  security_events:
+    'Failed sign-ins and failed password confirmations, for the brake and the summary in the audit log (ADR-03, ADR-06); kept 90 days (ADR-29).',
+};
+
+/** The one expression an instance table's policy may have, as pg_get_expr prints it. */
+export const NO_ORGANISATION =
+  "(NULLIF(current_setting('app.org_id'::text, true), ''::text) IS NULL)";
+
 /** Tables on the reviewed list that still must carry row-level security, with the column their policy compares. */
 const TENANT_KEY_COLUMN: Readonly<Record<string, string>> = { organisations: 'id' };
 
@@ -25,6 +54,8 @@ const OWNER_ONLY_TABLES = ['_prisma_migrations'];
 
 /** What the system role may read (ADR-05: "grants limited to what the resolvers read"). */
 export const SYSTEM_ROLE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  secure_links: ['id', 'organisation_id', 'token_hash'],
+  sessions: ['id', 'organisation_id', 'token_hash'],
   users: ['email', 'id', 'organisation_id'],
 };
 
@@ -53,6 +84,60 @@ interface PolicyRow {
   permissive: boolean;
   using: string | null;
   check: string | null;
+  /** The roles the policy is for; empty for every role (PUBLIC). */
+  roles: string[];
+}
+
+/** The problems of a reference table (REVIEWED_REFERENCE_TABLES). */
+function referenceTableProblems(table: TableRow, policies: readonly PolicyRow[]): string[] {
+  const problems: string[] = [];
+  if (!table.row_security || !table.force_row_security) {
+    problems.push(`${table.name}: row-level security is not enabled and forced`);
+  }
+  const own = policies.filter((policy) => policy.table === table.name && policy.permissive);
+  if (!own.some((policy) => ['SELECT', 'ALL'].includes(policy.command))) {
+    problems.push(`${table.name}: no policy lets the run-time roles read the reference table`);
+  }
+  for (const policy of own) {
+    const writes = policy.command !== 'SELECT';
+    if (writes && !(policy.roles.length === 1 && policy.roles[0] === 'confera_owner')) {
+      problems.push(
+        `${table.name}: policy ${policy.name} lets roles other than the owner write a reference table`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** The problems of an instance table (REVIEWED_INSTANCE_TABLES). */
+function instanceTableProblems(table: TableRow, policies: readonly PolicyRow[]): string[] {
+  const problems: string[] = [];
+  if (!table.row_security || !table.force_row_security) {
+    problems.push(`${table.name}: row-level security is not enabled and forced`);
+  }
+  const own = policies.filter((policy) => policy.table === table.name);
+  for (const command of COMMANDS) {
+    if (!own.some((policy) => policy.permissive && ['ALL', command].includes(policy.command))) {
+      problems.push(`${table.name}: no policy for ${command}`);
+    }
+  }
+  for (const policy of own) {
+    for (const [kind, expression] of [
+      ['USING', policy.using],
+      ['WITH CHECK', policy.check],
+    ] as const) {
+      const needed =
+        kind === 'USING'
+          ? policy.command !== 'INSERT'
+          : ['INSERT', 'UPDATE', 'ALL'].includes(policy.command);
+      if (needed && expression !== NO_ORGANISATION) {
+        problems.push(
+          `${table.name}: policy ${policy.name} ${kind} does not admit a statement only while no organisation is set`,
+        );
+      }
+    }
+  }
+  return problems;
 }
 
 export async function catalogueProblems(client: Client): Promise<string[]> {
@@ -82,11 +167,20 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
                            WHEN 'd' THEN 'DELETE' ELSE 'ALL' END AS command,
              p.polpermissive AS permissive,
              pg_get_expr(p.polqual, p.polrelid) AS "using",
-             pg_get_expr(p.polwithcheck, p.polrelid) AS "check"
+             pg_get_expr(p.polwithcheck, p.polrelid) AS "check",
+             ARRAY(SELECT r.rolname::text FROM pg_roles r WHERE r.oid = ANY (p.polroles)) AS roles
       FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid`)
   ).rows;
 
   for (const table of tables) {
+    if (table.name in REVIEWED_REFERENCE_TABLES) {
+      problems.push(...referenceTableProblems(table, policies));
+      continue;
+    }
+    if (table.name in REVIEWED_INSTANCE_TABLES) {
+      problems.push(...instanceTableProblems(table, policies));
+      continue;
+    }
     const reviewed = table.name in REVIEWED_GLOBAL_TABLES;
     const keyColumn = TENANT_KEY_COLUMN[table.name] ?? 'organisation_id';
     if (OWNER_ONLY_TABLES.includes(table.name)) {
@@ -191,7 +285,11 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
       WHERE con.contype = 'f' AND n.nspname = 'public'`)
   ).rows;
   for (const key of foreignKeys) {
-    if (key.to_table === 'organisations' || key.to_table in REVIEWED_GLOBAL_TABLES) {
+    if (
+      key.to_table === 'organisations' ||
+      key.to_table in REVIEWED_GLOBAL_TABLES ||
+      key.to_table in REVIEWED_REFERENCE_TABLES
+    ) {
       continue;
     }
     if (
@@ -248,6 +346,10 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
     } else if (grant.grantee === 'confera_system') {
       problems.push(
         `${grant.table}: the system role has ${grant.privilege} on the whole table; grant columns to it`,
+      );
+    } else if (grant.table in REVIEWED_REFERENCE_TABLES && grant.privilege !== 'SELECT') {
+      problems.push(
+        `${grant.table}: the application role has ${grant.privilege} on a reference table`,
       );
     } else if (['TRUNCATE', 'REFERENCES', 'TRIGGER'].includes(grant.privilege)) {
       problems.push(`${grant.table}: the application role has ${grant.privilege}`);

@@ -46,6 +46,25 @@ export class TenantContext {
     });
   }
 
+  /**
+   * Sets the organisation for the rest of the current request: what the access guard does
+   * once it has found the session, since a guard cannot wrap the handler in `run`. Refused
+   * outside a request context, and when another organisation is set already.
+   */
+  enter(organisationId: string): void {
+    if (!UUID.test(organisationId)) {
+      throw new TypeError('An organisation id must be a UUID.');
+    }
+    if (!this.cls.isActive()) {
+      throw new Error('There is no request context to enter an organisation in.');
+    }
+    const current = this.organisationId();
+    if (current !== undefined && current !== organisationId.toLowerCase()) {
+      throw new Error('Already inside another organisation; a nested change is not allowed.');
+    }
+    this.cls.set(ORGANISATION_KEY, organisationId.toLowerCase());
+  }
+
   organisationId(): string | undefined {
     return this.cls.isActive() ? this.cls.get<string | undefined>(ORGANISATION_KEY) : undefined;
   }

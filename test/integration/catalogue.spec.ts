@@ -2,6 +2,8 @@ import type { Client } from 'pg';
 import {
   catalogueProblems,
   REVIEWED_GLOBAL_TABLES,
+  REVIEWED_INSTANCE_TABLES,
+  REVIEWED_REFERENCE_TABLES,
   SYSTEM_ROLE_COLUMNS,
 } from './support/catalogue';
 import { connectAsSuperuser, rows } from './support/database';
@@ -60,11 +62,32 @@ describe('catalogue of the migrated database (ST-07)', () => {
     );
     expect(tables.length).toBeGreaterThanOrEqual(4);
     for (const table of tables) {
-      expect(table.has_column || table.tablename in REVIEWED_GLOBAL_TABLES).toBe(true);
+      expect({
+        table: table.tablename,
+        reviewed:
+          table.has_column ||
+          table.tablename in REVIEWED_GLOBAL_TABLES ||
+          table.tablename in REVIEWED_REFERENCE_TABLES ||
+          table.tablename in REVIEWED_INSTANCE_TABLES,
+      }).toEqual({ table: table.tablename, reviewed: true });
     }
-    for (const reason of Object.values(REVIEWED_GLOBAL_TABLES)) {
+    for (const reason of [
+      ...Object.values(REVIEWED_GLOBAL_TABLES),
+      ...Object.values(REVIEWED_REFERENCE_TABLES),
+      ...Object.values(REVIEWED_INSTANCE_TABLES),
+    ]) {
       expect(reason.length).toBeGreaterThan(20);
     }
+  });
+
+  it('a reference table and an instance table have no organisation column', async () => {
+    const found = await rows<{ table_name: string }>(
+      superuser,
+      `SELECT table_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND column_name = 'organisation_id' AND table_name = ANY ($1)`,
+      [[...Object.keys(REVIEWED_REFERENCE_TABLES), ...Object.keys(REVIEWED_INSTANCE_TABLES)]],
+    );
+    expect(found).toEqual([]);
   });
 
   it('the system role reads exactly the reviewed columns', async () => {
@@ -206,6 +229,47 @@ describe('catalogue of the migrated database (ST-07)', () => {
         'the application role as a member of the owner role',
         ['GRANT confera_owner TO confera_app'],
         /confera_app is a member of confera_owner/,
+      ],
+      [
+        'a write grant to the application role on a reference table',
+        ['GRANT INSERT ON role_permissions TO confera_app'],
+        /role_permissions: the application role has INSERT on a reference table/,
+      ],
+      [
+        'a policy that lets every role write a reference table',
+        ['CREATE POLICY zz_open ON roles FOR INSERT WITH CHECK (true)'],
+        /roles: policy zz_open lets roles other than the owner write a reference table/,
+      ],
+      [
+        'a reference table whose row-level security is not forced',
+        ['ALTER TABLE roles NO FORCE ROW LEVEL SECURITY'],
+        /roles: row-level security is not enabled and forced/,
+      ],
+      [
+        'an instance table whose policy admits an organisation',
+        [
+          'DROP POLICY instance_only ON security_events',
+          'CREATE POLICY instance_only ON security_events USING (true) WITH CHECK (true)',
+        ],
+        /security_events: policy instance_only USING does not admit a statement only while no organisation is set/,
+      ],
+      [
+        'an instance table without a policy for writing',
+        [
+          'DROP POLICY instance_only ON security_events',
+          "CREATE POLICY read_side ON security_events FOR SELECT USING (NULLIF(current_setting('app.org_id', true), '') IS NULL)",
+        ],
+        /security_events: no policy for INSERT/,
+      ],
+      [
+        'a grant to the system role on the instance table',
+        ['GRANT SELECT ON security_events TO confera_system'],
+        /security_events: the system role has SELECT on the whole table/,
+      ],
+      [
+        'TRUNCATE for the application role on the audit log',
+        ['GRANT TRUNCATE ON audit_entries TO confera_app'],
+        /audit_entries: the application role has TRUNCATE/,
       ],
     ])('%s', async (_name, statements, expected) => {
       const problems = await problemsAfter(...statements);

@@ -10,12 +10,19 @@
 // - a unique key on (organisation_id, id), so that other tables can point at it;
 // - a foreign key to another tenant table is composite on (organisation_id, id);
 // - explicit grants to confera_app, and to confera_system only what a resolver reads.
+//
+// Two reviewed kinds of table have no organisation (test/integration/support/catalogue.ts):
+// - reference tables (roles, role_permissions): seeded by migration, the same for every
+//   organisation, read-only for the run-time roles;
+// - instance tables (security_events): what happens before an organisation is known
+//   (a failed sign-in for an unknown address); their policy admits a statement only
+//   while NO organisation is set, so tenant code can never read or write them.
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  runtime      = "nodejs"
-  moduleFormat = "cjs"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "cjs"
   // Imports without a file extension, so that the compiler and Jest resolve them alike.
   importFileExtension = ""
 }
@@ -26,12 +33,37 @@ datasource db {
 
 /// The tenant. Its policy compares `id`, so an organisation sees only itself.
 model Organisation {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Issuer data printed on documents (FR-ORG-03). Entered by an admin, never seeded.
+  legalName               String?   @map("legal_name")
+  address                 String?
+  registrationNumber      String?   @map("registration_number")
+  taxNumber               String?   @map("tax_number")
+  contactEmail            String?   @map("contact_email") @db.Citext
+  vatNoteSr               String?   @map("vat_note_sr")
+  vatNoteEn               String?   @map("vat_note_en")
+  /// Payment details: changed only with the password again, and announced to all admins.
+  rsdAccount              String?   @map("rsd_account")
+  eurIban                 String?   @map("eur_iban")
+  eurSwift                String?   @map("eur_swift")
+  eurBankName             String?   @map("eur_bank_name")
+  paypalPayee             String?   @map("paypal_payee") @db.Citext
+  /// Who changed the payment details last, and when (the banner of FR-ORG-03, 0.6.0).
+  paymentDetailsChangedAt DateTime? @map("payment_details_changed_at") @db.Timestamptz(3)
+  paymentDetailsChangedBy String?   @map("payment_details_changed_by") @db.Uuid
+  /// Raised by every change; a change that names an older version is refused (409).
+  version                 Int       @default(1)
+  updatedAt               DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
 
-  users     User[]
-  userRoles UserRole[]
+  users        User[]
+  userRoles    UserRole[]
+  sessions     Session[]
+  knownDevices KnownDevice[]
+  secureLinks  SecureLink[]
+  mailMessages MailMessage[]
+  auditEntries AuditEntry[]
 
   @@map("organisations")
 }
@@ -39,16 +71,28 @@ model Organisation {
 /// A member of staff. One organisation per user in the MVP (ADR-06, decision z).
 /// The email is unique across the instance; it is how sign-in finds the organisation.
 model User {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId String   @map("organisation_id") @db.Uuid
-  email          String   @unique @db.Citext
-  displayName    String   @map("display_name")
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId         String    @map("organisation_id") @db.Uuid
+  email                  String    @unique @db.Citext
+  displayName            String    @map("display_name")
   /// Null until the invitation is accepted. Never returned by the API, never granted to the system role.
-  passwordHash   String?  @map("password_hash")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  passwordHash           String?   @map("password_hash")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// invited (no password yet), active, deactivated, removed (kept for the attribution of past actions).
+  status                 String    @default("invited")
+  passwordChangedAt      DateTime? @map("password_changed_at") @db.Timestamptz(3)
+  /// The second factor of 0.9.0 (ADR-03, G2-16). Null: not enrolled.
+  secondFactorEnrolledAt DateTime? @map("second_factor_enrolled_at") @db.Timestamptz(3)
+  /// Raised by every change; a change that names an older version is refused (409).
+  version                Int       @default(1)
+  updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  organisation Organisation  @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   roles        UserRole[]
+  sessions     Session[]
+  knownDevices KnownDevice[]
+  secureLinks  SecureLink[]
+  auditEntries AuditEntry[]
 
   @@unique([organisationId, id])
   @@map("users")
@@ -64,7 +108,179 @@ model UserRole {
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   user         User         @relation(fields: [organisationId, userId], references: [organisationId, id], onDelete: Cascade)
+  roleRef      Role         @relation(fields: [role], references: [name], onDelete: Restrict)
 
   @@id([organisationId, userId, role])
   @@map("user_roles")
+}
+
+/// The roles of the MVP (ADR-05, FR-USR-01): a reference table, seeded by migration.
+model Role {
+  name        String           @id
+  description String
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+/// What a role may do: the permissions are code constants (src/modules/access/permissions.ts),
+/// and this reference table, seeded by migration, gives them to the roles.
+model RolePermission {
+  role       String
+  permission String
+  roleRef    Role   @relation(fields: [role], references: [name], onDelete: Restrict)
+
+  @@id([role, permission])
+  @@map("role_permissions")
+}
+
+/// A signed-in session (ADR-03). The cookie holds a random token; only its SHA-256 is here.
+model Session {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  /// SHA-256 of the token in the cookie, hexadecimal.
+  tokenHash           String    @unique @map("token_hash")
+  /// The known device the session was signed in from, when there was one.
+  deviceId            String?   @map("device_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt          DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  /// 24 hours after the last use, and never after the absolute end.
+  idleExpiresAt       DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  /// 7 days after sign-in (G2-24).
+  absoluteExpiresAt   DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  /// The last time the password was asked again in this session; valid 5 minutes.
+  passwordConfirmedAt DateTime? @map("password_confirmed_at") @db.Timestamptz(3)
+  /// not_required, pending or passed: the step of the second factor (built in 0.9.0).
+  secondFactor        String    @default("not_required") @map("second_factor")
+  endedAt             DateTime? @map("ended_at") @db.Timestamptz(3)
+  endReason           String?   @map("end_reason")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [organisationId, userId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, userId])
+  @@map("sessions")
+}
+
+/// A browser that has signed in to an account before (ADR-03): exempt from the account brake.
+/// The device cookie holds a random token bound to the account; only its SHA-256 is here.
+model KnownDevice {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  tokenHash      String   @map("token_hash")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt     DateTime @default(now()) @map("last_used_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [organisationId, userId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, userId, tokenHash])
+  @@map("known_devices")
+}
+
+/// A secure link (ADR-04): one purpose, a subject, a recipient, an expiry; used once, by a POST.
+/// The token exists only in the email that carries it; only its SHA-256 is here.
+model SecureLink {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  /// invitation, password_reset or email_change.
+  purpose        String
+  tokenHash      String    @unique @map("token_hash")
+  userId         String    @map("user_id") @db.Uuid
+  /// The address the link was sent to: for email_change the new address.
+  recipient      String    @db.Citext
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(3)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [organisationId, userId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, userId, purpose])
+  @@map("secure_links")
+}
+
+/// The mail outbox (ADR-13): a message is queued in the same transaction as the change that
+/// causes it, with a unique key. One recipient per row. A link is never stored: the row says
+/// which link to make (purpose and user), and the worker of 0.2.0 part B makes it at send time.
+model MailMessage {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  uniqueKey        String   @map("unique_key")
+  /// The kind of message, which names its template (invitation, password_reset, ...).
+  kind             String
+  recipientUserId  String?  @map("recipient_user_id") @db.Uuid
+  recipientAddress String   @map("recipient_address") @db.Citext
+  /// The link the message carries, made at send time: its purpose and the user it is for.
+  linkPurpose      String?  @map("link_purpose")
+  linkUserId       String?  @map("link_user_id") @db.Uuid
+  /// What the template needs besides the link: ids and fixed codes, never a token.
+  parameters       Json     @default("{}")
+  status           String   @default("queued")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, uniqueKey])
+  @@index([organisationId, recipientUserId, kind, createdAt])
+  @@map("mail_outbox")
+}
+
+/// The audit log (ADR-06, FR-AUD-01 to 03): insert-only for both run-time roles. Old and new
+/// values only for the fields on the list in code (src/modules/audit/audit-fields.ts).
+model AuditEntry {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  occurredAt     DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  /// Who did it; null for the system (a summary, a job).
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  subjectType    String   @map("subject_type")
+  subjectId      String?  @map("subject_id") @db.Uuid
+  /// The names of the fields that changed.
+  fields         String[] @default([])
+  /// Old and new value of the listed fields only: { field: { old, new } }.
+  changes        Json     @default("{}")
+  /// Counts and periods of a summary; never a personal value.
+  detail         Json     @default("{}")
+  traceId        String?  @map("trace_id") @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  actor        User?        @relation(fields: [organisationId, actorUserId], references: [organisationId, id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, occurredAt])
+  @@map("audit_entries")
+}
+
+/// Security events of the instance (ADR-06, ADR-29): failed sign-ins, for the brake and for
+/// the summary in the audit log. An instance table: read and written only while no
+/// organisation is set. Kept 90 days.
+model SecurityEvent {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  occurredAt         DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  /// sign_in_failed or password_confirmation_failed.
+  kind               String
+  /// The one-hop client address (ADR-03).
+  clientAddress      String    @map("client_address")
+  /// The account, when the address belongs to one; null for an unknown address.
+  userOrganisationId String?   @map("user_organisation_id") @db.Uuid
+  userId             String?   @map("user_id") @db.Uuid
+  /// The attempt came from a browser that is a known device of that account.
+  knownDevice        Boolean   @default(false) @map("known_device")
+  /// When the summary of the audit log counted it (unknown addresses only).
+  summarisedAt       DateTime? @map("summarised_at") @db.Timestamptz(3)
+
+  @@index([occurredAt])
+  @@index([userId, occurredAt])
+  @@index([clientAddress, occurredAt])
+  @@map("security_events")
 }
