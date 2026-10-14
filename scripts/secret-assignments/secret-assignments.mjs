@@ -9,18 +9,25 @@
 // in every file that git tracks or would take, in any syntax where a name gets a value.
 //
 // SECRET-LIKE NAME. Decided by the words of the name, in any casing convention
-// (smtpPassword, SMTP_PASSWORD, smtp-password, "smtp password"): the name is, or ends
-// with, one of
+// (smtpPassword, SMTP_PASSWORD, smtp-password, "smtp password"), by its LAST word:
 //
-//     password, passwd, secret, token, api key, private key, credential, credentials,
-//     data key, client secret, session secret
+//     - the last word is, or ends with: password, passwd, pwd, secret, token
+//       (PGPASSWORD, DBPASSWD, MYSQL_PWD, csrfToken, clientSecret)
+//     - the last word is: credential, credentials
+//     - the last word is `key` and the word before it is one of: api, private, data,
+//       access, secret, signing, encryption, master, client, session
+//       (AWS_SECRET_ACCESS_KEY, DATA_KEY, signingKey)
 //
-// `passwordPolicy`, `tokenType`, `secretName`, `PASSWORD_MIN_LENGTH` end with another
-// word and are not secret-like. A number at the end does not count (`API_KEY_2`).
+// A number at the end does not count (`API_KEY_2`). `passwordPolicy`, `tokenType`,
+// `secretName`, `PASSWORD_MIN_LENGTH` end with another word and are not secret-like; nor
+// are `primaryKey`, `sortKey`, `cacheKey`, `publicKey`, `idempotencyKey`.
+//
+// ONE FIXED EXCEPTION: `credentials` of the Fetch API takes a mode, not a credential.
+// Under exactly that name, exactly 'include', 'same-origin' and 'omit' are not a finding.
 //
 // ALLOWED VALUES, and nothing else:
 //
-//     - nothing: an empty value, `null`, `~`, `true`, `false`
+//     - nothing: an empty value, `null`, `~`, `true`, `false` (no value, or a flag)
 //     - a reference to something else as the WHOLE value: `${VAR}`, `$VAR`, `$(command)`,
 //       `${{ secrets.X }}`, `{{ value }}`, a YAML alias; in JavaScript any expression
 //       that is not a literal (`process.env.X`, a call, another variable)
@@ -71,25 +78,36 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 /** The documented way to write a placeholder: a literal that starts with one of these. */
 export const PLACEHOLDER_PREFIXES = ['invented-', 'local-only-'];
 
-/** A name is secret-like when its words end with one of these. */
-export const SECRET_NAME_ENDINGS = [
-  ['password'],
-  ['passwd'],
-  ['secret'],
-  ['token'],
-  ['api', 'key'],
-  ['private', 'key'],
-  ['credential'],
-  ['credentials'],
-  ['data', 'key'],
-  ['client', 'secret'],
-  ['session', 'secret'],
+/** A name is secret-like when its last word is one of these, or ends with one (`PGPASSWORD`). */
+export const SECRET_WORD_ENDINGS = ['password', 'passwd', 'pwd', 'secret', 'token'];
+
+/** ... or when its last word is one of these, ... */
+export const SECRET_LAST_WORDS = ['credential', 'credentials'];
+
+/** ... or when its last word is `key` and the word before it is one of these. */
+export const SECRET_KEY_QUALIFIERS = [
+  'api',
+  'private',
+  'data',
+  'access',
+  'secret',
+  'signing',
+  'encryption',
+  'master',
+  'client',
+  'session',
 ];
 
-/** Two words that are often written as one, in lower case, where no casing separates them. */
-const WRITTEN_AS_ONE = new Map(
-  SECRET_NAME_ENDINGS.filter((words) => words.length > 1).map((words) => [words.join(''), words]),
-);
+/**
+ * The one fixed exception: `credentials` of the Fetch API takes a mode, not a credential.
+ * Exactly these values under exactly that name are not a finding; any other literal is.
+ */
+const FETCH_OPTION = 'credentials';
+const FETCH_MODES = new Set(['include', 'same-origin', 'omit']);
+
+function isFetchMode(name, value) {
+  return name === FETCH_OPTION && FETCH_MODES.has(value);
+}
 
 /** Lockfiles are written by a package manager, hold hashes, and are never scanned. */
 export const LOCKFILES = [
@@ -110,8 +128,7 @@ export function wordsOf(name) {
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .split(/[^A-Za-z0-9]+/)
     .filter((word) => word !== '')
-    .map((word) => word.toLowerCase())
-    .flatMap((word) => WRITTEN_AS_ONE.get(word) ?? [word]);
+    .map((word) => word.toLowerCase());
 }
 
 export function isSecretLikeName(name) {
@@ -120,15 +137,21 @@ export function isSecretLikeName(name) {
   while (words.length > 0 && /^[0-9]+$/.test(words[words.length - 1])) {
     words.pop();
   }
-  if (words.length > 0) {
-    const last = words[words.length - 1].replace(/[0-9]+$/, '');
-    words.splice(words.length - 1, 1, ...(WRITTEN_AS_ONE.get(last) ?? [last]));
+  if (words.length === 0) {
+    return false;
   }
-  return SECRET_NAME_ENDINGS.some(
-    (ending) =>
-      ending.length <= words.length &&
-      ending.every((word, index) => words[words.length - ending.length + index] === word),
-  );
+  const last = words[words.length - 1].replace(/[0-9]+$/, '');
+  if (SECRET_WORD_ENDINGS.some((ending) => last.endsWith(ending))) {
+    return true; // password, PGPASSWORD, csrfToken, client secret
+  }
+  if (SECRET_LAST_WORDS.includes(last)) {
+    return true;
+  }
+  if (last === 'key') {
+    return SECRET_KEY_QUALIFIERS.includes(words[words.length - 2] ?? '');
+  }
+  // `apikey`, `SECRETKEY`: the two words written as one, where no casing separates them.
+  return last.endsWith('key') && SECRET_KEY_QUALIFIERS.includes(last.slice(0, -'key'.length));
 }
 
 /** A literal text that may stand under a secret-like name: empty, or a placeholder. */
@@ -304,7 +327,7 @@ function pairsOfLine(line) {
 
 function scanLine(line, number, report, depth = 0) {
   for (const { name, value } of pairsOfLine(line)) {
-    if (isSecretLikeName(name) && !plainValueIsAllowed(value)) {
+    if (isSecretLikeName(name) && !plainValueIsAllowed(value) && !isFetchMode(name, value)) {
       report(number, name);
     } else if (depth < 2 && value.includes('=')) {
       // Environment=SMTP_PASSWORD=value: the value is a pair of its own.
@@ -388,16 +411,18 @@ const YAML_KEY =
 const YAML_BLOCK = /^[|>][+-]?[0-9]?[+-]?[ \t]*(?:#.*)?$/;
 
 /** A value of YAML under a secret-like name. */
-function yamlValueIsAllowed(raw) {
+function yamlValueIsAllowed(raw, name) {
   // An anchor names the value and `!!str` says its type: neither changes what it is.
   const value = raw.replace(/^(?:&\S+(?:[ \t]+|$)|!![A-Za-z]+(?:[ \t]+|$))+/, '');
   if (value === '' || /^[*!]/.test(value)) {
     return true; // nothing, an alias, a value that a tag of the application looks up
   }
-  const text = unquoted(value);
-  return text === null
-    ? plainValueIsAllowed(withoutComment(value).replace(/,$/, ''))
-    : quotedValueIsAllowed(text);
+  const quoted = unquoted(value);
+  const text = quoted ?? withoutComment(value).replace(/,$/, '');
+  if (isFetchMode(name, text)) {
+    return true;
+  }
+  return quoted === null ? plainValueIsAllowed(text) : quotedValueIsAllowed(text);
 }
 
 /** A collection in one line, { a: b } or [a, b]: every entry of it, the nested ones too. */
@@ -436,7 +461,7 @@ function scanYamlEntry(entry, number, report, follow) {
     }
   } else if (value.startsWith('{') || value.startsWith('[')) {
     scanYamlFlow(value, number, report);
-  } else if (secret && !yamlValueIsAllowed(value)) {
+  } else if (secret && !yamlValueIsAllowed(value, name)) {
     report(number, name);
   }
 }
@@ -469,7 +494,7 @@ function scanYaml(text, report) {
         const { name, line: at } = open;
         open = null;
         if (!YAML_KEY.test(entry) && !/^-(?:[ \t]|$)/.test(entry)) {
-          if (!yamlValueIsAllowed(entry)) {
+          if (!yamlValueIsAllowed(entry, name)) {
             report(at, name);
           }
           return;
@@ -1048,14 +1073,17 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
   }
 
   /** Is the text of this literal token a finding under a secret-like name? */
-  const offends = (token) => {
+  const offends = (token, name = '') => {
     if (token.type === 'string') {
-      return !quotedValueIsAllowed(token.value);
+      return !quotedValueIsAllowed(token.value) && !isFetchMode(name, token.value);
     }
     if (token.type === 'number') {
       return true;
     }
     if (token.type === 'template') {
+      if (token.plain && isFetchMode(name, token.head)) {
+        return false;
+      }
       // `${x}` is a reference, `${x}text` starts with one; text first counts as written.
       return token.plain || token.head !== '' ? !literalIsAllowed(token.head) : false;
     }
@@ -1137,8 +1165,9 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
    * Does the expression in [start, end) give a literal that is not allowed? It is taken
    * apart at `??`, `||`, `&&` and the branches of a ternary; brackets, `as` and `!` are
    * taken off; `'text' + more` and `text${more}` count by the text they start with.
+   * `name` is the name the value is bound to, for the one exception of the rule.
    */
-  const givesLiteral = (start, end) => {
+  const givesLiteral = (start, end, name) => {
     const parts = [];
     let from = start;
     for (let index = start; index < end; index += 1) {
@@ -1164,10 +1193,10 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         b -= 1;
       }
       if (b - a >= 2 && isPunctuator(tokens[a], '(') && partner[a] === b - 1) {
-        return givesLiteral(a + 1, b - 1);
+        return givesLiteral(a + 1, b - 1, name);
       }
       if (isContainer(a) && partner[a] === b - 1) {
-        return givesLiteral(a + 1, b - 1); // name={'text'} in a JSX element
+        return givesLiteral(a + 1, b - 1, name); // name={'text'} in a JSX element
       }
       // <string>'text': a cast in the old way of TypeScript.
       if (b - a >= 4 && isPunctuator(tokens[a], '<') && isPunctuator(tokens[b - 2], '>')) {
@@ -1177,7 +1206,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         a += 1;
       }
       if (b - a === 1) {
-        return offends(tokens[a]);
+        return offends(tokens[a], name);
       }
       // 'text' + more: a value that starts with written text.
       return b - a > 1 && isLiteral(tokens[a]) && isPunctuator(tokens[a + 1], '+')
@@ -1278,7 +1307,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         target !== null &&
         kind[target.at - 1] !== 'alias' &&
         isSecretLikeName(target.name) &&
-        givesLiteral(index + 1, endOfExpression(index + 1))
+        givesLiteral(index + 1, endOfExpression(index + 1), target.name)
       ) {
         report(tokens[target.at].line, target.name);
       }
@@ -1298,7 +1327,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         name !== null &&
         (isPunctuator(before, '{') || isPunctuator(before, ',')) &&
         isSecretLikeName(name) &&
-        givesLiteral(index + 1, endOfExpression(index + 1))
+        givesLiteral(index + 1, endOfExpression(index + 1), name)
       ) {
         report(tokens[first].line, name);
       }
@@ -1308,7 +1337,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       if (
         name !== null &&
         isSecretLikeName(name) &&
-        givesLiteral(index + 1, endOfOperand(index + 1))
+        givesLiteral(index + 1, endOfOperand(index + 1), name)
       ) {
         report(tokens[index - 1].line, name);
       }
@@ -1338,7 +1367,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       if (
         name !== null &&
         isSecretLikeName(name) &&
-        givesLiteral(colon + 1, endOfOperand(colon + 1))
+        givesLiteral(colon + 1, endOfOperand(colon + 1), name)
       ) {
         report(tokens[colon - 1].line, name);
       }

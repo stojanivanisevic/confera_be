@@ -118,6 +118,22 @@ describe('scan for literal values bound to secret-like names', () => {
       'api key',
       'API_KEY_2',
       'password2',
+      // The last word ends with a secret word.
+      'PGPASSWORD',
+      'DBPASSWD',
+      'MYSQL_PWD',
+      'csrfToken',
+      'csrftoken',
+      // `key` after a word that makes it a secret.
+      'AWS_SECRET_ACCESS_KEY',
+      'accessKey',
+      'SECRET_KEY',
+      'signingKey',
+      'ENCRYPTION_KEY',
+      'masterKey',
+      'CLIENT_KEY',
+      'sessionKey',
+      'secretkey',
     ];
     const ORDINARY = [
       'passwordPolicy',
@@ -133,6 +149,10 @@ describe('scan for literal values bound to secret-like names', () => {
       'publicKey',
       'primaryKey',
       'cacheKey',
+      'sortKey',
+      'foreignKey',
+      'idempotencyKey',
+      'keyboard',
       'tokenizer',
       'secretary',
       'TOKEN_TTL_SECONDS',

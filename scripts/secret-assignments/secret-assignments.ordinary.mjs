@@ -66,6 +66,41 @@ export const ORDINARY = [
       "const secretsManager = 'vault';",
     ),
   },
+  {
+    what: 'keys that are not secrets: of a table, of a cache, of a request, a public one',
+    file: 'src/keys.ts',
+    text: lines(
+      "const table = { primaryKey: 'id', sortKey: 'created_at', foreignKey: 'user_id' };",
+      "const cacheKey = 'users:all';",
+      "const publicKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5';",
+      "const idempotencyKey = 'order-2026-000123';",
+      "const key = 'value';",
+    ),
+  },
+  {
+    what: 'the same in an environment file, and names whose last word is another one',
+    file: 'config/app.env',
+    text: lines(
+      'PRIMARY_KEY=id',
+      'SORT_KEY=created_at',
+      'CACHE_KEY=users',
+      'PUBLIC_KEY=ssh-ed25519',
+      'IDEMPOTENCY_KEY=order-1',
+      'TOKEN_TYPE=Bearer',
+      'PASSWORD_POLICY=strong',
+      'SECRET_NAME=smtp',
+    ),
+  },
+  {
+    what: 'the option credentials of fetch with one of its three modes',
+    file: 'src/request.ts',
+    text: lines(
+      "await fetch(url, { method: 'POST', credentials: 'include' });",
+      "const sameOrigin = { credentials: 'same-origin' };",
+      "const init: RequestInit = { credentials: anonymous ? 'omit' : 'include' };",
+      "init.credentials = 'omit';",
+    ),
+  },
   // --- types hold no value --------------------------------------------------------------
   {
     what: 'a type, an interface and an enum whose names are secret words',

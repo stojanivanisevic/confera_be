@@ -458,14 +458,25 @@ that they stay.
 **The rule for a secret-like name.** In every file that git tracks, no literal value is
 bound to a secret-like name.
 
-- **A secret-like name** is one whose words are, or end with: password, passwd, secret,
-  token, api key, private key, credential, credentials, data key, client secret, session
-  secret. The casing does not matter (`smtpPassword`, `SMTP_PASSWORD`, `smtp-password`),
-  and a number at the end does not hide it (`API_KEY_2`). A name that only contains such
-  a word is not secret-like: `passwordPolicy`, `tokenType`, `secretName`,
-  `PASSWORD_MIN_LENGTH`, `SESSION_SECRET_FILE`, a label, a message.
+- **A secret-like name** is decided by its last word, in any casing (`smtpPassword`,
+  `SMTP_PASSWORD`, `smtp-password`); a number at the end does not count (`API_KEY_2`):
+  - the last word is, or ends with: password, passwd, pwd, secret, token (`PGPASSWORD`,
+    `DBPASSWD`, `MYSQL_PWD`, `csrfToken`, `clientSecret`);
+  - the last word is credential or credentials;
+  - the last word is `key` and the word before it is one of: api, private, data, access,
+    secret, signing, encryption, master, client, session (`AWS_SECRET_ACCESS_KEY`,
+    `DATA_KEY`, `signingKey`).
+
+  A name whose last word is another one is not secret-like: `passwordPolicy`,
+  `tokenType`, `secretName`, `PASSWORD_MIN_LENGTH`, `SESSION_SECRET_FILE`, a label, a
+  message; nor are `primaryKey`, `sortKey`, `cacheKey`, `publicKey`, `idempotencyKey`.
+
+- **One fixed exception:** the option `credentials` of the Fetch API takes a mode, not a
+  credential. Under exactly that name, exactly `'include'`, `'same-origin'` and `'omit'`
+  are not a finding; any other literal is.
 - **Allowed values, and nothing else:**
-  - nothing: an empty value, `null`, `~`, `true` or `false`;
+  - nothing: an empty value, and also `null`, `~`, `true` and `false`, which are no
+    value or a flag (`persist-credentials: false`);
   - a reference to something else as the whole value: `${VAR}`, `$VAR`, `$(command)`,
     `${{ secrets.X }}`; in JavaScript anything that is not a literal (`process.env.X`,
     a call, another variable);
