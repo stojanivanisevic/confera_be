@@ -137,6 +137,28 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
       expect([...SECRET_VARIABLE_NAMES].sort()).toEqual(Object.keys(REVIEWED_SECRETS).sort());
     });
 
+    // A default for a secret would be written in the schema as the argument of a call
+    // (`z.string().default('...')`). The scan for secret-like names does not read the
+    // arguments of a call (its rule lets "anything that is not a literal" through), so
+    // the rule "a secret has no default" is held here, on the configuration itself.
+    it.each(SECRET_VARIABLE_NAMES)(
+      '%s has no default: without it, or with an empty one, the start is refused on every stage',
+      (name) => {
+        expect(VARIABLES[name].required).toBe(true);
+        for (const base of [validEnvironment({ STAGE: 'local' }), validProductionEnvironment()]) {
+          const without: Record<string, string | undefined> = { ...base };
+          without[name] = undefined;
+          for (const environment of [without, { ...base, [name]: '' }]) {
+            const result = parseEnvironment(environment);
+            expect({ name, accepted: result.ok }).toEqual({ name, accepted: false });
+            if (!result.ok) {
+              expect(result.problems.map((problem) => problem.variable)).toContain(name);
+            }
+          }
+        }
+      },
+    );
+
     it.each(VARIABLE_NAMES)(
       '%s does not accept free text: it is one of a closed set of values, or an address',
       (name) => {
