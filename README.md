@@ -31,8 +31,16 @@ Ports used on your machine, all bound to 127.0.0.1: **3001** (API), **5432**
 
 ## 2. First start
 
+Clone `confera_be` and `confera_fe` **side by side in one folder** (for example
+`D:\Code\confera_be` and `D:\Code\confera_fe`): the cross-repo smoke test (section 9) and
+the frontend's checks of the API contract and of the shared secret scanner look for the
+other repository in `../`.
+
+Clone the branch `develop`. Until a `main` exists, a clone without `-b` lands on another
+branch (the default branch of the GitHub repository, `m1/be-foundation`).
+
 ```
-git clone https://github.com/stojanivanisevic/confera_be.git
+git clone -b develop https://github.com/stojanivanisevic/confera_be.git
 cd confera_be
 ```
 
@@ -72,8 +80,10 @@ corepack pnpm db:provision
 corepack pnpm db:migrate
 ```
 
-`db:provision` ends with `Database "confera" is provisioned.`, `db:migrate` with
-`All migrations have been successfully applied.` Both are safe to run again, and two
+`db:provision` ends with `Database "confera" is provisioned.`. `db:migrate` ends with
+`All migrations have been successfully applied.` the first time, and with
+`No pending migrations to apply.` when the schema is already up to date: both mean
+success. Both commands are safe to run again, and two
 `db:provision` at the same moment wait for each other (an advisory lock on the server).
 A database that an interrupted `DROP DATABASE` left invalid is dropped and created
 again, and a run whose connection breaks (PostgreSQL restarted) starts again by itself,
@@ -182,8 +192,8 @@ The API reads its configuration from environment variables, and only through the
   variable set for another program, the API will name it and refuse.
 
 Exit codes of a refused start: **78** the configuration is not valid; **77** the
-application refused (a database role that is too powerful, or no database); **1**
-anything else.
+application refused (a database role that is too powerful, no database, or a database
+that did not answer within 20 s); **1** anything else.
 
 No secret is ever committed. `.env` is ignored by git, and `pnpm supply-chain` scans the
 files git would take. `deploy/api.env.example` is the template of a server's environment;
@@ -333,29 +343,35 @@ To add one:
 | integration  | `test/integration/`                                                   | PostgreSQL in Docker | `pnpm test:int` |
 | end to end   | `test/e2e/`                                                           | the stack in Docker  | `pnpm test:e2e` |
 
-- **Unit:** configuration and the STAGE guard, redaction, the HTTP layer (errors, host
-  separation, headers), the OpenAPI lint and drift check, the PDF golden test,
-  architecture tests (lint rules on code samples, who imports the system client, who
-  reads the environment, no credential compared with configuration, no `DEV_` key in a
-  compose or deploy file), the test tools (`seed:e2e` refuses, the stub slot), and probes
-  of single units (Serbian text and the glyph check in every field of a PDF).
-- **Build:** the built application refuses every bad stage, instance and `DEV_` key;
-  no dev-tools code in `dist/`, and no seed or stub in any build; the committed OpenAPI
-  files equal the code.
-- **Timing:** a fresh process of plain Node makes its first PDF, the next ones and a
-  table of 200 rows in under 5 seconds each. It is a step of its own, so no other test
-  runs beside it, and the middle one of five processes counts (three of the five must be
-  under the limit): other work on the machine can only add time to a measurement, but
-  the luckiest process alone must not meet a limit that a person waits for.
+- **Unit:** configuration and the STAGE guard (with `LISTEN_HOST`), redaction, the HTTP
+  layer (errors, host separation, headers), the OpenAPI lint and drift check, the PDF
+  golden test and the PDF limits (long words, the largest document), architecture tests
+  (lint rules on code samples, who imports the system client, who reads the environment,
+  no credential compared with configuration, no `DEV_` key in a compose or deploy file),
+  the test tools (`seed:e2e` refuses, the stub slot, the secret scanner with its two
+  corpora and its manifest), and probes of single units (Serbian text and the glyph check
+  in every field of a PDF).
+- **Build:** the built application refuses every bad stage, instance and `DEV_` key,
+  and a refused start loads no application code; no dev-tools code in `dist/`, and no
+  seed or stub in any build; the committed OpenAPI files equal the code.
+- **Timing:** a fresh process of plain Node makes its first PDF, the next ones, a table
+  of 200 rows and a word of 3 000 letters in a narrow column in under 5 seconds each. It
+  is a step of its own, so no other test runs beside it, and the middle one of five
+  processes counts (three of the five must be under the limit): other work on the
+  machine can only add time to a measurement, but the luckiest process alone must not
+  meet a limit that a person waits for.
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),
   writes into another organisation, the catalogue check, what the roles cannot do, the
-  start-up role check, and a clean production start with a canary in every secret.
+  start-up role check (memberships, `SET ROLE`, the predefined roles), a database that
+  never answers, two `db:provision` at once and one after an interrupted `DROP DATABASE`,
+  and a clean production start with a canary in every secret.
 - **End to end:** supertest against the real application (`createApp` of
   `src/bootstrap.ts`, nothing replaced) with the configuration of a server, connected as
   the application role: every route of the OpenAPI files, the error format, the headers,
-  no CORS grant, odd `Host` headers, many requests at once, the request log; the harness
+  no CORS grant, odd `Host` headers, many requests at once, the request log, readiness
+  while the database hangs and after it answers again; the harness
   itself (schema from `migrate deploy`, the role, the factories); `seed:e2e`; the stack
   (the three roles, the mail catcher).
 
@@ -411,11 +427,13 @@ corepack pnpm api:check --sibling     the contract vendored there is the one of 
 - PowerShell: `$env:CONFERA_E2E_API_ORIGIN = 'http://127.0.0.1:3001'; corepack pnpm e2e`
 - Git Bash, macOS, Linux: `CONFERA_E2E_API_ORIGIN=http://127.0.0.1:3001 corepack pnpm e2e`
 
-Add `--project=real-api` for the short form (about two minutes). The run first asks
-<http://127.0.0.1:3001/health/ready> and stops with one message when the API is not
-there. What it tests, and what the variable changes, is in the README of `confera_fe`
-(section 6, "Against the real API"). The stub slot (`pnpm stubs`) is not needed for it in
-0.1.0.
+Add `--project=real-api` for the short form (about two minutes). **Start the API first**
+and leave it running: in 0.1.0 the run of `confera_fe` builds and starts its own three
+servers (about 19 s) before it asks <http://127.0.0.1:3001/health/ready>; when the API is
+not there it then stops, with its message and a stack trace. The API's part is only to
+be up and ready: `/health/ready` answers `{"status":"ok"}` when it is. What the run tests,
+and what the variable changes, is in the README of `confera_fe` (section 6, "Against the
+real API"). The stub slot (`pnpm stubs`) is not needed for it in 0.1.0.
 
 Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 
@@ -466,12 +484,12 @@ Sans as the fallback (the digraph letters ǆ ǉ ǌ, polytonic Greek and more).
   square of its length); a line may break between two pieces. A document with more than
   30 000 characters of text is refused (`PdfTooLargeError`): split it.
 - A document must be made in under 5 seconds, the first one of a process included. The
-  gate is the timing tier (`test/timing/pdf-cold-start.spec.ts`, section 8): fresh
-  processes of plain Node, which is what a server is. On the development laptop the
-  first document takes about 0.3 s, the next ones under 0.1 s and a table of 200 rows
-  about 0.1 s. Inside Jest the clock also measures Jest and whatever else the machine
-  is doing (the same table: 0.5 to 3 s in the unit tier), so the unit tier reports the
-  time of its first document and leaves the judgement to the timing tier.
+  gate is the timing tier (`test/timing/`, section 8): fresh processes of plain Node,
+  which is what a server is. On the development laptop the first document takes about
+  0.3 s, the next ones under 0.1 s and a table of 200 rows about 0.1 s. Inside Jest the
+  clock also measures Jest and whatever else the machine is doing (the same table: 0.5
+  to 3 s in the unit tier), so the unit tier reports the time of its first document and
+  leaves the judgement to the timing tier.
 
 `corepack pnpm pdf:sample` writes the bilingual sample to look at.
 
@@ -595,6 +613,7 @@ the version is too young, wait or take the one before.
 prisma/              schema and committed migrations
 openapi/             the generated, committed OpenAPI files
 deploy/              environment template of a server
+src/startup.ts       checks the configuration before the framework and the application are loaded
 src/config/          the configuration schema and the STAGE guard; the only reader of the environment
 src/common/          HTTP layer (errors, surfaces, headers), logging
 src/platform/prisma  tenant client, resolvers, start-up role check
@@ -610,6 +629,7 @@ test/integration     tests against PostgreSQL in Docker
 test/e2e             end-to-end tests of the API; factories and the seed of invented people
 test/support         helpers of the tests
 scripts/             build, check, provisioning, supply-chain, seed and stub scripts (plain Node)
+scripts/secret-assignments/  the secret scanner, its two corpora and its manifest (copied to confera_fe)
 eslint/              the lint rules with a security purpose
 ```
 
@@ -630,7 +650,9 @@ eslint/              the lint rules with a security purpose
   query compiler with a dynamic import, which Jest allows only with that Node flag. The
   test scripts set it.
 - **"The database cannot be reached with DATABASE_URL"** (exit code 77). The stack is not
-  up, or steps 4 and 5 of section 2 were skipped.
+  up, steps 4 and 5 of section 2 were skipped, or PostgreSQL did not answer within 20 s.
+- **`LISTEN_HOST` stops the start** (exit code 78). On `local`, `dev` and `test` the API
+  listens on a loopback address only (section 4); `0.0.0.0` is for `prod` in a container.
 - **`http://127.0.0.1:3001/api/v1/meta` answers 404.** Use `localhost` (section 5).
 - **`pnpm install` fails with "frozen lockfile".** You changed `package.json`; see section 12.
 - **A script stops with "dependencies are out of date".** Run `corepack pnpm install`.
@@ -641,7 +663,9 @@ eslint/              the lint rules with a security purpose
 - **Port 3001 is in use.** An earlier `pnpm start` or `start:dev` is still running.
 - **`seed:e2e did not run`** (exit code 78). `STAGE` is not `local` or `test`: look at
   `.env` and at the environment of your terminal, which wins over `.env`.
-- **`pnpm test:e2e` or `test:int` fails with "cannot connect to PostgreSQL as a
-  superuser".** The stack is not up: `corepack pnpm stack:up`.
+- **`db:provision` (also inside `test:int` and `test:e2e`) fails with "cannot reach
+  PostgreSQL".** The stack is not up: `corepack pnpm stack:up`. Its other sentences name
+  what else happened: PostgreSQL still starting or recovering, a refused superuser
+  password, or a database that does not accept connections.
 - **Never write `\uXXXX`-style invisible characters into a file as real characters.**
   Use the escape in the source, so that a reviewer can see them.
