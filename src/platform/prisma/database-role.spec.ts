@@ -1,4 +1,4 @@
-import { type DatabaseRole, roleProblems } from './database-role';
+import { type DatabaseRole, REFUSED_PREDEFINED_ROLES, roleProblems } from './database-role';
 
 /** ST-08: which database roles the start-up check refuses. The check against a real database is an integration test. */
 
@@ -16,6 +16,7 @@ const SAFE: DatabaseRole = {
   memberOfSuperuser: [],
   memberOfBypassRls: [],
   memberOfCreateRole: [],
+  memberOfPredefined: [],
 };
 
 describe('roleProblems', () => {
@@ -81,5 +82,25 @@ describe('roleProblems: memberships (edge case E1 of M1-REV-01)', () => {
     const role = { ...SAFE, memberOfCreateRole: ['dba'] };
     expect(roleProblems('application', role)).toHaveLength(1);
     expect(roleProblems('system', role)).toHaveLength(1);
+  });
+});
+
+describe('roleProblems: predefined roles of PostgreSQL', () => {
+  it.each(Object.entries(REFUSED_PREDEFINED_ROLES))(
+    'refuses a member of %s, for both kinds: it %s',
+    (name, reason) => {
+      const role = { ...SAFE, memberOfPredefined: [name] };
+      for (const kind of ['application', 'system'] as const) {
+        expect(roleProblems(kind, role)).toEqual([
+          `is a member of predefined roles of PostgreSQL (${name}: ${reason})`,
+        ]);
+      }
+    },
+  );
+
+  it('refuses a predefined role it does not know yet (fail closed)', () => {
+    expect(roleProblems('application', { ...SAFE, memberOfPredefined: ['pg_new_in_19'] })).toEqual([
+      'is a member of predefined roles of PostgreSQL (pg_new_in_19: a predefined role this check does not know yet)',
+    ]);
   });
 });

@@ -30,7 +30,38 @@ export interface DatabaseRole {
   readonly memberOfSuperuser: readonly string[];
   readonly memberOfBypassRls: readonly string[];
   readonly memberOfCreateRole: readonly string[];
+  /**
+   * Predefined roles of PostgreSQL (`pg_...`) this role is a member of, through any chain
+   * of memberships, apart from `pg_database_owner` (that one is ownership, refused above).
+   */
+  readonly memberOfPredefined: readonly string[];
 }
+
+/**
+ * The predefined roles of PostgreSQL 18, each refused for the application role and the
+ * system role, by what it would let a compromised application do beyond the rows its
+ * grants and the row-level security give it. `pg_database_owner` is not listed: it is
+ * the owner of the database, which the ownership rule refuses. A predefined role that a
+ * later version adds is refused too, until it is decided here (fail closed); a test
+ * compares this list with the roles of the server.
+ */
+export const REFUSED_PREDEFINED_ROLES: Readonly<Record<string, string>> = {
+  pg_read_server_files: 'reads any file the server can read, the data files included',
+  pg_write_server_files: 'writes any file the server can write',
+  pg_execute_server_program: 'runs any program as the operating-system user of the server',
+  pg_read_all_data: 'reads every table and column, past the grants that keep it from them',
+  pg_write_all_data: 'writes every table, past the grants',
+  pg_read_all_settings: 'reads the settings only a superuser sees (file paths, archive_command)',
+  pg_read_all_stats: 'reads the statements of every other session',
+  pg_stat_scan_tables: 'runs functions that lock and scan any table',
+  pg_monitor: 'holds the three roles before it',
+  pg_signal_backend: 'cancels or ends the sessions of the other roles',
+  pg_signal_autovacuum_worker: 'ends the workers that clean up the tables',
+  pg_checkpoint: 'forces checkpoints, a load on the whole server',
+  pg_maintain: 'runs VACUUM, CLUSTER, REINDEX and LOCK TABLE on any table',
+  pg_use_reserved_connections: 'takes the connections reserved for administrators',
+  pg_create_subscription: 'subscribes to other servers, with connections out of this one',
+};
 
 export async function describeRole(client: PrismaClient): Promise<DatabaseRole> {
   const rows = await client.$queryRaw<DatabaseRole[]>`
@@ -74,7 +105,15 @@ export async function describeRole(client: PrismaClient): Promise<DatabaseRole> 
           AND (x.rolcreaterole OR x.rolcreatedb OR x.rolreplication)
           AND pg_has_role(current_user, x.oid, 'MEMBER')
         ORDER BY 1
-      ) AS "memberOfCreateRole"
+      ) AS "memberOfCreateRole",
+      ARRAY(
+        SELECT x.rolname::text FROM pg_roles x
+        WHERE x.oid <> r.oid
+          AND left(x.rolname, 3) = 'pg_'
+          AND x.rolname <> 'pg_database_owner'
+          AND pg_has_role(current_user, x.oid, 'MEMBER')
+        ORDER BY 1
+      ) AS "memberOfPredefined"
     FROM pg_roles r
     WHERE r.rolname = current_user
   `;
@@ -113,6 +152,13 @@ export function roleProblems(kind: RoleKind, role: DatabaseRole): string[] {
     problems.push(
       `is a member of a role that may create roles or databases, or replicate (${role.memberOfCreateRole.join(', ')})`,
     );
+  }
+  if (role.memberOfPredefined.length > 0) {
+    const reasons = role.memberOfPredefined.map(
+      (name) =>
+        `${name}: ${REFUSED_PREDEFINED_ROLES[name] ?? 'a predefined role this check does not know yet'}`,
+    );
+    problems.push(`is a member of predefined roles of PostgreSQL (${reasons.join('; ')})`);
   }
   if (role.owner) {
     problems.push('owns the database, the schema or a table, or is a member of the role that does');

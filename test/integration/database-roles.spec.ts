@@ -154,6 +154,7 @@ describe('database roles', () => {
           memberOfSuperuser: [],
           memberOfBypassRls: [],
           memberOfCreateRole: [],
+          memberOfPredefined: [],
         });
         expect(roleProblems('application', role)).toEqual([]);
       } finally {

@@ -256,6 +256,28 @@ role that is a superuser, may bypass row-level security (the system role among t
 may create roles or databases: a member may become that role with `SET ROLE`. The system
 role is refused for the same, except bypassing row-level security, which is its purpose.
 
+Both are refused too when they are members of a **predefined role of PostgreSQL**, each
+for what it would let a compromised application do beyond its own rows:
+
+| Predefined role                                    | Lets a member                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| `pg_read_server_files`                             | read any file the server can read, the data files included       |
+| `pg_write_server_files`                            | write any file the server can write                              |
+| `pg_execute_server_program`                        | run any program as the operating-system user of the server       |
+| `pg_read_all_data` / `pg_write_all_data`           | read or write every table and column, past the grants            |
+| `pg_read_all_settings`                             | read the settings only a superuser sees (paths, archive command) |
+| `pg_read_all_stats`, `pg_monitor`                  | read the statements of every other session                       |
+| `pg_stat_scan_tables`                              | run functions that lock and scan any table                       |
+| `pg_signal_backend`, `pg_signal_autovacuum_worker` | end the sessions of other roles, or the cleaning of the tables   |
+| `pg_checkpoint`                                    | force checkpoints, a load on the whole server                    |
+| `pg_maintain`                                      | run VACUUM, CLUSTER, REINDEX and LOCK TABLE on any table         |
+| `pg_use_reserved_connections`                      | take the connections reserved for administrators                 |
+| `pg_create_subscription`                           | subscribe to other servers, with connections out of this one     |
+
+That is every predefined role of PostgreSQL 18 but `pg_database_owner`, which is
+ownership and refused as such. A predefined role of a later version is refused until it
+is decided here; a test compares the list with the roles of the server.
+
 **A database that does not answer** is not waited for: a new connection may take 10 s,
 the start-up check 20 s in all (then the API exits with 77), and readiness answers 503
 when `SELECT 1` has not come back within 5 s. Liveness (`/health`) never asks the
