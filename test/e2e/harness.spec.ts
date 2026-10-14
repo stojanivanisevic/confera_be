@@ -12,6 +12,7 @@ import {
   buildOrganisation,
   buildUser,
   Factories,
+  INSTANCE_TABLES,
   INVENTED_DOMAIN,
   type InventedOrganisation,
   type InventedUser,
@@ -228,12 +229,16 @@ describe('the end-to-end harness', () => {
       expect(code).toBe('42501');
     });
 
-    it('reset knows every tenant table of the schema', async () => {
+    it('reset knows every tenant and instance table of the schema', async () => {
       const tables = await rows<{ tablename: string }>(
         owner,
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations' ORDER BY 1",
       );
-      expect(tables.map((table) => table.tablename)).toEqual([...TENANT_TABLES].sort());
+      // The reference tables are seeded by migration and never emptied.
+      const reference = ['roles', 'role_permissions'];
+      expect(tables.map((table) => table.tablename)).toEqual(
+        [...TENANT_TABLES, ...INSTANCE_TABLES, ...reference].sort(),
+      );
     });
 
     // The last test of this file: it empties the tables the tests above read.

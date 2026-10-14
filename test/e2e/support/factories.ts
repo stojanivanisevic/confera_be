@@ -1,5 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { hash } from '@node-rs/argon2';
 import type { Client } from 'pg';
+import { HASH_OPTIONS } from '../../../src/modules/access/password-hasher';
 
 /**
  * Factories for the end-to-end tests: invented organisations and invented people
@@ -17,7 +19,22 @@ export const INVENTED_DOMAIN = 'example.test';
  * Every tenant table, children first. `Factories.reset` empties them; a test of the
  * harness fails when a migration adds a table that is missing here.
  */
-export const TENANT_TABLES = ['user_roles', 'users', 'organisations'] as const;
+export const TENANT_TABLES = [
+  'audit_entries',
+  'mail_outbox',
+  'secure_links',
+  'known_devices',
+  'sessions',
+  'user_roles',
+  'users',
+  'organisations',
+] as const;
+
+/** Tables of the instance (no organisation): emptied by `reset` too, so a run starts from nothing. */
+export const INSTANCE_TABLES = ['security_events'] as const;
+
+/** The password of every invented person who has one (it meets the four rules; none of its words is a name). */
+export const INVENTED_PASSWORD = 'invented-Jasen-Kula-Reka-42';
 
 export type Role = 'admin' | 'reviewer';
 
@@ -32,6 +49,8 @@ export interface InventedUser {
   readonly email: string;
   readonly displayName: string;
   readonly role: Role;
+  /** invited (no password), active (INVENTED_PASSWORD), deactivated or removed. */
+  readonly status: 'invited' | 'active' | 'deactivated' | 'removed';
 }
 
 /** Given names and family names with š č ć ž đ, as the real ones will have. */
@@ -103,6 +122,7 @@ export function buildUser(
     id: randomUUID(),
     email: `${slug(displayName).replaceAll('-', '.')}.${unique}@${slug(organisation.name).slice(0, 40)}.${INVENTED_DOMAIN}`,
     role: 'reviewer',
+    status: 'active',
     ...overrides,
     displayName,
     organisationId: organisation.id,
@@ -148,10 +168,12 @@ export class Factories {
     overrides: Partial<Omit<InventedUser, 'organisationId'>> = {},
   ): Promise<InventedUser> {
     const user = buildUser(organisation, overrides);
+    // An active person has INVENTED_PASSWORD, hashed as the application hashes it.
+    const passwordHash = user.status === 'invited' ? null : await inventedPasswordHash();
     await inOrganisation(this.owner, organisation.id, async () => {
       await this.owner.query(
-        'INSERT INTO users (id, organisation_id, email, display_name) VALUES ($1, $2, $3, $4)',
-        [user.id, user.organisationId, user.email, user.displayName],
+        'INSERT INTO users (id, organisation_id, email, display_name, status, password_hash) VALUES ($1, $2, $3, $4, $5, $6)',
+        [user.id, user.organisationId, user.email, user.displayName, user.status, passwordHash],
       );
       await this.owner.query(
         'INSERT INTO user_roles (organisation_id, user_id, role) VALUES ($1, $2, $3)',
@@ -173,9 +195,17 @@ export class Factories {
     return { organisation, users };
   }
 
-  /** Empties every tenant table. The schema and the roles stay. */
+  /** Empties every tenant table and the instance tables. The schema and the roles stay. */
   async reset(): Promise<void> {
-    const tables = TENANT_TABLES.map((table) => `"${table}"`).join(', ');
+    const tables = [...TENANT_TABLES, ...INSTANCE_TABLES].map((table) => `"${table}"`).join(', ');
     await this.owner.query(`TRUNCATE ${tables} CASCADE`);
   }
+}
+
+let hashed: Promise<string> | undefined;
+
+/** The argon2id hash of INVENTED_PASSWORD, made once per process with the application's parameters. */
+export function inventedPasswordHash(): Promise<string> {
+  hashed ??= hash(INVENTED_PASSWORD, HASH_OPTIONS);
+  return hashed;
 }

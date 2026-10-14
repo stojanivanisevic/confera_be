@@ -6,6 +6,373 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/account/email": {
+      "post": {
+        "operationId": "changeEmail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Asks for an email change; needs the current password. A link to confirm it goes to the\nnew address, a notice to the old one and to every active admin. 409 `email_taken` when\nthe address belongs to an account already.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/account/password": {
+      "post": {
+        "operationId": "changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Changes the own password; needs the current one. Ends every other session of the user,\nand tells every active admin. A new password that breaks a rule is refused with 400\n`password_refused` and each broken rule named (`password_length`, `password_common`,\n`password_personal`, `password_mismatch`).",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "operationId": "listAuditEntries",
+        "parameters": [
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "session.signed_in",
+                "session.sign_in_failed",
+                "session.signed_out",
+                "session.signed_out_everywhere",
+                "account.password_changed",
+                "account.email_change_requested",
+                "account.email_changed",
+                "password_reset.requested",
+                "password_reset.completed",
+                "invitation.queued",
+                "invitation.accepted",
+                "user.invited",
+                "user.updated",
+                "user.role_changed",
+                "user.deactivated",
+                "user.reactivated",
+                "user.removed",
+                "user.sessions_ended",
+                "organisation.updated",
+                "organisation.payment_details_changed",
+                "security.unknown_address_sign_ins"
+              ]
+            }
+          },
+          {
+            "name": "actorUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Entries from this moment on.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Entries before this moment.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The entries, newest first, a page at a time.",
+        "tags": [
+          "Audit"
+        ],
+        "x-confera-access": {
+          "permission": "audit.read"
+        }
+      }
+    },
+    "/api/v1/email-changes/{token}": {
+      "get": {
+        "operationId": "openEmailChange",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailChangeLinkDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The page of an email-change link: the address the account will have. Uses nothing up.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      },
+      "post": {
+        "operationId": "confirmEmailChange",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirms an email change from the new address. Ends every session of the user.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/api/v1/invitations/{token}": {
+      "get": {
+        "operationId": "openInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPersonDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The page of an invitation link: whose account it is, for the password checklist. Uses nothing up.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      },
+      "post": {
+        "operationId": "acceptInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Accepts an invitation: sets the password, makes the account active, uses the link up.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
     "/api/v1/meta": {
       "get": {
         "operationId": "getMeta",
@@ -35,12 +402,1154 @@
         "summary": "Name and version of the API.",
         "tags": [
           "Meta"
-        ]
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/api/v1/organisation": {
+      "get": {
+        "operationId": "getOrganisation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Organisation"
+        ],
+        "x-confera-access": {
+          "permission": "organisation.read"
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganisation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrganisationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Changes the issuer data. 409 `version_conflict` when another admin changed it first.",
+        "tags": [
+          "Organisation"
+        ],
+        "x-confera-access": {
+          "permission": "organisation.manage"
+        }
+      }
+    },
+    "/api/v1/organisation/payment-details": {
+      "put": {
+        "operationId": "changePaymentDetails",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentDetailsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Changes the bank accounts and the PayPal payee: needs the password asked again\n(403 `password_confirmation_required` without it), and every active admin is told.",
+        "tags": [
+          "Organisation"
+        ],
+        "x-confera-access": {
+          "permission": "organisation.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/password-resets": {
+      "post": {
+        "operationId": "requestReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Asks for a password reset. The answer is 202 and nothing else, for every address, after\nthe same time: whether an account has it, is active, is in the cool-down of an earlier\nrequest or has reached its daily cap, is not told.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/api/v1/password-resets/{token}": {
+      "get": {
+        "operationId": "openReset",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPersonDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The page of a reset link: whose account it is, for the password checklist. Uses nothing up.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      },
+      "post": {
+        "operationId": "completeReset",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sets a new password through a reset link, and uses the link up. Ends every session of the user.",
+        "tags": [
+          "Account"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/api/v1/session": {
+      "post": {
+        "operationId": "signIn",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Signs in. Every failure answers alike (401 `sign_in_failed`), after the same time: an\nunknown address, a wrong password, a braked account or address, an account that is\ndeactivated, invited or removed. Sets the session cookie and, for a browser that was\nnot a known device of the account, the device cookie.",
+        "tags": [
+          "Session"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      },
+      "get": {
+        "operationId": "getSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The signed-in user, the organisation and the CSRF value of the session. A request with\nthe header `X-Confera-Background` (a refetch the person did not ask for) does not renew\nthe session.",
+        "tags": [
+          "Session"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      },
+      "delete": {
+        "operationId": "signOut",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Signs out: ends this session on the server and clears its cookie.",
+        "tags": [
+          "Session"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/session/password-confirmation": {
+      "post": {
+        "operationId": "confirmPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordConfirmationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmationDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The password asked again before a sensitive change (ADR-03): valid for 5 minutes, in\nthis session only. A wrong password answers 403 `password_incorrect` and counts for the\nbrake of the account.",
+        "tags": [
+          "Session"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "delete": {
+        "operationId": "signOutEverywhere",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Signs out everywhere: ends every session of the user, this one included.",
+        "tags": [
+          "Session"
+        ],
+        "x-confera-access": {
+          "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "listUsers",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Part of the name or the address, in any letter case.",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "One state; without it every user but the removed ones.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "invited",
+                "active",
+                "deactivated",
+                "removed"
+              ]
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "reviewer"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "The page, from 1.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Rows per page, at most 100. Default 25.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The users, a page at a time; the removed ones only when asked for by state.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.read"
+        }
+      },
+      "post": {
+        "operationId": "inviteUser",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Invites a user: the invitation goes to the address. 409 `email_taken` when it has an account.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.read"
+        }
+      },
+      "patch": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      },
+      "delete": {
+        "operationId": "removeUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Removes a user; past actions stay attributed. 409 `last_admin` for the last active admin.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}/deactivation": {
+      "post": {
+        "operationId": "deactivateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivates: the user cannot sign in, and the sessions end. 409 `last_admin` for the last active admin.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}/invitation": {
+      "post": {
+        "operationId": "resendInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sends the invitation again, with a new link that ends the earlier one.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}/reactivation": {
+      "post": {
+        "operationId": "reactivateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}/role": {
+      "put": {
+        "operationId": "changeRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Changes the role; ends the user's sessions. 409 `last_admin` for the last active admin.",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/users/{id}/sessions": {
+      "delete": {
+        "operationId": "endUserSessions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ends every session of the user (an admin's \"end this user's sessions\", ADR-03).",
+        "tags": [
+          "Users"
+        ],
+        "x-confera-access": {
+          "permission": "users.manage"
+        },
+        "x-confera-fresh-password": true
       }
     }
   },
   "components": {
     "schemas": {
+      "AuditActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ]
+      },
+      "AuditEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "actor": {
+            "nullable": true,
+            "description": "Who did it; null for the system (a summary).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuditActorDto"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "One of the actions of the audit log, for example `user.role_changed`."
+          },
+          "subjectType": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "fields": {
+            "description": "The names of the fields that changed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "changes": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Old and new value, only for the fields whose values the log keeps (settings that are not personal)."
+          },
+          "detail": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Counts and periods of a summary."
+          },
+          "traceId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "actor",
+          "action",
+          "subjectType",
+          "subjectId",
+          "fields",
+          "changes",
+          "detail",
+          "traceId"
+        ]
+      },
+      "AuditPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "ChangeEmailDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "The current password: an email change needs it (ADR-03).",
+            "maxLength": 1024
+          },
+          "newEmail": {
+            "type": "string",
+            "description": "The new address. The change is confirmed from it."
+          }
+        },
+        "required": [
+          "password",
+          "newEmail"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "newPasswordRepeat": {
+            "type": "string",
+            "description": "The second entry of the new password: both entries must match.",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword",
+          "newPasswordRepeat"
+        ]
+      },
+      "ChangeRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "role",
+          "version"
+        ]
+      },
+      "ConfirmationDto": {
+        "type": "object",
+        "properties": {
+          "confirmationValidUntil": {
+            "type": "string",
+            "description": "The password asked again is valid until this moment, in this session only."
+          }
+        },
+        "required": [
+          "confirmationValidUntil"
+        ]
+      },
+      "EmailChangeLinkDto": {
+        "type": "object",
+        "properties": {
+          "newEmail": {
+            "type": "string",
+            "description": "The address the account will have once the change is confirmed."
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "newEmail",
+          "expiresAt"
+        ]
+      },
       "FieldError": {
         "type": "object",
         "properties": {
@@ -58,6 +1567,55 @@
           "code"
         ]
       },
+      "InviteUserDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address the invitation goes to; the user signs in with it."
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "role"
+        ]
+      },
+      "LinkPersonDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "organisationName": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "The link stops working at this moment."
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "organisationName",
+          "expiresAt"
+        ]
+      },
       "Meta": {
         "type": "object",
         "properties": {
@@ -72,6 +1630,161 @@
         },
         "required": [
           "name",
+          "version"
+        ]
+      },
+      "OrganisationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The short name shown in the application."
+          },
+          "legalName": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "Matični broj: 8 digits."
+          },
+          "taxNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "PIB: 9 digits."
+          },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "vatNoteSr": {
+            "type": "string",
+            "nullable": true,
+            "description": "The note on documents that the association is exempt from VAT, in Serbian."
+          },
+          "vatNoteEn": {
+            "type": "string",
+            "nullable": true,
+            "description": "The same note in English."
+          },
+          "rsdAccount": {
+            "type": "string",
+            "nullable": true,
+            "description": "The account for payments in RSD."
+          },
+          "eurIban": {
+            "type": "string",
+            "nullable": true
+          },
+          "eurSwift": {
+            "type": "string",
+            "nullable": true
+          },
+          "eurBankName": {
+            "type": "string",
+            "nullable": true
+          },
+          "paypalPayee": {
+            "type": "string",
+            "nullable": true,
+            "description": "The PayPal account that receives payments."
+          },
+          "paymentDetailsChangedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the payment details were changed last; the issue screen shows it for 14 days."
+          },
+          "paymentDetailsChangedBy": {
+            "nullable": true,
+            "description": "Who changed them.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserReferenceDto"
+              }
+            ]
+          },
+          "version": {
+            "type": "number",
+            "description": "Sent back with a change: a change made on an older version is refused (409)."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "legalName",
+          "address",
+          "registrationNumber",
+          "taxNumber",
+          "contactEmail",
+          "vatNoteSr",
+          "vatNoteEn",
+          "rsdAccount",
+          "eurIban",
+          "eurSwift",
+          "eurBankName",
+          "paypalPayee",
+          "paymentDetailsChangedAt",
+          "paymentDetailsChangedBy",
+          "version"
+        ]
+      },
+      "PasswordConfirmationDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "The password of the signed-in user, asked again before a sensitive change.",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "PaymentDetailsDto": {
+        "type": "object",
+        "properties": {
+          "rsdAccount": {
+            "type": "string",
+            "nullable": true
+          },
+          "eurIban": {
+            "type": "string",
+            "nullable": true
+          },
+          "eurSwift": {
+            "type": "string",
+            "nullable": true
+          },
+          "eurBankName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "paypalPayee": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "rsdAccount",
+          "eurIban",
+          "eurSwift",
+          "eurBankName",
+          "paypalPayee",
           "version"
         ]
       },
@@ -105,6 +1818,306 @@
         "required": [
           "code",
           "traceId"
+        ]
+      },
+      "ResetRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address of the account. The answer is the same whether it belongs to one or not.",
+            "minLength": 1,
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "SessionDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/SessionUserDto"
+          },
+          "organisation": {
+            "$ref": "#/components/schemas/SessionOrganisationDto"
+          },
+          "csrf": {
+            "type": "string",
+            "description": "The value of the `X-CSRF-Token` header that every changing request of this session\ncarries (ADR-03). Bound to the session; never in a cookie."
+          },
+          "idleExpiresAt": {
+            "type": "string",
+            "description": "The session ends at this moment unless it is used before (24 hours after the last use)."
+          },
+          "absoluteExpiresAt": {
+            "type": "string",
+            "description": "The session ends at this moment whatever happens (7 days after sign-in)."
+          },
+          "confirmationValidUntil": {
+            "type": "string",
+            "nullable": true,
+            "description": "Until when the password asked again is valid in this session; null when it was not asked."
+          },
+          "secondFactor": {
+            "type": "string",
+            "description": "The step of the second factor (built in 0.9.0): not_required, pending or passed."
+          }
+        },
+        "required": [
+          "user",
+          "organisation",
+          "csrf",
+          "idleExpiresAt",
+          "absoluteExpiresAt",
+          "confirmationValidUntil",
+          "secondFactor"
+        ]
+      },
+      "SessionOrganisationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "SessionUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "roles": {
+            "description": "The roles of the user: admin, reviewer.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "description": "What the user may do (src/modules/access/permissions.ts).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "roles",
+          "permissions"
+        ]
+      },
+      "SetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "passwordRepeat": {
+            "type": "string",
+            "description": "The second entry: both entries must match.",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "password",
+          "passwordRepeat"
+        ]
+      },
+      "SignInDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address of the account.",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "description": "The password of the account.",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UpdateOrganisationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "legalName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "address": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "registrationNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "taxNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "vatNoteSr": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "vatNoteEn": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "displayName",
+          "version"
+        ]
+      },
+      "UserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "description": "admin or reviewer."
+          },
+          "status": {
+            "type": "string",
+            "description": "invited (no password yet), active, deactivated or removed."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "description": "Sent back with a change: a change made on an older version is refused (409)."
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "role",
+          "status",
+          "createdAt",
+          "version"
+        ]
+      },
+      "UserPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "How many users match, over all pages."
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "UserReferenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ]
+      },
+      "VersionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "description": "The version the change is made on.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
         ]
       }
     }

@@ -38,7 +38,7 @@ export class SessionDto {
    * The value of the `X-CSRF-Token` header that every changing request of this session
    * carries (ADR-03). Bound to the session; never in a cookie.
    */
-  csrfToken!: string;
+  csrf!: string;
   /** The session ends at this moment unless it is used before (24 hours after the last use). */
   idleExpiresAt!: string;
   /** The session ends at this moment whatever happens (7 days after sign-in). */

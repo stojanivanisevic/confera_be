@@ -5,8 +5,87 @@
     "description": "The API of the public surface (forms, secure links). It answers only under the public host name and only ever gains things.",
     "version": "0.1.0"
   },
-  "paths": {},
+  "paths": {
+    "/public/v1/csp-reports": {
+      "post": {
+        "operationId": "receive",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Receives the reports. Always 204; what the browser sent is never echoed.",
+        "tags": [
+          "CspReports"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    }
+  },
   "components": {
-    "schemas": {}
+    "schemas": {
+      "FieldError": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path of the field in the request, for example `authors.0.email`."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable code of the rule that failed, for example `isEmail`. Never the value."
+          }
+        },
+        "required": [
+          "path",
+          "code"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable, machine-readable code, for example `not_found` or `validation_failed`."
+          },
+          "traceId": {
+            "type": "string",
+            "description": "Identifies this request in the server log."
+          },
+          "status": {
+            "type": "number",
+            "description": "HTTP status. Absent on an unknown error."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short English name of the status. Absent on an unknown error."
+          },
+          "errors": {
+            "description": "The refused fields, when the input was not valid.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "traceId"
+        ]
+      }
+    }
   }
 }

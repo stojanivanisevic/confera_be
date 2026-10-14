@@ -84,10 +84,10 @@ export class AccessGuard implements CanActivate, OnModuleInit {
         ) {
           continue;
         }
-        const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS_METADATA, [
-          handler,
-          controller,
-        ]);
+        const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(
+          ROUTE_ACCESS_METADATA,
+          [handler, controller],
+        );
         if (access === undefined) {
           undeclared.push(`${controller.name}.${name}`);
         }
@@ -103,10 +103,10 @@ export class AccessGuard implements CanActivate, OnModuleInit {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const handler = context.getHandler();
     const controller = context.getClass();
-    const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS_METADATA, [
-      handler,
-      controller,
-    ]);
+    const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(
+      ROUTE_ACCESS_METADATA,
+      [handler, controller],
+    );
     if (access === undefined) {
       throw new ProblemException(404, 'not_found');
     }

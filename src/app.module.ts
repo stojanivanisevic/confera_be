@@ -8,8 +8,14 @@ import type { AppLogger } from './common/logging/app-logger';
 import { LoggingModule } from './common/logging/logging.module';
 import type { AppConfig } from './config/config';
 import { ConfigModule } from './config/config.module';
+import { AccessGuard } from './modules/access/access.guard';
+import { AccessModule } from './modules/access/access.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { CspReportsModule } from './modules/csp-reports/csp-reports.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetaModule } from './modules/meta/meta.module';
+import { OrganisationModule } from './modules/organisation/organisation.module';
+import { UsersModule } from './modules/users/users.module';
 import { PdfModule } from './platform/pdf/pdf.module';
 import { PrismaModule } from './platform/prisma/prisma.module';
 
@@ -43,15 +49,22 @@ export class AppModule {
         DiscoveryModule,
         PrismaModule,
         PdfModule,
+        AccessModule,
         HealthModule,
         MetaModule,
+        UsersModule,
+        OrganisationModule,
+        AuditModule,
+        CspReportsModule,
         ...extraImports,
       ],
       providers: [
         // One exception filter for everything that is thrown (ADR-19).
         { provide: APP_FILTER, useClass: ProblemFilter },
-        // Host separation of the two surfaces, checked on every route (ADR-02).
+        // Host separation of the two surfaces, checked on every route (ADR-02); then who
+        // may call the route (ADR-03, ADR-05). The order is the order of the guards here.
         { provide: APP_GUARD, useClass: SurfaceGuard },
+        { provide: APP_GUARD, useExisting: AccessGuard },
         { provide: APP_PIPE, useFactory: createValidationPipe },
       ],
     };

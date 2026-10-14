@@ -173,7 +173,7 @@ export class SessionController {
         permissions: [...state.permissions].sort(),
       },
       organisation: { id: user.organisation.id, name: user.organisation.name },
-      csrfToken: csrfValueOf(state.sessionToken),
+      csrf: csrfValueOf(state.sessionToken),
       idleExpiresAt: state.idleExpiresAt.toISOString(),
       absoluteExpiresAt: state.absoluteExpiresAt.toISOString(),
       confirmationValidUntil: state.confirmationValidUntil?.toISOString() ?? null,

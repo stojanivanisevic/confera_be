@@ -4,6 +4,12 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { DestinationStream } from 'pino';
 import { AppModule } from './app.module';
+import { bodyLimit } from './common/http/body-limit';
+import { TRUSTED_PROXY_HOPS } from './common/http/client-address';
+import {
+  CSP_REPORT_BODY_LIMIT,
+  CSP_REPORT_PATH,
+} from './modules/csp-reports/csp-reports.controller';
 import { refusePreflight } from './common/http/no-preflight.middleware';
 import { securityHeaders } from './common/http/security-headers';
 import { requestContext } from './common/http/trace';
@@ -34,21 +40,35 @@ export async function createApp(
   const logger = new AppLogger(createRootLogger(config.logLevel, options.logDestination));
   const app = await NestFactory.create<NestExpressApplication>(
     AppModule.register({ config, logger, extraImports: options.extraImports }),
-    { abortOnError: false, logger },
+    // bodyParser: false, so that configureHttp sets the limits and content types itself.
+    { abortOnError: false, logger, bodyParser: false },
   );
   configureHttp(app, logger);
   await options.configure?.(app, config);
   return app;
 }
 
+/** The largest JSON body of an ordinary request (ST-41 caps it; the forms of 0.3.0 raise it where needed). */
+export const JSON_BODY_LIMIT = '64kb';
+
 /** The middleware of every request, in order. Tests apply it to their own application too. */
 export function configureHttp(app: NestExpressApplication, logger: AppLogger): void {
   app.disable('x-powered-by');
+  // The one hop in front of the API that may write X-Forwarded-For (ADR-03, ST-25).
+  app.set('trust proxy', TRUSTED_PROXY_HOPS);
   // Order matters: the request context first, so that everything after it has a trace id.
   app.use(requestContext());
   app.use(securityHeaders);
   app.use(requestLog(logger));
   app.use(refusePreflight);
+  // Bodies: JSON of a bounded size, and nothing else. A browser posts the reports of the
+  // content security policy as application/csp-report or application/reports+json, with
+  // a limit of their own, smaller than the general one.
+  app.use(CSP_REPORT_PATH, bodyLimit(CSP_REPORT_BODY_LIMIT));
+  app.useBodyParser('json', {
+    limit: JSON_BODY_LIMIT,
+    type: ['application/json', 'application/csp-report', 'application/reports+json'],
+  });
 }
 
 /**

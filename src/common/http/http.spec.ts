@@ -13,6 +13,7 @@ import { IsEmail, IsInt, IsString, Max, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import request from 'supertest';
 import { validProductionEnvironment } from '../../config/testing/valid-environment';
+import { Public } from '../../modules/access/access.decorators';
 import { ADMIN_HOST, createTestApp, PUBLIC_HOST, type TestApp } from '../testing/test-app';
 import { ProblemException } from './problem';
 import { API_SECURITY_HEADERS } from './security-headers';
@@ -40,6 +41,7 @@ class SampleDto {
 }
 
 @AdminController('sample')
+@Public()
 class SampleAdminController {
   @Get('ok')
   ok() {
@@ -100,6 +102,7 @@ class SampleAdminController {
 }
 
 @PublicController('sample')
+@Public()
 class SamplePublicController {
   @Get('ok')
   ok() {
@@ -108,6 +111,7 @@ class SamplePublicController {
 }
 
 @OpsController('ops-sample')
+@Public()
 class SampleOpsController {
   @Get()
   ok() {
@@ -216,6 +220,8 @@ describe('the HTTP layer of the application', () => {
       http()
         .post('/api/v1/sample/echo')
         .set('Host', ADMIN_HOST)
+        // A changing request carries the origin of its surface (ADR-03, ST-13).
+        .set('Origin', test.config.origins.admin)
         .send(body as object);
 
     it('accepts a valid body', async () => {
@@ -255,6 +261,7 @@ describe('the HTTP layer of the application', () => {
       const response = await http()
         .post('/api/v1/sample/echo')
         .set('Host', ADMIN_HOST)
+        .set('Origin', test.config.origins.admin)
         .set('Content-Type', 'application/json')
         .send(`{"title": "${CANARY}`);
       expect(response.status).toBe(400);
@@ -417,6 +424,7 @@ describe('the HTTP layer of the application', () => {
 describe('a controller without a surface', () => {
   it('stops the start', async () => {
     @Controller('api/v1/bare')
+    @Public()
     class BareController {
       @Get()
       ok() {
@@ -433,6 +441,7 @@ describe('a controller without a surface', () => {
     ['an ops controller inside the public API', () => OpsController('public/v1/hidden')],
   ])('%s stops the start', async (_name, decorate) => {
     @decorate()
+    @Public()
     class MisplacedController {
       @Get()
       ok() {
