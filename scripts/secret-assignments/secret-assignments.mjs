@@ -1,12 +1,15 @@
-// The scan for secrets that are given away by their NAME. Version: see VERSION below.
+// The scan for secrets that are given away by their NAME or by their PLACE.
+// Version: see VERSION below.
 //
 // A scanner of formats (secretlint, gitleaks) knows what a GitHub token or a private key
 // looks like. A mail password, a session secret or a data key looks like nothing: it is
-// any text. What gives it away is the name it is bound to. This scan reports
+// any text. What gives it away is the name it is bound to, or the place it is handed to.
+// This scan reports
 //
-//     a LITERAL VALUE bound to a SECRET-LIKE NAME
+//     a LITERAL VALUE bound to a SECRET-LIKE NAME, compared with one, or passed where a
+//     KEY OR A SECRET is the parameter
 //
-// in every file that git tracks or would take, in any syntax where a name gets a value.
+// in every file that git tracks or would take.
 //
 // SECRET-LIKE NAME. Decided by the words of the name, in any casing convention
 // (smtpPassword, SMTP_PASSWORD, smtp-password, "smtp password"), by its LAST word:
@@ -25,28 +28,49 @@
 // end with another word and are not secret-like; nor are `primaryKey`, `sortKey`,
 // `cacheKey`, `publicKey`, `idempotencyKey`, nor plurals (`secrets`, `tokens`).
 //
+// LITERAL VALUE. What is written in the file: a text, a number, a template text that
+// starts with written text, a list of such values. Also:
+//
+//     - a literal through a conversion: Buffer.from(L), new TextEncoder().encode(L),
+//       atob(L), btoa(L), String(L) (`const secretKey = Buffer.from('x')`)
+//     - in JavaScript, a name that is declared in the same file with a literal value,
+//       whatever the scope (`const k = 'x'; createHmac('sha256', k)`)
+//     - in a shell, a command substitution or backticks whose command is `echo` or
+//       `printf` with written text (`$(echo x)`, `$(printf x | base64)`); in PowerShell,
+//       ConvertTo-SecureString, Write-Output and echo with written text
+//       (`ConvertTo-SecureString 'x' -AsPlainText -Force`)
+//
 // ALLOWED VALUES, and nothing else:
 //
 //     - nothing: an empty value, `null`, `~`, `true`, `false` (no value, or a flag)
 //     - a reference to something else as the WHOLE value: `${VAR}`, `$VAR`, `$1`, `$@`,
-//       references one after the other (`$PREFIX$SUFFIX`), `$(command)`,
-//       `${{ secrets.X }}`, `{{ value }}`, a YAML alias; in JavaScript any expression
-//       that is not a literal (`process.env.X`, a call, another variable); in PowerShell
-//       a command or a call (`$p = Read-Host`)
+//       references one after the other (`$PREFIX$SUFFIX`), `$(command)` and `command`
+//       of any other command, `${{ secrets.X }}`, `{{ value }}`, a YAML alias; in
+//       JavaScript any expression that is not a literal (`process.env.X`, a call that is
+//       not a conversion, another variable that is not declared with a literal); in
+//       PowerShell a command or a call (`$p = Read-Host`)
 //     - a placeholder: a literal that STARTS with `invented-` or `local-only-`
 //
 // A list of values under a secret-like name is read value by value.
 //
 // There is no guess by length or by randomness: `'too_short'` under a secret-like name is
-// a finding, and so is `changeme`. The code is changed to follow the rule.
+// a finding, and so are `changeme` and `1`. The code is changed to follow the rule.
 //
 // THE WRITTEN EXCEPTIONS, and no others:
 //
 //     - `credentials` of the Fetch API takes a mode: under exactly that name, exactly
 //       'include', 'same-origin' and 'omit' are not a finding
-//     - versions under names of packages: the maps dependencies, devDependencies,
+//     - versions under names of packages: in the maps dependencies, devDependencies,
 //       optionalDependencies, peerDependencies, overrides, resolutions, catalog and
-//       catalogs of a package manifest or a pnpm workspace file (also pnpm.overrides)
+//       catalogs at the top of a package manifest or a pnpm workspace file (also
+//       pnpm.overrides), a VERSION SPECIFIER is not a finding: a semver range
+//       (`1.7.1`, `^1.2`, `>=1 <2 || 3.x`, `*`) or `workspace:`, `catalog:`, `npm:`,
+//       `link:`, `file:`, `portal:`, `patch:` followed by text. Any other value there is
+//       read like everywhere else (a dist tag, a git or web address included).
+//     - patches of packages: in the map patchedDependencies of a package manifest (also
+//       pnpm.patchedDependencies) or a pnpm workspace file, the path of a `.patch` file
+//     - module paths: in the map `paths` of `compilerOptions` in a tsconfig or jsconfig
+//       file (`"@app/token": ["src/token.ts"]`), the names of modules and their paths
 //     - GitHub Actions: under `permissions`, the levels read, write and none
 //       (`id-token: write`)
 //
@@ -57,17 +81,67 @@
 //     (.js .cjs .mjs .jsx        not), a class field, an object property, a default
 //      .ts .cts .mts .tsx)       parameter, an attribute of a JSX element, and a literal
 //                                used as a fallback for such a name (`??`, `||`, a
-//                                ternary branch), also inside the `${...}` of a template
-//     JSON (.json .jsonc)        "name": value, in any letter case
+//                                ternary branch), also inside the `${...}` of a template;
+//                                a literal compared with such a name (===, !==, ==, !=);
+//                                a literal passed as the KEY ARGUMENT of a call (below);
+//                                and every text and template text is also read as lines
+//                                of a shell (below), texts joined with + as one
+//     JSON (.json .jsonc)        "name": value, in any letter case; every text value is
+//                                also read as lines of a shell
 //     YAML (.yml .yaml)          name: value, in any letter case; lists, mappings in
-//                                braces (also over several lines), the lines below
-//     every other text file      NAME=value at the start of a line, with or without
-//     (.env, shell, Dockerfile,  `export`, quotes, a leading list dash, `ENV`, `ARG` or
-//      .npmrc, Markdown, ...)    `RUN`; `ENV NAME value`; several pairs on one line; and
-//                                `-e NAME=value` or `--env NAME=value` anywhere in a line
+//                                braces (also over several lines), the lines below; a
+//                                value under any other name is read as a line of a shell
+//     every other text file      lines of a shell (below)
+//     (.env, shell, Dockerfile,
+//      .npmrc, Markdown, ...)
 //
-// A file is read as UTF-8, or as UTF-16 when a byte-order mark says so. A file with a zero
-// byte and no such mark is binary and is not read. Comments are not read.
+// LINES OF A SHELL. A line is cut into commands at `&&`, `||`, `;` and `|` outside
+// quotes (also at the start of a line, as in a continued RUN of a Dockerfile). Each
+// command is read for NAME=value at its start, with or without `export`, `env`,
+// `cross-env`, quotes, a leading list dash, `ENV`, `ARG` or `RUN`; `ENV NAME value`;
+// several pairs in one command; a pair in the value of a pair (`Environment=NAME=value`);
+// and `-e NAME=value` or `--env NAME=value` anywhere. A line that starts with `#` or `;`
+// is a comment.
+//
+// KEY ARGUMENTS. A call by one of these names (the last name before the brackets, so
+// `crypto.createHmac(...)` is createHmac) takes a key or a secret at the argument named:
+//
+//     cookieParser, createSecretKey, createPrivateKey,     the first
+//     pbkdf2, pbkdf2Sync, scrypt, scryptSync
+//     createHmac, createCipheriv, createDecipheriv,         the second
+//     hkdf, hkdfSync, jwtVerify, jwtDecrypt,
+//     HmacSHA1, HmacSHA256, HmacSHA384, HmacSHA512, HmacMD5
+//     sign, verify, encrypt, decrypt                        the second; the first when it
+//                                                           is the only argument
+//                                                           (`new SignJWT(p).sign(key)`)
+//
+// A definition of a function or a method by such a name is not a call.
+//
+// A file is read as UTF-8, or as UTF-16 when a byte-order mark says so. Comments are
+// not read.
+//
+// WHAT IS NOT READ: a file with a zero byte and no byte-order mark (binary); a file git
+// ignores; lockfiles; what the caller excludes (generated or vendored files); and the two
+// corpora of this scanner while they are exactly the files its manifest records (they
+// hold the shapes of secrets on purpose; a changed corpus is read like any other file).
+// A file larger than 2 MB is not read, and is REPORTED as a finding of its own: leave it
+// out with --exclude if it is generated or vendored, or make it smaller.
+//
+// WHAT THIS RULE DOES NOT SEE (for whoever judges whether a gap matters):
+//
+//     - a literal under a name that is not secret-like, used as a secret in ANOTHER file,
+//       or handed on through an object, a function or a second variable
+//       (`const k = 'x'; const j = k; createHmac('sha256', j)`)
+//     - a call that is not on the list above, a key argument at another position
+//       (`crypto.sign(alg, data, 'key')`), a call through an alias or a computed member
+//       (`const h = crypto.createHmac; h('sha256', 'x')`), a key under a property whose
+//       name is not secret-like (`{ k: 'x' }`)
+//     - a comparison by `switch`/`case`, `Object.is` or an assertion (`toBe('x')`)
+//     - a literal in a language this scan does not tokenize (SQL, Python, PowerShell
+//       beyond `$name = value`), except where its lines look like a shell
+//     - YAML explicit keys (`? key`), keys in backticks, escaped identifiers
+//     - a secret that is not a literal at all: read from a file that git tracks (a key
+//       file without a format of its own), or put together at run time
 //
 // The files are read as their syntax (a tokenizer for JavaScript and JSON, a reader of
 // entries for YAML, a reader of lines for the others), not searched with one pattern per
@@ -106,7 +180,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const PLACEHOLDER_PREFIXES = ['invented-', 'local-only-'];
 
 /** The version of this scanner and its two corpora, as the manifest beside them records it. */
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 /**
  * A name is secret-like when its last word is one of these, or ends with one
@@ -165,6 +239,87 @@ const FETCH_MODES = new Set(['include', 'same-origin', 'omit']);
 
 function isFetchMode(name, value) {
   return name === FETCH_OPTION && FETCH_MODES.has(value);
+}
+
+/**
+ * Calls that take a key or a secret as an argument: the name of the call (the last name
+ * before its brackets) and the position of that argument, counted from 0. `sign`,
+ * `verify`, `encrypt` and `decrypt` take it second, or first when it is their only
+ * argument (`new SignJWT(payload).sign(key)`).
+ */
+export const KEY_ARGUMENTS = new Map([
+  // the first argument
+  ...['cookieParser', 'createSecretKey', 'createPrivateKey'].map((name) => [name, 0]),
+  ...['pbkdf2', 'pbkdf2Sync', 'scrypt', 'scryptSync'].map((name) => [name, 0]),
+  // the second argument
+  ...['createHmac', 'createCipheriv', 'createDecipheriv', 'hkdf', 'hkdfSync'].map((name) => [
+    name,
+    1,
+  ]),
+  ...['jwtVerify', 'jwtDecrypt', 'compactDecrypt'].map((name) => [name, 1]),
+  ...['HmacSHA1', 'HmacSHA256', 'HmacSHA384', 'HmacSHA512', 'HmacMD5'].map((name) => [name, 1]),
+  ...['sign', 'verify', 'encrypt', 'decrypt'].map((name) => [name, 1]),
+]);
+
+/** Of KEY_ARGUMENTS, the call whose only argument is the key (`new SignJWT(p).sign(key)`). */
+const KEY_WHEN_ALONE = new Set(['sign']);
+
+/**
+ * `signer.sign(privateKey, 'base64')` of Node gives the encoding of its output second:
+ * for sign and verify, the name of an encoding there is not a key.
+ */
+const ENCODINGS = new Set([
+  'base64',
+  'base64url',
+  'hex',
+  'latin1',
+  'binary',
+  'utf8',
+  'utf-8',
+  'ascii',
+  'ucs2',
+  'utf16le',
+  'buffer',
+]);
+
+/** Conversions that give the literal they are handed: Buffer.from(L), atob(L), ... */
+const CONVERSIONS = new Set(['atob', 'btoa', 'String']);
+
+/**
+ * A version specifier, as the maps of dependencies hold them: a semver range or one of
+ * the protocols of npm and pnpm followed by text. A dist tag or an address is not one.
+ */
+const PROTOCOL_SPECIFIER = /^(?:workspace|catalog|npm|link|file|portal|patch):\S*$/;
+const PARTIAL_VERSION =
+  /^v?(?:0|[1-9][0-9]*|[xX*])(?:\.(?:0|[1-9][0-9]*|[xX*])){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+export function isVersionSpecifier(value) {
+  const text = value.trim();
+  if (PROTOCOL_SPECIFIER.test(text)) {
+    return true;
+  }
+  if (text === '' || text === '*' || text === 'x') {
+    return text !== '';
+  }
+  return text.split('||').every((range) => {
+    const part = range.trim();
+    const hyphen = /^(\S+)\s+-\s+(\S+)$/.exec(part);
+    if (hyphen !== null) {
+      return PARTIAL_VERSION.test(hyphen[1]) && PARTIAL_VERSION.test(hyphen[2]);
+    }
+    const comparators = part.replace(/(<=|>=|<|>|=|\^|~)\s+/g, '$1').split(/\s+/);
+    return (
+      part !== '' &&
+      comparators.every((comparator) =>
+        PARTIAL_VERSION.test(comparator.replace(/^(?:<=|>=|<|>|=|\^|~)/, '')),
+      )
+    );
+  });
+}
+
+/** The path of a patch file, as patchedDependencies holds it. */
+function isPatchPath(value) {
+  return /^[^\s'"]+\.patch$/.test(value.trim());
 }
 
 /** Lockfiles are written by a package manager, hold hashes, and are never scanned. */
@@ -273,7 +428,49 @@ function isWholeReference(text) {
     return closingIndex(text, 0, '{{', '}}') === text.length; // {{ value }}
   }
   // `command`
-  return text.length > 1 && text.startsWith('`') && text.indexOf('`', 1) === text.length - 1;
+  return (
+    text.length > 1 &&
+    text.startsWith('`') &&
+    text.indexOf('`', 1) === text.length - 1 &&
+    !printsWrittenText(text.slice(1, -1))
+  );
+}
+
+/** The words of a command line of a shell, with their quotes, and `$(...)` kept whole. */
+function shellWords(command) {
+  const words = [];
+  let rest = command.trim();
+  while (rest !== '') {
+    const word = firstWord(rest);
+    const quoted = /^["']/.test(rest);
+    words.push({ text: word.value, quoted, raw: rest.slice(0, word.length) });
+    rest = rest.slice(Math.max(word.length, 1)).trimStart();
+  }
+  return words;
+}
+
+/**
+ * Does this command (the inside of `$(...)` or of backticks) print written text, so that
+ * its output is a literal? `echo x`, `printf x`, also at the head of a pipeline
+ * (`echo x | base64`). Options (`-n`) and references (`"$X"`) print nothing written;
+ * in the format of printf, the conversions (`%s`) and escapes (`\n`) do not either.
+ */
+function printsWrittenText(command) {
+  const head = splitCommands(command)[0] ?? '';
+  const [name, ...args] = shellWords(head);
+  if (name === undefined || !['echo', 'printf'].includes(name.text)) {
+    return false;
+  }
+  return args.some(({ text, quoted }, index) => {
+    if (!quoted && /^-[a-zA-Z]+$/.test(text)) {
+      return false;
+    }
+    const written =
+      name.text === 'printf' && index === 0
+        ? text.replace(/%[-#0 +]*[0-9]*(?:\.[0-9]+)?[a-zA-Z%]|\\[a-z0-9]/g, '')
+        : text;
+    return written !== '' && !isShellReferences(written);
+  });
 }
 
 /**
@@ -301,6 +498,9 @@ function isShellReferences(text) {
         if (fallback !== null && !plainValueIsAllowed(fallback[2])) {
           return false;
         }
+      } else if (printsWrittenText(text.slice(index + 2, end - 1))) {
+        // $(echo x): the output of the command is the text written in it.
+        return false;
       }
       index = end;
     } else if (/[0-9@*#?$!-]/.test(next)) {
@@ -333,11 +533,13 @@ function plainValueIsAllowed(value) {
 // ---------------------------------------------------------------------------
 
 const LINE_PREFIX =
-  /^(?:(?:export|declare|local|readonly|typeset|set|setx|env)[ \t]+(?:-[A-Za-z]+[ \t]+)*|(?:ENV|ARG)[ \t]+)/;
+  /^(?:(?:export|declare|local|readonly|typeset|set|setx|env|cross-env-shell|cross-env)[ \t]+(?:-[A-Za-z]+[ \t]+)*|(?:ENV|ARG)[ \t]+)/;
 const DOCKERFILE_PREFIX = /^(?:ONBUILD[ \t]+)?(?:ENV|ARG)[ \t]+/i;
 /** RUN of a Dockerfile: a shell command line follows, which may begin with NAME=value. */
 const DOCKERFILE_RUN = /^(?:ONBUILD[ \t]+)?RUN[ \t]+/i;
 const LINE_NAME = /^[A-Za-z0-9_.$:/@~+-]*[A-Za-z][A-Za-z0-9_.$:/@~+-]*/;
+/** The name of a variable of a shell, for the texts inside JavaScript and JSON. */
+const SHELL_NAME = /^[A-Za-z_][A-Za-z0-9_]*/;
 /** `-e NAME=value`, `--env NAME=value`, `--env=NAME=value`: an argument of a command. */
 const ENV_ARGUMENT = /(?:^|\s)(?:-e|--env)(?:[ \t]+|=)(["']?)([A-Za-z_][A-Za-z0-9_]*)=/g;
 
@@ -392,16 +594,42 @@ function powerShellValue(written) {
   if (written.startsWith('$')) {
     return firstWord(written); // another variable: a reference
   }
+  // ConvertTo-SecureString 'x' -AsPlainText, Write-Output 'x', echo x: what it gives is
+  // the text written in it (the value of -String, or the first word that is no parameter).
+  const printing = /^(?:ConvertTo-SecureString|Write-Output|echo)(?:[ \t]+(.*))?$/i.exec(
+    written.trim(),
+  );
+  if (printing !== null) {
+    const words = shellWords(printing[1] ?? '');
+    for (let index = 0; index < words.length; index += 1) {
+      const word = words[index];
+      if (!word.quoted && /^-[A-Za-z]+$/.test(word.text)) {
+        if (/^-String$/i.test(word.text)) {
+          const value = words[index + 1];
+          return value === undefined || (!value.quoted && /^[$(@]/.test(value.text))
+            ? null
+            : { value: value.text, length: written.length };
+        }
+        continue;
+      }
+      return !word.quoted && /^[$(@]/.test(word.text)
+        ? null
+        : { value: word.text, length: written.length };
+    }
+    return null;
+  }
   return written.trim() === '' ? { value: '', length: written.length } : null;
 }
 
 /**
  * The pairs NAME=value that a line begins with. `export`, `ENV`, `RUN`, a list dash and
  * quotes around the pair are stepped over, in any order (`export "NAME=value"`);
- * `ENV NAME value` of a Dockerfile is read too.
+ * `ENV NAME value` of a Dockerfile is read too. `strict`: the syntax of a shell itself (a
+ * text inside JavaScript or JSON): a name of letters, digits and `_`, and `=` with no space
+ * around it, so that `this.password = value` of code written in a text is no pair.
  * @returns {{ name: string, value: string }[]}
  */
-function pairsOfLine(line) {
+function pairsOfLine(line, strict = false) {
   let rest = line.trim();
   let dockerfile = false;
   for (let before = ''; before !== rest;) {
@@ -425,13 +653,13 @@ function pairsOfLine(line) {
 
   const pairs = [];
   for (;;) {
-    const name = LINE_NAME.exec(rest);
+    const name = (strict ? SHELL_NAME : LINE_NAME).exec(rest);
     if (!name) {
       break;
     }
     const after = rest.slice(name[0].length);
     // `=`, and `:=`, `?=`, `+=` of a Makefile or a shell; not `==` or `=~` of a comparison.
-    const equals = /^[ \t]*[:?+]?=(?![=~>])[ \t]*/.exec(after);
+    const equals = (strict ? /^=(?![=~>])/ : /^[ \t]*[:?+]?=(?![=~>])[ \t]*/).exec(after);
     if (!equals) {
       // ENV NAME value: the value is the rest of the line.
       const spaced = /^[ \t]+(\S.*)$/.exec(after);
@@ -479,13 +707,63 @@ function argumentPairs(line) {
   return pairs;
 }
 
-function scanLine(line, number, report, depth = 0) {
-  for (const { name, value } of [...pairsOfLine(line), ...argumentPairs(line)]) {
-    if (isSecretLikeName(name) && !plainValueIsAllowed(value) && !isFetchMode(name, value)) {
-      report(number, name);
-    } else if (depth < 2 && value.includes('=')) {
-      // Environment=SMTP_PASSWORD=value: the value is a pair of its own.
-      scanLine(value, number, report, depth + 1);
+/**
+ * The commands of a line of a shell: cut at `&&`, `||`, `;` and `|` outside quotes,
+ * `$(...)` and backticks. A Dockerfile's `RUN a \` followed by `&& NAME=value b` gives
+ * the command `NAME=value b` on the second line.
+ */
+export function splitCommands(line) {
+  const commands = [];
+  let start = 0;
+  let quote = '';
+  let depth = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (quote !== '') {
+      if (character === '\\' && quote === '"') {
+        index += 1;
+      } else if (character === quote) {
+        quote = '';
+      }
+    } else if (character === '\\') {
+      index += 1;
+    } else if (character === '"' || character === "'" || character === '`') {
+      quote = character;
+    } else if (character === '$' && line[index + 1] === '(') {
+      depth += 1;
+      index += 1;
+    } else if (character === ')' && depth > 0) {
+      depth -= 1;
+    } else if (depth === 0 && (character === ';' || character === '|' || character === '&')) {
+      const double = line[index + 1] === character && character !== ';';
+      if (character === '&' && !double) {
+        continue; // a command in the background, or a redirection (2>&1)
+      }
+      commands.push(line.slice(start, index));
+      index += double ? 1 : 0;
+      start = index + 1;
+    }
+  }
+  commands.push(line.slice(start));
+  return commands.map((command) => command.trim()).filter((command) => command !== '');
+}
+
+/**
+ * One line of a shell, or of a file read as one. `strict`: a text inside JavaScript or
+ * JSON, read with the syntax of a shell itself (see pairsOfLine).
+ */
+function scanLine(line, number, report, depth = 0, strict = false) {
+  if (/^\s*[#;]/.test(line)) {
+    return; // a comment
+  }
+  for (const command of depth === 0 ? splitCommands(line) : [line]) {
+    for (const { name, value } of [...pairsOfLine(command, strict), ...argumentPairs(command)]) {
+      if (isSecretLikeName(name) && !plainValueIsAllowed(value) && !isFetchMode(name, value)) {
+        report(number, name);
+      } else if (depth < 2 && value.includes('=')) {
+        // Environment=SMTP_PASSWORD=value: the value is a pair of its own.
+        scanLine(value, number, report, depth + 1, strict);
+      }
     }
   }
 }
@@ -585,11 +863,32 @@ const DEPENDENCY_MAPS = new Set([
 /** Files that hold such maps. */
 const PACKAGE_FILE = /(?:^|[\\/])(?:package\.json5?|package\.ya?ml|pnpm-workspace\.ya?ml)$/;
 
+/** tsconfig and jsconfig files, whose `compilerOptions.paths` maps names of modules. */
+const TSCONFIG_FILE = /(?:^|[\\/])[jt]sconfig[^\\/]*\.json5?$/;
+
+/**
+ * What a value of a package manifest or a pnpm workspace file may be, by the names of the
+ * mappings around it (the outermost first): a version specifier in a map of dependencies
+ * at the top of the file (or in pnpm.overrides), the path of a patch file in
+ * patchedDependencies; null when nothing more is allowed than everywhere else.
+ */
+function packageAllowance(names) {
+  const [first, second] = names;
+  if (DEPENDENCY_MAPS.has(first) || (first === 'pnpm' && second === 'overrides')) {
+    return isVersionSpecifier;
+  }
+  if (first === 'patchedDependencies' || (first === 'pnpm' && second === 'patchedDependencies')) {
+    return isPatchPath;
+  }
+  return null;
+}
+
 /**
  * A value of YAML under a secret-like name. `parents` are the names of the mappings
- * around it, the innermost last.
+ * around it, the innermost last. `allowance`, when given, says what else the place
+ * allows (a version under the name of a package).
  */
-function yamlValueIsAllowed(raw, name, parents = []) {
+function yamlValueIsAllowed(raw, name, parents = [], allowance = null) {
   // An anchor names the value and `!!str` says its type: neither changes what it is.
   const value = raw.replace(/^(?:&\S+(?:[ \t]+|$)|!![A-Za-z]+(?:[ \t]+|$))+/, '');
   if (value === '' || /^[*!]/.test(value)) {
@@ -603,6 +902,9 @@ function yamlValueIsAllowed(raw, name, parents = []) {
   if (parents[parents.length - 1] === 'permissions' && PERMISSION_LEVELS.has(text)) {
     return true;
   }
+  if (allowance !== null && allowance(text)) {
+    return true;
+  }
   return quoted === null ? plainValueIsAllowed(text) : quotedValueIsAllowed(text);
 }
 
@@ -611,18 +913,18 @@ function yamlValueIsAllowed(raw, name, parents = []) {
  * every entry of it, the nested ones too. A list under a secret-like name (`secret`) is a
  * list of its values, and each must be allowed.
  */
-function scanYamlFlow(text, number, report, parents, secret) {
+function scanYamlFlow(text, number, report, parents, secret, allowance = null) {
   const end = closingIndex(text, 0, text[0], text[0] === '{' ? '}' : ']');
   if (end === -1) {
     return;
   }
   for (const item of flowItems(text.slice(1, end - 1))) {
     if (text[0] === '[' && secret !== null && !/^[{[]/.test(item)) {
-      if (!yamlValueIsAllowed(item, secret, parents)) {
+      if (!yamlValueIsAllowed(item, secret, parents, allowance)) {
         report(number, secret);
       }
     } else {
-      scanYamlEntry(unquoted(item) ?? item, number, report, () => undefined, parents);
+      scanYamlEntry(unquoted(item) ?? item, number, report, () => undefined, parents, allowance);
     }
   }
 }
@@ -633,9 +935,9 @@ function scanYamlFlow(text, number, report, parents, secret) {
  * several lines after `|` or `>`; ('below', name) for a name with no value on its line;
  * ('flow', name, text) for braces or brackets that close on a later line.
  */
-function scanYamlEntry(entry, number, report, follow, parents = []) {
+function scanYamlEntry(entry, number, report, follow, parents = [], allowance = null) {
   if (entry.startsWith('{') || entry.startsWith('[')) {
-    scanYamlFlow(entry, number, report, parents, null);
+    scanYamlFlow(entry, number, report, parents, null, allowance);
     return;
   }
   const match = YAML_KEY.exec(entry);
@@ -654,10 +956,10 @@ function scanYamlEntry(entry, number, report, follow, parents = []) {
     if (closingIndex(value, 0, value[0], value[0] === '{' ? '}' : ']') === -1) {
       follow('flow', name, value);
     } else {
-      scanYamlFlow(value, number, report, [...parents, name], secret ? name : null);
+      scanYamlFlow(value, number, report, [...parents, name], secret ? name : null, allowance);
     }
   } else if (secret) {
-    if (!yamlValueIsAllowed(value, name, parents)) {
+    if (!yamlValueIsAllowed(value, name, parents, allowance)) {
       report(number, name);
     }
   } else {
@@ -668,7 +970,7 @@ function scanYamlEntry(entry, number, report, follow, parents = []) {
 
 /**
  * @param {boolean} packageFile a package manifest or a pnpm workspace file, whose maps of
- *   dependencies are not read
+ *   dependencies hold versions under names of packages (packageAllowance)
  */
 function scanYaml(text, report, packageFile = false) {
   /**
@@ -680,6 +982,8 @@ function scanYaml(text, report, packageFile = false) {
   /** The mappings around the current line: { column, name }, the innermost last. */
   const parents = [];
   const names = () => parents.map(({ name }) => name);
+  /** What the place of the current line allows besides the rule: see packageAllowance. */
+  const allowance = () => (packageFile ? packageAllowance(names()) : null);
   const lines = text.split(/\r?\n/);
   lines.forEach((line, index) => {
     const number = index + 1;
@@ -696,6 +1000,7 @@ function scanYaml(text, report, packageFile = false) {
           report,
           [...names(), name],
           isSecretLikeName(name) ? name : null,
+          allowance(),
         );
       }
       return;
@@ -723,7 +1028,7 @@ function scanYaml(text, report, packageFile = false) {
           //   value          a plain value on the next line
           const { name, line: at } = open;
           open = null;
-          if (!yamlValueIsAllowed(entry, name, names())) {
+          if (!yamlValueIsAllowed(entry, name, names(), allowance())) {
             report(at, name);
           }
           return;
@@ -739,7 +1044,7 @@ function scanYaml(text, report, packageFile = false) {
           !YAML_KEY.test(item[1]) &&
           !/^[{[]/.test(item[1])
         ) {
-          if (!yamlValueIsAllowed(item[1], open.name, names())) {
+          if (!yamlValueIsAllowed(item[1], open.name, names(), allowance())) {
             report(number, open.name);
           }
           return;
@@ -761,15 +1066,6 @@ function scanYaml(text, report, packageFile = false) {
     while (parents.length > 0 && parents[parents.length - 1].column >= column) {
       parents.pop();
     }
-    if (packageFile && names().some((name) => DEPENDENCY_MAPS.has(name))) {
-      return; // a version specifier under the name of a package
-    }
-    const key = YAML_KEY.exec(entry);
-    const name = key === null ? null : (key[1] ?? key[2] ?? key[3]).trim();
-    if (packageFile && name !== null && DEPENDENCY_MAPS.has(name)) {
-      parents.push({ column, name });
-      return;
-    }
     scanYamlEntry(
       entry,
       number,
@@ -781,6 +1077,7 @@ function scanYaml(text, report, packageFile = false) {
         open = { kind, indent: column, name: opened, line: number, read: false, text: flowText };
       },
       names(),
+      allowance(),
     );
   });
 }
@@ -1042,10 +1339,19 @@ export function tokenize(text) {
         push('punctuator', character);
         index += 1;
       } else {
+        // The text of the template as a shell would get it: each `${...}` is a reference.
+        const segments = [];
+        let position = index + 1;
+        for (const hole of end.holes) {
+          segments.push(cooked(text.slice(position, hole.from - 2)));
+          position = hole.to + 1;
+        }
+        segments.push(cooked(text.slice(position, end.index - 1)));
         push('template', text.slice(index, end.index), {
           head: end.head,
           plain: end.plain,
           reference: end.reference,
+          shell: segments.join('${hole}'),
           holes: end.holes.map(({ from: start, to }) => ({
             text: text.slice(start, to),
             // The line of the hole: the line of the template, plus the lines before it.
@@ -1166,6 +1472,7 @@ const CONTINUES = new Set([
 /** Words that may follow a value inside one expression. */
 const AFTER_A_VALUE = new Set(['as', 'satisfies', 'in', 'instanceof', 'of']);
 const ALTERNATIVES = new Set(['??', '||', '&&', '?', ':']);
+const COMPARISONS = new Set(['===', '!==', '==', '!=']);
 const ASSIGNS = new Set(['=', '??=', '||=', '&&=', '+=']);
 
 function isWord(token, value) {
@@ -1192,13 +1499,15 @@ function carriesOn(previous, token) {
  * Every bracket is followed, and every `{` is told apart: an object (its properties are
  * names that get values), a block or the body of a class, a type, an enum.
  */
-function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
+function scanTokens(tokens, report, { json = false, manifest = false, tsconfig = false } = {}) {
   /** For a bracket, the index of the one that closes or opens it; else -1. */
   const partner = new Array(tokens.length).fill(-1);
   /** For an opening bracket, what it opens. */
   const kind = new Array(tokens.length).fill('');
   /** For every token, what it stands in: the kind of the innermost bracket, or 'type'. */
   const context = new Array(tokens.length).fill('');
+  /** For every token, the index of the innermost opening bracket it stands in, or -1. */
+  const enclosing = new Array(tokens.length).fill(-1);
   const stack = [];
   /** Set by `enum`, `interface` and `class`: what the next `{` opens. */
   let pending = '';
@@ -1292,6 +1601,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       }
     }
     context[index] = alias !== -1 ? 'type' : inner();
+    enclosing[index] = stack.length === 0 ? -1 : stack[stack.length - 1];
 
     if (token.type === 'word') {
       const next = tokens[index + 1];
@@ -1337,27 +1647,59 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
     }
   });
 
-  if (manifest) {
-    // "dependencies": { "generate-password": "1.7.1" }: a name of a package, not of a value.
+  /**
+   * The names of the JSON objects from the top of the file down to the object that opens
+   * at `open`: [null, 'pnpm', 'overrides'] for the overrides of pnpm. Null when a list or
+   * something else than an object stands in the way.
+   */
+  const objectPath = (open) => {
+    const names = [];
+    for (let at = open; at !== -1; at = enclosing[at]) {
+      if (tokens[at].value !== '{') {
+        return null;
+      }
+      const named = isPunctuator(tokens[at - 1], ':') && tokens[at - 2]?.type === 'string';
+      names.unshift(named ? tokens[at - 2].value : null);
+    }
+    return names;
+  };
+
+  /** For a `:` of a property, what its place allows besides the rule; else null. */
+  const allowanceAt = (colon) => {
+    if (!manifest || enclosing[colon] === -1) {
+      return null;
+    }
+    const path = objectPath(enclosing[colon]);
+    return path === null || path[0] !== null ? null : packageAllowance(path.slice(1));
+  };
+
+  if (tsconfig) {
+    // "paths": { "@app/token": ["src/token.ts"] } of compilerOptions: names of modules.
     tokens.forEach((token, index) => {
-      if (
-        kind[index] === 'object' &&
-        isPunctuator(tokens[index - 1], ':') &&
-        tokens[index - 2]?.type === 'string' &&
-        PACKAGE_MAPS.has(tokens[index - 2].value)
-      ) {
-        context.fill('type', index, partner[index] === -1 ? index : partner[index]);
+      if (kind[index] === 'object' && partner[index] !== -1) {
+        const path = objectPath(index);
+        if (path?.length === 3 && path[0] === null && path[1] === 'compilerOptions') {
+          if (path[2] === 'paths') {
+            context.fill('type', index, partner[index]);
+          }
+        }
       }
     });
   }
 
-  /** Is the text of this literal token a finding under a secret-like name? */
-  const offends = (token, name = '') => {
+  /** Names declared in this file with `const`, `let` or `var`, and where their value is. */
+  const declarations = new Map();
+
+  /**
+   * Is the text of this literal token a finding under a secret-like name? `textOnly`: a
+   * number does not count (for the key of a call: `Math.sign(-1)` is no key).
+   */
+  const offends = (token, name = '', textOnly = false) => {
     if (token.type === 'string') {
       return !quotedValueIsAllowed(token.value) && !isFetchMode(name, token.value);
     }
     if (token.type === 'number') {
-      return true;
+      return !textOnly;
     }
     if (token.type === 'template') {
       if (token.plain && isFetchMode(name, token.head)) {
@@ -1440,13 +1782,60 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
     return index;
   };
 
+  /** The end of the first argument of the call whose `(` is at `open`. */
+  const firstArgumentEnd = (open) => {
+    for (let at = open + 1; at < partner[open]; at += 1) {
+      if (opens(at)) {
+        at = partner[at];
+      } else if (isPunctuator(tokens[at], ',')) {
+        return at;
+      }
+    }
+    return partner[open];
+  };
+
+  /**
+   * When [a, b) is a conversion that gives what it is handed (Buffer.from(x),
+   * new TextEncoder().encode(x), atob(x), btoa(x), String(x)), the range of x; else null.
+   */
+  const convertedArgument = (a, b) => {
+    const call = (open) =>
+      isPunctuator(tokens[open], '(') && partner[open] === b - 1 && open + 1 < b - 1
+        ? [open + 1, firstArgumentEnd(open)]
+        : null;
+    if (
+      isWord(tokens[a], 'Buffer') &&
+      isPunctuator(tokens[a + 1], '.') &&
+      isWord(tokens[a + 2], 'from')
+    ) {
+      return call(a + 3);
+    }
+    if (
+      isWord(tokens[a], 'new') &&
+      isWord(tokens[a + 1], 'TextEncoder') &&
+      isPunctuator(tokens[a + 2], '(') &&
+      partner[a + 2] === a + 3 &&
+      isPunctuator(tokens[a + 4], '.') &&
+      isWord(tokens[a + 5], 'encode')
+    ) {
+      return call(a + 6);
+    }
+    if (isWord(tokens[a]) && CONVERSIONS.has(tokens[a].value)) {
+      return call(a + 1);
+    }
+    return null;
+  };
+
   /**
    * Does the expression in [start, end) give a literal that is not allowed? It is taken
    * apart at `??`, `||`, `&&` and the branches of a ternary; brackets, `as` and `!` are
-   * taken off; `'text' + more` and `text${more}` count by the text they start with.
-   * `name` is the name the value is bound to, for the one exception of the rule.
+   * taken off; `'text' + more` and `text${more}` count by the text they start with; a
+   * conversion counts by what it is handed; a name declared in this file counts by its
+   * value (one step: `traced`). `name` is the name the value is bound to, for the one
+   * exception of the rule. `textOnly`: a number does not count.
    */
-  const givesLiteral = (start, end, name) => {
+  const givesLiteral = (start, end, name, { traced = false, textOnly = false } = {}) => {
+    const options = { traced, textOnly };
     const parts = [];
     let from = start;
     for (let index = start; index < end; index += 1) {
@@ -1472,10 +1861,20 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         b -= 1;
       }
       if (b - a >= 2 && isPunctuator(tokens[a], '(') && partner[a] === b - 1) {
-        return givesLiteral(a + 1, b - 1, name);
+        return givesLiteral(a + 1, b - 1, name, options);
       }
       if (isContainer(a) && partner[a] === b - 1) {
-        return givesLiteral(a + 1, b - 1, name); // name={'text'} in a JSX element
+        return givesLiteral(a + 1, b - 1, name, options); // name={'text'} in a JSX element
+      }
+      const converted = convertedArgument(a, b);
+      if (converted !== null) {
+        return givesLiteral(converted[0], converted[1], name, options); // Buffer.from('text')
+      }
+      if (b - a === 1 && !traced && isWord(tokens[a]) && declarations.has(tokens[a].value)) {
+        // const k = 'text'; ... k: the name stands for the literal it was declared with.
+        return declarations
+          .get(tokens[a].value)
+          .some(([from, to]) => givesLiteral(from, to, name, { traced: true, textOnly }));
       }
       if (isPunctuator(tokens[a], '[') && partner[a] === b - 1) {
         // A list of values: ['deploy', 'value']. Each element is a value of the name.
@@ -1487,7 +1886,7 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
             if (
               index > element &&
               !isPunctuator(tokens[element], '...') &&
-              givesLiteral(element, index, name)
+              givesLiteral(element, index, name, options)
             ) {
               return true;
             }
@@ -1504,11 +1903,11 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         a += 1;
       }
       if (b - a === 1) {
-        return offends(tokens[a], name);
+        return offends(tokens[a], name, textOnly);
       }
       // 'text' + more: a value that starts with written text.
       return b - a > 1 && isLiteral(tokens[a]) && isPunctuator(tokens[a + 1], '+')
-        ? offends(tokens[a])
+        ? offends(tokens[a], '', textOnly)
         : false;
     });
   };
@@ -1594,6 +1993,57 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
     return null;
   };
 
+  /** Is the reference that ends at `last` (`a.b.token`) the operand of a `typeof`? */
+  const isTypeofOperand = (last) => {
+    for (let at = last; at >= 0; at -= 1) {
+      const token = tokens[at];
+      if (isPunctuator(token, ']') && partner[at] !== -1) {
+        at = partner[at];
+      } else if (isWord(token, 'typeof')) {
+        return true;
+      } else if (!isWord(token) && !isPunctuator(token, '.') && !isPunctuator(token, '?.')) {
+        return false;
+      }
+    }
+    return false;
+  };
+
+  /** Is [start, end) a plain reference: names joined by `.` or `?.`, and `['name']`? */
+  const isReference = (start, end) => {
+    if (end <= start) {
+      return false;
+    }
+    for (let at = start; at < end; at += 1) {
+      const token = tokens[at];
+      if (isPunctuator(token, '[') && computedName(partner[at]) !== null) {
+        at = partner[at];
+      } else if (!isWord(token) && !isPunctuator(token, '.') && !isPunctuator(token, '?.')) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // The names this file declares with a value (`const k = 'text'`), for the one step that
+  // follows a name to its literal (givesLiteral).
+  if (!json) {
+    tokens.forEach((token, index) => {
+      if (!isPunctuator(token, '=') || context[index] === 'type' || context[index] === 'enum') {
+        return;
+      }
+      const target = targetOf(index);
+      if (
+        target !== null &&
+        isWord(tokens[target.at - 1]) &&
+        DECLARES.has(tokens[target.at - 1].value)
+      ) {
+        const values = declarations.get(target.name) ?? [];
+        values.push([index + 1, endOfExpression(index + 1)]);
+        declarations.set(target.name, values);
+      }
+    });
+  }
+
   // Second pass: every place where a name gets a value.
   tokens.forEach((token, index) => {
     if (token.type !== 'punctuator' || context[index] === 'type' || context[index] === 'enum') {
@@ -1621,11 +2071,20 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
         first = partner[index - 1];
       }
       const before = tokens[first - 1];
+      const end = endOfExpression(index + 1);
+      // "generate-password": "1.7.1" in the dependencies of a package manifest.
+      const allowance = allowanceAt(index);
+      const allowed =
+        allowance !== null &&
+        end === index + 2 &&
+        tokens[index + 1].type === 'string' &&
+        allowance(tokens[index + 1].value);
       if (
         name !== null &&
         (isPunctuator(before, '{') || isPunctuator(before, ',')) &&
         isSecretLikeName(name) &&
-        givesLiteral(index + 1, endOfExpression(index + 1), name)
+        !allowed &&
+        givesLiteral(index + 1, end, name)
       ) {
         report(tokens[first].line, name);
       }
@@ -1669,16 +2128,158 @@ function scanTokens(tokens, report, { json = false, manifest = false } = {}) {
       ) {
         report(tokens[colon - 1].line, name);
       }
+    } else if (COMPARISONS.has(token.value) && !json) {
+      // secretLike === 'literal' and 'literal' !== secretLike: a literal compared with the
+      // name is the value it must have. `typeof token === 'string'` compares a type.
+      const end = endOfOperand(index + 1);
+      const left = nameEndingAt(index - 1);
+      if (
+        left !== null &&
+        isSecretLikeName(left) &&
+        !isTypeofOperand(index - 1) &&
+        givesLiteral(index + 1, end, left)
+      ) {
+        report(tokens[index - 1].line, left);
+      } else if (
+        isLiteral(tokens[index - 1]) &&
+        !isPunctuator(tokens[index - 2], '+') &&
+        isReference(index + 1, end)
+      ) {
+        const right = nameEndingAt(end - 1);
+        if (right !== null && isSecretLikeName(right) && offends(tokens[index - 1], right)) {
+          report(tokens[index - 1].line, right);
+        }
+      }
     }
+  });
+
+  if (json) {
+    return;
+  }
+  // Third pass: a literal handed to a call at the place of its key (KEY_ARGUMENTS):
+  // cookieParser('x'), jwt.sign(payload, 'x'), createHmac('sha256', 'x').
+  tokens.forEach((token, index) => {
+    const open = index + 1;
+    if (
+      !isWord(token) ||
+      !KEY_ARGUMENTS.has(token.value) ||
+      ['type', 'enum', 'class'].includes(context[index]) ||
+      !isPunctuator(tokens[open], '(') ||
+      partner[open] === -1
+    ) {
+      return;
+    }
+    // A definition of a function or a method by that name is not a call; nor is Math.sign.
+    if (
+      isWord(tokens[index - 1], 'function') ||
+      isPunctuator(tokens[partner[open] + 1], '{') ||
+      (isPunctuator(tokens[index - 1], '.') && isWord(tokens[index - 2], 'Math'))
+    ) {
+      return;
+    }
+    const args = [];
+    let from = open + 1;
+    for (let at = open + 1; at < partner[open]; at += 1) {
+      if (opens(at)) {
+        at = partner[at];
+      } else if (isPunctuator(tokens[at], ',')) {
+        args.push([from, at]);
+        from = at + 1;
+      }
+    }
+    if (from < partner[open]) {
+      args.push([from, partner[open]]);
+    }
+    const position =
+      args.length === 1 && KEY_WHEN_ALONE.has(token.value) ? 0 : KEY_ARGUMENTS.get(token.value);
+    const argument = args[position];
+    if (argument === undefined) {
+      return;
+    }
+    const [first, afterLast] = argument;
+    // signer.sign(privateKey, 'base64'): the encoding of the output, not a key.
+    const encoding =
+      (token.value === 'sign' || token.value === 'verify') &&
+      afterLast - first === 1 &&
+      tokens[first].type === 'string' &&
+      ENCODINGS.has(tokens[first].value.toLowerCase());
+    if (!encoding && givesLiteral(first, afterLast, '', { textOnly: true })) {
+      report(token.line, token.value, 'argument');
+    }
+  });
+}
+
+/** What a shell would get from a text token: its text, with every `${...}` a reference. */
+function shellTextOf(token) {
+  return token.type === 'template' ? token.shell : token.value;
+}
+
+/**
+ * Every text of a JavaScript or JSON file, read as lines of a shell (with the syntax of a
+ * shell itself: see pairsOfLine). In JavaScript, texts joined with `+` are read as one,
+ * and what is not a text in such a chain is a reference: `'PGPASSWORD=' + password` is no
+ * finding, `'PGPASSWORD=' + 'x'` is one. In JSON, the names of properties are not read.
+ */
+function scanShellTexts(tokens, report, { json = false } = {}) {
+  const isText = (token) => token?.type === 'string' || token?.type === 'template';
+  /** The index after the operand at `at`: a name with its members, calls and indexes. */
+  const operandEnd = (at) => {
+    let index = at + 1;
+    for (;;) {
+      const token = tokens[index];
+      if (token?.type === 'punctuator' && (token.value === '.' || token.value === '?.')) {
+        index += 2;
+      } else if (token?.type === 'punctuator' && (token.value === '(' || token.value === '[')) {
+        let depth = 0;
+        for (; index < tokens.length; index += 1) {
+          const value = tokens[index].type === 'punctuator' ? tokens[index].value : '';
+          depth += value === '(' || value === '[' || value === '{' ? 1 : 0;
+          depth -= value === ')' || value === ']' || value === '}' ? 1 : 0;
+          if (depth === 0) {
+            break;
+          }
+        }
+        index += 1;
+      } else {
+        return index;
+      }
+    }
+  };
+  const read = new Set();
+  tokens.forEach((token, index) => {
+    if (read.has(index) || !isText(token)) {
+      return;
+    }
+    if (json && isPunctuator(tokens[index + 1], ':')) {
+      return; // the name of a property
+    }
+    let text = shellTextOf(token);
+    let at = index + 1;
+    while (!json && isPunctuator(tokens[at], '+') && tokens[at + 1] !== undefined) {
+      const next = tokens[at + 1];
+      if (isText(next)) {
+        text += shellTextOf(next);
+        read.add(at + 1);
+        at += 2;
+      } else if (next.type === 'number') {
+        text += next.value;
+        at += 2;
+      } else if (next.type === 'word' || isPunctuator(next, '(')) {
+        text += '${hole}';
+        at = next.type === 'word' ? operandEnd(at + 1) : operandEnd(at);
+      } else {
+        break;
+      }
+    }
+    text.split(/\r?\n/).forEach((line, offset) => {
+      scanLine(line, token.line + offset, report, 0, true);
+    });
   });
 }
 
 // ---------------------------------------------------------------------------
 // Files
 // ---------------------------------------------------------------------------
-
-/** In a package manifest these hold names of packages with their versions: DEPENDENCY_MAPS. */
-const PACKAGE_MAPS = DEPENDENCY_MAPS;
 
 const JAVASCRIPT = /\.(?:[cm]?[jt]sx?)$/i;
 const JSON_FILE = /\.(?:json[c5l]?|ndjson|webmanifest)$/i;
@@ -1698,10 +2299,11 @@ const SECOND_EXTENSION = /\.(?:example|sample|dist|template|tmpl|tpl|default|ori
 function scanJavaScript(text, report) {
   const tokens = tokenize(text);
   scanTokens(tokens, report);
+  scanShellTexts(tokens, report);
   for (const token of tokens) {
     for (const hole of token.holes ?? []) {
-      scanJavaScript(hole.text, (line, name) => {
-        report(hole.line + line - 1, name);
+      scanJavaScript(hole.text, (line, name, kind) => {
+        report(hole.line + line - 1, name, kind);
       });
     }
   }
@@ -1709,12 +2311,14 @@ function scanJavaScript(text, report) {
 
 /**
  * Findings in one text. The name of the file decides how it is read.
- * @returns {{ line: number, name: string }[]} in the order of the lines, each once
+ * @returns {{ line: number, name: string, kind: 'binding' | 'argument' }[]} in the order of
+ *   the lines, each once. `kind`: 'argument' when the literal is the key argument of a call
+ *   named `name`, 'binding' otherwise.
  */
 export function scanText(file, text) {
   const found = new Map();
-  const report = (line, name) => {
-    found.set(`${String(line)}\u0000${name}`, { line, name });
+  const report = (line, name, kind = 'binding') => {
+    found.set(`${String(line)}\u0000${name}\u0000${kind}`, { line, name, kind });
   };
   let syntax = file;
   while (SECOND_EXTENSION.test(syntax) && /\.[^.\\/]+\.[^.\\/]+$/.test(syntax)) {
@@ -1723,7 +2327,13 @@ export function scanText(file, text) {
   if (JAVASCRIPT.test(syntax)) {
     scanJavaScript(text, report);
   } else if (JSON_FILE.test(syntax) || (NO_EXTENSION.test(syntax) && /^\s*\{/.test(text))) {
-    scanTokens(tokenize(text), report, { json: true, manifest: PACKAGE_FILE.test(syntax) });
+    const tokens = tokenize(text);
+    scanTokens(tokens, report, {
+      json: true,
+      manifest: PACKAGE_FILE.test(syntax),
+      tsconfig: TSCONFIG_FILE.test(syntax),
+    });
+    scanShellTexts(tokens, report, { json: true });
   } else if (YAML.test(syntax)) {
     scanYaml(text, report, PACKAGE_FILE.test(syntax));
   } else {
@@ -1817,11 +2427,32 @@ function excluder(patterns) {
 }
 
 /**
+ * Is this file one of the two corpora of this scanner, exactly as the manifest beside the
+ * scanner records it? Such a file holds the shapes of secrets on purpose and is not read;
+ * a corpus that was changed is read like any other file.
+ */
+function isUnchangedCorpus(file, content) {
+  const name = path.posix.basename(file.replaceAll('\\', '/'));
+  if (name !== SCANNER_FILES[1] && name !== SCANNER_FILES[2]) {
+    return false;
+  }
+  const manifestFile = path.join(HERE, MANIFEST_FILE);
+  if (!existsSync(manifestFile)) {
+    return false;
+  }
+  const recorded = JSON.parse(readFileSync(manifestFile, 'utf8')).files?.[name];
+  const text = content.toString('utf8').replace(/\r\n/g, '\n');
+  return recorded === createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/**
  * Scans every file under `root` that git tracks or would take.
  * @param {string} root
  * @param {{ exclude?: string[] }} [options] paths and globs, relative to `root`, that
  *   are left out: what the repository generates or vendors
- * @returns {{ file: string, line: number, name: string }[]}
+ * @returns {{ file: string, line: number, name: string, kind: string }[]} `kind` is
+ *   'binding', 'argument' (the key argument of the call `name`) or 'unread' (a file
+ *   larger than 2 MB, which is not read and is a finding of its own)
  */
 export function scanDirectory(root, options = {}) {
   const excluded = excluder(options.exclude ?? []);
@@ -1834,12 +2465,19 @@ export function scanDirectory(root, options = {}) {
     let content;
     try {
       const status = lstatSync(absolute);
-      if (!status.isFile() || status.size > LARGEST_FILE) {
+      if (!status.isFile()) {
+        continue;
+      }
+      if (status.size > LARGEST_FILE) {
+        findings.push({ file, line: 0, name: '', kind: 'unread' });
         continue;
       }
       content = readFileSync(absolute);
     } catch {
       continue; // listed and gone
+    }
+    if (isUnchangedCorpus(file, content)) {
+      continue;
     }
     for (const finding of scanBuffer(file, content)) {
       findings.push({ file, ...finding });
@@ -1850,10 +2488,17 @@ export function scanDirectory(root, options = {}) {
 
 /** One finding per two lines, with the path as git and secretlint print it. Never the value. */
 export function formatFindings(root, findings) {
+  const remedy = `Leave it empty, refer to something else, or start a placeholder with ${PLACEHOLDER_PREFIXES.join(' or ')}.`;
   return findings
-    .map(({ file, line, name }) => {
+    .map(({ file, line, name, kind = 'binding' }) => {
       const location = path.join(root, file).replaceAll('\\', '/');
-      return `${location}\n  ${String(line)}  error  a literal value is bound to "${name}", a name like a secret. Leave it empty, refer to something else, or start a placeholder with ${PLACEHOLDER_PREFIXES.join(' or ')}.`;
+      if (kind === 'unread') {
+        return `${location}\n  0  error  the file is larger than 2 MB and was not read: a secret in it would not be seen. Leave it out with --exclude if it is generated or vendored; otherwise make it smaller.`;
+      }
+      if (kind === 'argument') {
+        return `${location}\n  ${String(line)}  error  a literal value is handed to ${name}() where it takes a key or a secret. Pass a value read from the configuration instead.`;
+      }
+      return `${location}\n  ${String(line)}  error  a literal value is bound to "${name}", a name like a secret. ${remedy}`;
     })
     .join('\n');
 }
@@ -2030,9 +2675,16 @@ async function main(args) {
   const findings = scanDirectory(root, { exclude });
   if (findings.length > 0) {
     process.stdout.write(`${formatFindings(root, findings)}\n\n`);
-    process.stdout.write(
-      `${String(findings.length)} literal value(s) bound to a name like a secret.\n`,
-    );
+    const unread = findings.filter(({ kind }) => kind === 'unread').length;
+    const values = findings.length - unread;
+    if (values > 0) {
+      process.stdout.write(
+        `${String(values)} literal value(s) bound to a name like a secret or handed to a key.\n`,
+      );
+    }
+    if (unread > 0) {
+      process.stdout.write(`${String(unread)} file(s) larger than 2 MB not read.\n`);
+    }
     return 1;
   }
   return 0;

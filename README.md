@@ -560,11 +560,13 @@ that they stay.
     keys, an address with a user and a password. An invented address must point at
     127.0.0.1 or localhost and its password must start with `invented-` or `local-only-`.
   - `scripts/secret-assignments/` finds a secret that has no format by the **name** it is
-    bound to. Its rule is the next paragraph, and it is the rule you write code by.
+    bound to, or by the **place** it is handed to. Its rule is the next paragraph, and it
+    is the rule you write code by.
 - **Container images by digest.**
 
-**The rule for a secret-like name.** In every file that git tracks, no literal value is
-bound to a secret-like name.
+**The rule for a secret-like name (scanner 1.1.0).** In every file that git tracks or
+would take, no literal value is bound to a secret-like name, compared with one, or handed
+to a call where it takes a key or a secret.
 
 - **A secret-like name** is decided by its last word, in any casing (`smtpPassword`,
   `SMTP_PASSWORD`, `smtp-password`):
@@ -585,46 +587,105 @@ bound to a secret-like name.
   `cacheKey`, `publicKey`, `idempotencyKey`, nor a plural (`secrets:` of compose lists
   names, not values).
 
+- **A literal value** is what is written in the file: a text, a number, a template text
+  that starts with written text, a list of such values. Also:
+  - a literal through a conversion: `Buffer.from(L)`, `new TextEncoder().encode(L)`,
+    `atob(L)`, `btoa(L)`, `String(L)` (`const secretKey = Buffer.from('x')`);
+  - in JavaScript, a name declared in the same file with a literal value, whatever the
+    scope (`const k = 'x'; createHmac('sha256', k)`, `password: CANARY`);
+  - in a shell, `$(echo x)`, `$(printf x | base64)` and `` `echo x` `` with written text;
+    in PowerShell, `ConvertTo-SecureString 'x' -AsPlainText`, `Write-Output 'x'` and
+    `echo x`.
+
 - **Allowed values, and nothing else:**
   - nothing: an empty value, and also `null`, `~`, `true` and `false`, which are no
     value or a flag (`persist-credentials: false`);
   - a reference to something else as the whole value: `${VAR}`, `$VAR`, `$1`, `$@`,
-    references one after the other (`"$PREFIX$SUFFIX"`), `$(command)`,
-    `${{ secrets.X }}`; in JavaScript anything that is not a literal (`process.env.X`, a
-    call, another variable); in PowerShell a command or a call (`$p = Read-Host`);
+    references one after the other (`"$PREFIX$SUFFIX"`), `$(command)` of any other
+    command, `${{ secrets.X }}`; in JavaScript anything that is not a literal
+    (`process.env.X`, a call that is no conversion, another variable that is not declared
+    with a literal); in PowerShell a command or a call (`$p = Read-Host`);
   - a placeholder: a literal that **starts with** `invented-` or `local-only-`.
 
   A list of values under a secret-like name is read value by value.
 
 - **There is no guess by length or by randomness.** `'too_short'` under a secret-like
   name is a finding, and so are `changeme` and `1`. A test that needs a password that is
-  too short uses `'invented-x'`.
+  too short uses `'invented-x'`; a canary of a test starts with `invented-` too.
 - **The written exceptions, and no others:**
   - the option `credentials` of the Fetch API takes a mode: under exactly that name,
     exactly `'include'`, `'same-origin'` and `'omit'` are not a finding;
-  - versions under names of packages: the maps `dependencies`, `devDependencies`,
+  - versions under names of packages: in the maps `dependencies`, `devDependencies`,
     `optionalDependencies`, `peerDependencies`, `overrides`, `resolutions`, `catalog` and
-    `catalogs` of a package manifest or a pnpm workspace file (and `pnpm.overrides`);
+    `catalogs` at the top of a package manifest or a pnpm workspace file (and
+    `pnpm.overrides`), a **version specifier**: a semver range (`1.7.1`, `^1.2`,
+    `>=1 <2 || 3.x`, `*`) or `workspace:`, `catalog:`, `npm:`, `link:`, `file:`,
+    `portal:`, `patch:` followed by text. Any other value there (a dist tag, a git or web
+    address) is read as everywhere else;
+  - patches of packages: in `patchedDependencies` of a package manifest (also
+    `pnpm.patchedDependencies`) or a pnpm workspace file, the path of a `.patch` file;
+  - module paths: in `compilerOptions.paths` of a tsconfig or jsconfig file
+    (`"@app/token": ["src/token.ts"]`);
   - GitHub Actions: under `permissions`, the levels `read`, `write` and `none`
     (`id-token: write`).
 - **Where a name gets a value:**
-  - `NAME=value` at the start of a line, with or without `export`, quotes, a leading list
-    dash, `ENV`, `ARG` or `RUN` (environment files, shell, compose, Dockerfile, this
-    README), and `-e NAME=value` or `--env NAME=value` anywhere in a line;
+  - lines of a shell (environment files, shell, compose, Dockerfile, this README): a line
+    is cut into commands at `&&`, `||`, `;` and `|` outside quotes (also at its start, as
+    in a continued `RUN`); each command is read for `NAME=value` at its start, with or
+    without `export`, `env`, `cross-env`, quotes, a leading list dash, `ENV`, `ARG` or `RUN`, and for
+    `-e NAME=value` or `--env NAME=value` anywhere. A line that starts with `#` or `;` is
+    a comment;
   - `name: value` in YAML and `"name": value` in JSON, in any letter case, also in a file
-    with one more extension (`compose.yml.example`);
+    with one more extension (`compose.yml.example`); a YAML value under any other name
+    is read as a line of a shell;
   - in JavaScript and TypeScript an assignment (also `+=`), a declaration (typed or not),
     a field of a class, an object property, a default parameter, an attribute of a JSX
     element, and a literal used as a fallback for such a name (`??`, `||`, a branch of a
-    ternary), also inside the `${...}` of a template.
+    ternary), also inside the `${...}` of a template; a literal compared with such a name
+    (`===`, `!==`, `==`, `!=`; `typeof token === 'string'` compares a type);
+  - every text of JavaScript and every text value of JSON is also read as lines of a
+    shell, in the strict syntax of a shell (a name of letters, digits and `_`, and `=`
+    without spaces): `execSync('PGPASSWORD=x pg_dump')`, a script of `package.json`.
+    Texts joined with `+` are read as one, and what is not a text in them is a
+    reference (`'PGPASSWORD=' + password` is no finding).
 
   A file is read as UTF-8, or as UTF-16 when a byte-order mark says so.
 
-- **What is not read:** comments; lockfiles; and what this repository generates: the
-  OpenAPI documents in `openapi/` (generated from the code and committed) and the Prisma
-  client in `src/generated/` (not in git). Nothing is vendored. The list of what is left
-  out is `scripts/secret-scan.config.mjs`; a hand-written file with a finding is changed,
-  never added to that list.
+- **Where a call takes a key or a secret** (the last name before the brackets, so
+  `crypto.createHmac(...)` is `createHmac`): the first argument of `cookieParser`,
+  `createSecretKey`, `createPrivateKey`, `pbkdf2`, `pbkdf2Sync`, `scrypt`, `scryptSync`;
+  the second of `createHmac`, `createCipheriv`, `createDecipheriv`, `hkdf`, `hkdfSync`,
+  `jwtVerify`, `jwtDecrypt`, `compactDecrypt`, `HmacSHA1`, `HmacSHA256`, `HmacSHA384`,
+  `HmacSHA512`, `HmacMD5`, `sign`, `verify`, `encrypt`, `decrypt`; the first of `sign`
+  when it is its only argument (`new SignJWT(payload).sign(key)`). Only a text counts
+  there, not a number (`Math.sign(-1)`), and for `sign` and `verify` the name of an
+  encoding is not a key (`signer.sign(privateKey, 'base64')`). A definition of a
+  function or a method by such a name is not a call.
+
+- **What is not read:** comments; a binary file; a file git ignores (`.env`); lockfiles;
+  the two corpora of the scanner while they are exactly the files its manifest records
+  (they hold the shapes of secrets on purpose; a changed corpus is read like any other
+  file); and what this repository generates: the OpenAPI documents in `openapi/`
+  (generated from the code and committed) and the Prisma client in `src/generated/` (not
+  in git). Nothing is vendored. The list of what is left out is
+  `scripts/secret-scan.config.mjs`; a hand-written file with a finding is changed, never
+  added to that list. **A file larger than 2 MB is not read and is reported**, as a
+  finding of its own.
+
+- **What the rule does not see**, written down so that whoever judges a gap can:
+  - a literal under a name that is not secret-like, used as a secret in another file, or
+    handed on through an object, a function or a second variable
+    (`const k = 'x'; const j = k; createHmac('sha256', j)`);
+  - a call that is not on the list, a key at another position
+    (`crypto.sign(alg, data, 'key')`), a call through an alias or a computed member
+    (`const h = crypto.createHmac; h('sha256', 'x')`), a key under a property whose name
+    is not secret-like (`{ k: 'x' }`);
+  - a comparison by `switch`/`case`, `Object.is` or an assertion (`toBe('x')`);
+  - a literal in a language the scan does not read as its syntax (SQL, Python,
+    PowerShell beyond `$name = value`), except where its lines look like a shell;
+  - YAML explicit keys (`? key`), keys in backticks, escaped identifiers (M1-ISS-08);
+  - a secret that is no literal at all: a key file without a format of its own that git
+    tracks, or a value put together at run time.
 
 The scanner is one file without dependencies, `scripts/secret-assignments/secret-assignments.mjs`,
 with its two corpora beside it: shapes that must be reported (`…reported.mjs`) and ordinary

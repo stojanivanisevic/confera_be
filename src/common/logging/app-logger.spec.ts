@@ -24,7 +24,7 @@ function capture(level: 'info' | 'debug' | 'trace' = 'trace') {
   };
 }
 
-const CANARY = 'canary-0f3d9a';
+const CANARY = 'invented-canary-0f3d9a';
 
 describe('AppLogger', () => {
   it('writes one JSON line per entry, with level, time, service and message', () => {

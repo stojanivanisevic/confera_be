@@ -277,7 +277,7 @@ async function plantedSecrets() {
     {
       what: 'a generated password with a dollar sign in an environment file',
       file: 'deploy/planted-generated.env',
-      text: `SMTP_PASSWORD=${random(8, ALNUM)}$${random(12, ALNUM)}\n`,
+      text: `SMTP_PASSWORD=${[random(8, ALNUM), random(12, ALNUM)].join('$')}\n`,
     },
     {
       what: 'a password under a lower-case key of a configuration file (password: value)',
@@ -299,7 +299,7 @@ async function plantedSecrets() {
     {
       what: 'a mail password that only contains the placeholder words, not at its start',
       file: 'deploy/planted-not-a-placeholder.env',
-      text: `SMTP_PASSWORD=${random(6, ALNUM)}-invented-${random(6, ALNUM)}-local-only-${random(6, ALNUM)}\n`,
+      text: `SMTP_PASSWORD=${[random(6, ALNUM), 'invented', random(6, ALNUM), 'local-only', random(6, ALNUM)].join('-')}\n`,
     },
     // Caught today. Two edges of the reader of lines that neither corpus of the scanner
     // holds: the list dash outside a YAML file, and written text after a reference.
@@ -311,7 +311,7 @@ async function plantedSecrets() {
     {
       what: 'a mail password that starts with a reference and goes on as written text ($PREFIX-value)',
       file: 'deploy/planted-prefixed.env',
-      text: `SMTP_PASSWORD=$PREFIX-${random(24, ALNUM)}\n`,
+      text: `SMTP_PASSWORD=${['$PREFIX', random(24, ALNUM)].join('-')}\n`,
     },
     // Third round. The rule is written down now (README, "The rule for a secret-like name"):
     // a literal value bound to a secret-like name, in the syntaxes it lists, and no allowed
@@ -370,6 +370,53 @@ async function plantedSecrets() {
       file: 'src/planted/compound.ts',
       text: `export let smtpPassword = '';\nsmtpPassword += '${random(24, ALNUM)}';\n`,
     },
+    // Fourth round, scanner 1.1.0 (M1-ISS-01, M1-ISS-03 to 06): a secret in the place of a
+    // key, in a command inside code, compared with a name, printed by echo, under the name
+    // of a package, and a file too large to read.
+    {
+      what: '1.1.0: a literal key handed to createHmac (M1-ISS-01)',
+      file: 'src/planted/hmac.ts',
+      text: `export const mac = (body: string) => createHmac('sha256', '${random(32, ALNUM)}').update(body).digest('hex');\n`,
+    },
+    {
+      what: '1.1.0: a literal secret of cookie-parser (M1-ISS-01)',
+      file: 'src/planted/cookies.ts',
+      text: `app.use(cookieParser('${random(32, ALNUM)}'));\n`,
+    },
+    {
+      what: '1.1.0: a literal signing key through Buffer.from (M1-ISS-01)',
+      file: 'src/planted/jwt.ts',
+      text: `export const issue = (payload: object) => jwt.sign(payload, Buffer.from('${random(32, ALNUM)}'));\n`,
+    },
+    {
+      what: '1.1.0: a password in a command that a script runs (M1-ISS-05)',
+      file: 'scripts/planted-exec.mjs',
+      text: `execSync('PGPASSWORD=${random(24, ALNUM)} pg_dump app');\n`,
+    },
+    {
+      what: '1.1.0: a key compared with a literal',
+      file: 'src/planted/compare.ts',
+      text: `export const allowed = (key: string) => key.length > 0 && apiKey === '${random(32, ALNUM)}';\n`,
+    },
+    {
+      what: '1.1.0: a password printed by echo in a command substitution (M1-ISS-04)',
+      file: 'deploy/planted-echo.sh',
+      text: [
+        '#!/bin/sh',
+        `export SMTP_PASSWORD=${['$(echo', `${random(24, ALNUM)})`].join(' ')}`,
+        '',
+      ].join('\n'),
+    },
+    {
+      what: '1.1.0: a value under the name of a package that is no version (M1-ISS-03)',
+      file: 'deploy/planted-package/package.json',
+      text: `{\n  "name": "planted",\n  "dependencies": { "x-api-key": "${random(24, ALNUM)}" }\n}\n`,
+    },
+    {
+      what: '1.1.0: a file larger than 2 MB, which the scan does not read (M1-ISS-06)',
+      file: 'deploy/planted-large.txt',
+      text: 'x'.repeat(2 * 1024 * 1024 + 1),
+    },
   ];
   // Third round, the other direction: ordinary files. No literal value is bound to a name
   // in them, only references, so the rule excludes them. The scan reports them today.
@@ -383,6 +430,16 @@ async function plantedSecrets() {
       what: 'contract: a value made of references only holds no literal (TOKEN="$PREFIX$SUFFIX")',
       file: 'scripts/planted-joined.sh',
       text: ['#!/bin/sh', 'TOKEN="$PREFIX$SUFFIX"', 'PASSWORD=$FIRST$SECOND', ''].join('\n'),
+    },
+    {
+      what: 'contract 1.1.0: module paths of a tsconfig are names of modules (M1-ISS-07)',
+      file: 'deploy/planted-paths/tsconfig.json',
+      text: '{\n  "compilerOptions": { "paths": { "@app/token": ["src/token.ts"] } }\n}\n',
+    },
+    {
+      what: 'contract 1.1.0: the patches of pnpm are paths of patch files (M1-ISS-07)',
+      file: 'deploy/planted-patches/package.json',
+      text: '{\n  "pnpm": { "patchedDependencies": { "csrf-token@2.0.0": "patches/csrf-token@2.0.0.patch" } }\n}\n',
     },
   ];
   const placeholders = {
@@ -406,7 +463,14 @@ async function plantedSecrets() {
       for (const file of planted) {
         rmSync(path.join(copy, file), { force: true });
       }
-      for (const directory of ['src/planted', 'test/planted', '.github']) {
+      for (const directory of [
+        'src/planted',
+        'test/planted',
+        '.github',
+        'deploy/planted-package',
+        'deploy/planted-paths',
+        'deploy/planted-patches',
+      ]) {
         rmSync(path.join(copy, directory), { recursive: true, force: true });
       }
     }

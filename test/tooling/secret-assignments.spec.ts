@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { repoRoot, runNode } from '../support/run-node';
 
@@ -54,7 +54,21 @@ const SYNTAXES_OF_THE_RULE = [
   'branch of a ternary in JavaScript',
   '-e NAME=value of a command',
   'RUN NAME=value of a Dockerfile',
+  // 1.1.0
+  'key argument of a call in JavaScript',
+  'a literal through a conversion in JavaScript',
+  'a name declared with a literal in JavaScript',
+  'comparison with a literal in JavaScript',
+  'a shell line inside a text of JavaScript',
+  'a shell line inside a text of JSON',
+  'a command after && ; | of a shell',
+  'echo or printf in a command substitution',
+  'ConvertTo-SecureString of PowerShell',
+  'a value under the name of a package that is not a version',
 ];
+
+/** A value that is no placeholder, for the files these tests write. Its name is not secret-like. */
+const FAKE = 'hunter2';
 
 describe('scan for literal values bound to secret-like names', () => {
   jest.setTimeout(120_000);
@@ -268,8 +282,58 @@ describe('scan for literal values bound to secret-like names', () => {
         'src/session.ts:1 sessionSecret',
       ]);
       expect(output).not.toContain(value);
-      expect(output).toContain('3 literal value(s) bound to a name like a secret.');
+      expect(output).toContain(
+        '3 literal value(s) bound to a name like a secret or handed to a key.',
+      );
       expect(output).toContain('invented- or local-only-');
+    });
+
+    it('names the call that is handed a literal key, never the value, and fails', async () => {
+      const { exitCode, output } = await scan({
+        'src/mac.ts': `export const mac = createHmac('sha256', '${FAKE}');\n`,
+      });
+      expect(exitCode).toBe(1);
+      expect(output).toMatch(
+        /src\/mac\.ts\n {2}1 {2}error {2}a literal value is handed to createHmac\(\) where it takes a key or a secret/,
+      );
+      expect(output).not.toContain(FAKE);
+    });
+
+    it('reports a file larger than 2 MB, which it does not read, and fails (M1-ISS-06)', async () => {
+      const { exitCode, output, findings } = await scan({
+        'big.txt': 'a'.repeat(2 * 1024 * 1024 + 1),
+        'small.txt': 'a'.repeat(2 * 1024 * 1024),
+      });
+      expect(exitCode).toBe(1);
+      expect(output).toMatch(
+        /big\.txt\n {2}0 {2}error {2}the file is larger than 2 MB and was not read/,
+      );
+      expect(output).not.toContain('small.txt');
+      expect(output).toContain('1 file(s) larger than 2 MB not read.');
+      expect(findings).toEqual([]);
+      // Left out by the caller, it is no finding.
+      expect((await scan({}, '--exclude', 'big.txt')).exitCode).toBe(0);
+    });
+
+    it('does not read its own two corpora while they are as the manifest records them, and reads a changed one', async () => {
+      const source = join(repoRoot, 'scripts', 'secret-assignments');
+      const copy = join('scripts', 'secret-assignments');
+      const corpora = Object.fromEntries(
+        [
+          'secret-assignments.reported.mjs',
+          'secret-assignments.ordinary.mjs',
+          'secret-assignments.manifest.json',
+        ].map((name) => [join(copy, name), readFileSync(join(source, name), 'utf8')]),
+      );
+      const unchanged = await scan(corpora);
+      expect({ exitCode: unchanged.exitCode, output: unchanged.output }).toEqual({
+        exitCode: 0,
+        output: '',
+      });
+      const reported = join(copy, 'secret-assignments.reported.mjs');
+      const changed = await scan({ [reported]: `${corpora[reported] ?? ''}// changed\n` });
+      expect(changed.exitCode).toBe(1);
+      expect(changed.findings.length).toBeGreaterThan(50);
     });
 
     it('passes, and prints nothing, when every value follows the rule', async () => {
@@ -285,9 +349,9 @@ describe('scan for literal values bound to secret-like names', () => {
     it('reads what git tracks or would take: an ignored file is not read', async () => {
       const { findings } = await scan({
         '.gitignore': '.env\nnode_modules/\n',
-        '.env': 'SMTP_PASSWORD=hunter2\n',
+        '.env': `SMTP_PASSWORD=${FAKE}\n`,
         'node_modules/x/index.js': "exports.token = 'hunter2';\n",
-        'kept.env': 'SMTP_PASSWORD=hunter2\n',
+        'kept.env': `SMTP_PASSWORD=${FAKE}\n`,
       });
       expect(findings).toEqual(['kept.env:1 SMTP_PASSWORD']);
     });
