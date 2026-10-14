@@ -7,6 +7,8 @@ version at every milestone (ADR-19).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-14
+
 ### Added
 
 - Scaffold of the API: NestJS 12, Prisma 7, strict TypeScript 6.0.3, pnpm 11 through corepack.
@@ -36,3 +38,9 @@ version at every milestone (ADR-19).
 - PDF: the glyph check covers every place where text can enter a document (page background, title of a table of contents, list separators); what cannot be checked (SVG images, sections, attachments, text references, fill patterns, unknown kinds) is refused.
 - PDF: the fonts are loaded once, from memory, with their ligature features removed, so the PDF library no longer shapes every text without its cache; a table of 200 rows renders three to four times faster. The 5-second criterion is asserted by `pnpm test:timing`, a step of its own in `pnpm check`: fresh processes of plain Node, the first document included.
 - A start that the configuration refuses ends before the framework and the application are loaded (`src/startup.ts`): it runs no application code and costs a tenth of the time, which the tests of the built application depend on when the machine is busy.
+- The start-up role check follows every chain of memberships (`pg_has_role(..., 'MEMBER')`, so a membership that only allows `SET ROLE` counts too): the application role is refused when it can reach a role that is a superuser, may bypass row-level security (the system role among them) or may create roles or databases; the system role when it can reach a superuser or a role that may create roles or databases. Both are refused as members of a predefined role of PostgreSQL: the 15 of PostgreSQL 18 that are memberships (from `pg_read_server_files` to `pg_create_subscription`, each with its reason), and any `pg_` role of a later version until it is decided; `pg_database_owner`, the 16th, is ownership and refused as such. The API exits with 77 (E1).
+- On the stages `local`, `dev` and `test` the API listens on a loopback address only: `LISTEN_HOST` must be in 127.0.0.0/8, `::1` or `localhost`, otherwise the start is refused with exit code 78 before the framework is loaded. `prod` is unchanged (E2).
+- A database that accepts connections and never answers is not waited for: a new connection may take 10 s, the start-up role check 20 s in all (then exit code 77), and `GET /health/ready` answers 503 when `SELECT 1` has not come back within 5 s; readiness answers 200 again by itself when the database does. `GET /health` never asks the database (E5).
+- PDF: a run of more than 24 letters without a space is cut into pieces of 12 before pdfmake sees it (one word of 3 000 letters in a narrow column took 56 s on the event loop, now well under a second), and a document with more than 30 000 characters of text is refused with `PdfTooLargeError`. The timing tier also measures the long word (E6).
+- `db:provision` holds an advisory lock on the server for its whole run, so two runs at once wait for each other instead of failing with "tuple concurrently updated"; a database that an interrupted `DROP DATABASE` left invalid is dropped and created again; a run whose connection breaks (PostgreSQL restarted or still starting) starts again by itself, up to three times; a failure is one sentence that names what happened and its error code (E8).
+- README: the clone names its branch (`main` the latest release, `develop` the work in progress), with `confera_be` and `confera_fe` side by side in one folder; `db:migrate` ends with one of two sentences, both success; the cross-repo smoke test starts the frontend's three servers before it asks `/health/ready`, so the API is started first; exit codes, test tiers, layout and the things a newcomer trips over brought up to date with the fixes above.

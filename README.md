@@ -36,8 +36,9 @@ Clone `confera_be` and `confera_fe` **side by side in one folder** (for example
 the frontend's checks of the API contract and of the shared secret scanner look for the
 other repository in `../`.
 
-Clone the branch `develop`. Until a `main` exists, a clone without `-b` lands on another
-branch (the default branch of the GitHub repository, `m1/be-foundation`).
+The branch `main` holds the latest release and `develop` the work in progress; to work on
+the code, clone `develop`. Name the branch with `-b` (`-b main` for the release), so that
+the clone does not depend on the default branch of the GitHub repository.
 
 ```
 git clone -b develop https://github.com/stojanivanisevic/confera_be.git
