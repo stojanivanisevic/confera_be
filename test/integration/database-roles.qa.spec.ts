@@ -36,6 +36,8 @@ describe('the start-up role check and the roles of the server files (ADR-05, ST-
     pg_write_server_files: 'confera_test_qa_app_write_files',
     pg_execute_server_program: 'confera_test_qa_app_run_programs',
     system: 'confera_test_qa_system_run_programs',
+    /** Member of the system role that may SET ROLE to it, without inheriting from it. */
+    setOnly: 'confera_test_qa_app_set_only',
   } as const;
 
   let superuser: Client;
@@ -66,6 +68,9 @@ describe('the start-up role check and the roles of the server files (ADR-05, ST-
       `CREATE ROLE ${roles.system} LOGIN PASSWORD ${pw} IN ROLE confera_system, pg_execute_server_program`,
     );
     await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${roles.system}`);
+    await superuser.query(`CREATE ROLE ${roles.setOnly} LOGIN PASSWORD ${pw} IN ROLE confera_app`);
+    await superuser.query(`GRANT confera_system TO ${roles.setOnly} WITH INHERIT FALSE, SET TRUE`);
+    await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${roles.setOnly}`);
   });
 
   afterAll(async () => {
@@ -88,6 +93,18 @@ describe('the start-up role check and the roles of the server files (ADR-05, ST-
       }
     },
   );
+
+  // Holds E1 as fixed (passes today): a membership that gives nothing by inheritance, only the
+  // right to SET ROLE, is found too. With pg_has_role(..., 'USAGE') instead of 'MEMBER' in the
+  // check, no other test noticed the difference.
+  it('the check finds a problem in an application role that may only SET ROLE to the system role', async () => {
+    const client = createBaseClient(as(roles.setOnly), { poolSize: 1 });
+    try {
+      expect(roleProblems('application', await describeRole(client))).not.toEqual([]);
+    } finally {
+      await client.$disconnect();
+    }
+  });
 
   it('the check finds a problem in a system role that is a member of pg_execute_server_program', async () => {
     const client = createBaseClient(as(roles.system), { poolSize: 1 });
