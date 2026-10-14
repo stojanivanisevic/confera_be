@@ -251,7 +251,15 @@ address.
 
 **At every start the API asks the database what its two roles may do** and refuses to
 start when the application role is a superuser, may bypass row-level security, owns
-anything or may create anything.
+anything or may create anything, or is a member, through any chain of memberships, of a
+role that is a superuser, may bypass row-level security (the system role among them) or
+may create roles or databases: a member may become that role with `SET ROLE`. The system
+role is refused for the same, except bypassing row-level security, which is its purpose.
+
+**A database that does not answer** is not waited for: a new connection may take 10 s,
+the start-up check 20 s in all (then the API exits with 77), and readiness answers 503
+when `SELECT 1` has not come back within 5 s. Liveness (`/health`) never asks the
+database, and readiness turns 200 again by itself when the database answers.
 
 ### Tenant isolation
 
