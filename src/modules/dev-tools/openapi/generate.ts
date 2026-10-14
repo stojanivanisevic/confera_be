@@ -6,14 +6,21 @@
 //
 // The documents are built from the same application the entries start, with an invented
 // configuration: no environment is read and no database is touched.
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { createApp } from '../../../bootstrap';
 import { parseEnvironment } from '../../../config/config';
+import {
+  CONTRACTS_DIRECTORY,
+  PASSWORD_RULES_FILE,
+  passwordRulesDocument,
+} from '../contracts/password-rules-file';
 import { buildDocuments, type ConferaDocuments } from './document';
-import { findDrift, formatDrift, OPENAPI_FILES, writeDocuments } from './files';
+import { compare, findDrift, formatDrift, OPENAPI_FILES, serialise, writeDocuments } from './files';
 import { formatFindings, lintResponseSchemas } from './schema-lint';
 
-const USAGE = 'Usage: node generate.js (--write | --check) [--dir <folder>]\n';
+const USAGE =
+  'Usage: node generate.js (--write | --check) [--dir <folder>] [--contracts-dir <folder>]\n';
 
 function toolingConfig() {
   const result = parseEnvironment({
@@ -48,6 +55,7 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const dirIndex = argv.indexOf('--dir');
   const directory = resolve(dirIndex >= 0 ? (argv[dirIndex + 1] ?? 'openapi') : 'openapi');
+  const contractsIndex = argv.indexOf('--contracts-dir');
 
   const documents = await documentsFromCode();
 
@@ -62,21 +70,46 @@ async function main(argv: readonly string[]): Promise<number> {
     return 1;
   }
 
+  // The other contract of the API: the password rule set with its vectors (ADR-03, ST-62).
+  // With --dir alone (a test's copy), the rule set is written and checked in that folder too.
+  const contracts = resolve(
+    contractsIndex >= 0
+      ? (argv[contractsIndex + 1] ?? CONTRACTS_DIRECTORY)
+      : dirIndex >= 0
+        ? directory
+        : CONTRACTS_DIRECTORY,
+  );
+  const rules = serialise(passwordRulesDocument());
+  const rulesPath = join(contracts, PASSWORD_RULES_FILE);
+
   if (write) {
     for (const path of writeDocuments(directory, documents)) {
       process.stdout.write(`wrote ${path}\n`);
     }
+    mkdirSync(contracts, { recursive: true });
+    writeFileSync(rulesPath, rules, 'utf8');
+    process.stdout.write(`wrote ${rulesPath}\n`);
     return 0;
   }
 
   const drift = findDrift(directory, documents);
+  const rulesDrift = compare(
+    `${CONTRACTS_DIRECTORY}/${PASSWORD_RULES_FILE}`,
+    rules,
+    existsSync(rulesPath) ? readFileSync(rulesPath, 'utf8') : undefined,
+  );
+  if (rulesDrift !== undefined) {
+    drift.push(rulesDrift);
+  }
   if (drift.length > 0) {
     process.stderr.write(
-      `OpenAPI files are stale: the code and the committed files differ.\n${formatDrift(drift)}\nRun "corepack pnpm openapi:generate", look at the diff and commit it.\n`,
+      `OpenAPI files are stale, or the password rule set is: the code and the committed files differ.\n${formatDrift(drift)}\nRun "corepack pnpm openapi:generate", look at the diff and commit it.\n`,
     );
     return 1;
   }
-  process.stdout.write('OpenAPI files are current and pass the schema lint.\n');
+  process.stdout.write(
+    'OpenAPI files are current, and so is the password rule set; they pass the schema lint.\n',
+  );
   return 0;
 }
 
