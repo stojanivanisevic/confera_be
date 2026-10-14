@@ -105,18 +105,72 @@ function superuserConnection(ownerUrl) {
   };
 }
 
-async function connect(config, database) {
-  const client = new pg.Client(database === undefined ? config : { ...config, database });
-  try {
-    await client.connect();
-  } catch (error) {
-    // Only the error code is printed: it names no host, role or password.
-    fail(
-      `cannot connect to PostgreSQL as a superuser (${error.code ?? 'no error code'}). Is the development stack up? Run "corepack pnpm stack:up".`,
-    );
-  }
-  return client;
+/** Codes after which the same run, started again, may well succeed: the server came back. */
+const TRANSIENT = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  '57P01', // the session was ended by an administrator, or the server shut down
+  '57P02', // the server is restarting after another process crashed
+  '57P03', // the server is starting up, shutting down or recovering
+  '08006', // the connection broke
+  '08003',
+]);
+
+/** A connection that broke under a query has no code; its message says so. */
+function isTransient(error) {
+  return (
+    TRANSIENT.has(error?.code) ||
+    /Connection terminated|terminating connection|server closed the connection/i.test(
+      error?.message ?? '',
+    )
+  );
 }
+
+/**
+ * What a failure to connect means, in a sentence. Only codes are named: a message of the
+ * driver can name a host, a role or a password.
+ */
+function connectProblem(error, database) {
+  switch (error?.code) {
+    case 'ECONNREFUSED':
+    case 'ENOTFOUND':
+    case 'ETIMEDOUT':
+      return `cannot reach PostgreSQL (${error.code}). Is the development stack up? Run "corepack pnpm stack:up".`;
+    case '57P03':
+      return 'PostgreSQL is starting up, shutting down or recovering after a crash (57P03); it did not accept connections in time. Run again in a moment.';
+    case '28P01':
+      return 'PostgreSQL refused the password of the superuser (28P01): check POSTGRES_PASSWORD or PROVISION_DATABASE_URL.';
+    case '3D000':
+      return `the database "${database ?? 'postgres'}" does not exist (3D000).`;
+    case '55000':
+      return `PostgreSQL does not accept connections to the database "${database ?? 'postgres'}" (55000): it is invalid after an interrupted DROP DATABASE, or does not allow connections. Drop it, or run with --reset for a test database.`;
+    default:
+      return `cannot connect to PostgreSQL as a superuser (${error?.code ?? 'no error code'}).`;
+  }
+}
+
+/** Connects, and waits up to 30 s for a server that is starting or recovering. */
+async function connect(config, database) {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const client = new pg.Client(database === undefined ? config : { ...config, database });
+    try {
+      await client.connect();
+      return client;
+    } catch (error) {
+      await client.end().catch(() => undefined);
+      if (!isTransient(error) || Date.now() > deadline) {
+        throw new ProvisionFailure(connectProblem(error, database));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+}
+
+/** A failure that is already a sentence for the person at the terminal. */
+class ProvisionFailure extends Error {}
 
 async function provisionRole(client, role) {
   const name = client.escapeIdentifier(role.name);
@@ -176,6 +230,21 @@ async function main() {
     if (reset) {
       await server.query(`DROP DATABASE IF EXISTS ${db} WITH (FORCE)`);
     }
+    // A DROP DATABASE that was interrupted (the server stopped or crashed in the middle of
+    // it) leaves the database behind marked invalid (datconnlimit -2, PostgreSQL 16 and
+    // later): nobody can connect to it ("cannot connect to invalid database", 55000) and
+    // the only thing PostgreSQL allows is to drop it. It holds nothing that could be read
+    // any more, so it is dropped and created again.
+    const invalid = await server.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1 AND datconnlimit = -2',
+      [database],
+    );
+    if (invalid.rowCount > 0) {
+      process.stdout.write(
+        `Database "${database}" was left invalid by an interrupted DROP DATABASE; it is dropped and created again.\n`,
+      );
+      await server.query(`DROP DATABASE ${db} WITH (FORCE)`);
+    }
     const found = await server.query('SELECT 1 FROM pg_database WHERE datname = $1', [database]);
     if (found.rowCount === 0) {
       await server.query(
@@ -220,12 +289,27 @@ async function main() {
   );
 }
 
-try {
-  await main();
-} catch (error) {
-  // A plain sentence, not a stack trace. The code of PostgreSQL says what kind of failure it was.
-  const code = typeof error?.code === 'string' ? ` (PostgreSQL ${error.code})` : '';
-  fail(
-    `provisioning did not finish: ${error instanceof Error ? error.message : 'unknown error'}${code}. It is safe to run again.`,
-  );
+// Every step is "create if missing, then set", so a run that lost its connection (the
+// server restarted, or the stack was stopped and started) is simply run again, up to
+// three times. Anything else ends the run at once.
+for (let attempt = 1; ; attempt += 1) {
+  try {
+    await main();
+    break;
+  } catch (error) {
+    if (error instanceof ProvisionFailure) {
+      fail(error.message);
+    }
+    if (attempt < 3 && isTransient(error)) {
+      process.stdout.write(
+        `The connection to PostgreSQL was lost (${error?.code ?? 'connection ended'}): PostgreSQL restarted or was stopped. Provisioning starts again (attempt ${String(attempt + 1)} of 3).\n`,
+      );
+      continue;
+    }
+    // A plain sentence, not a stack trace. The code of PostgreSQL says what kind of failure it was.
+    const code = typeof error?.code === 'string' ? ` (PostgreSQL ${error.code})` : '';
+    fail(
+      `provisioning did not finish: ${error instanceof Error ? error.message : 'unknown error'}${code}. It is safe to run again.`,
+    );
+  }
 }

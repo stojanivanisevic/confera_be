@@ -75,6 +75,9 @@ corepack pnpm db:migrate
 `db:provision` ends with `Database "confera" is provisioned.`, `db:migrate` with
 `All migrations have been successfully applied.` Both are safe to run again, and two
 `db:provision` at the same moment wait for each other (an advisory lock on the server).
+A database that an interrupted `DROP DATABASE` left invalid is dropped and created
+again, and a run whose connection breaks (PostgreSQL restarted) starts again by itself,
+up to three times. A failure says in one sentence what happened.
 
 **Step 6. Start the API.**
 
