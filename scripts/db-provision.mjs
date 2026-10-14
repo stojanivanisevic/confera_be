@@ -18,6 +18,7 @@
 // printed.
 import pg from 'pg';
 import { loadDotEnv } from './lib/process.mjs';
+import { DATABASE_VARIABLES, refuseUnlessOwnDatabase } from './lib/stack.mjs';
 
 const ROLES = {
   owner: { name: 'confera_owner', variable: 'MIGRATION_DATABASE_URL', bypass: false },
@@ -187,6 +188,9 @@ async function provisionRole(client, role) {
 
 async function main() {
   loadDotEnv();
+  // One stack per checkout (M1-ISS-13): never provision, and never drop with --reset, a
+  // database of the stack of another checkout.
+  refuseUnlessOwnDatabase('db:provision', [...DATABASE_VARIABLES, 'PROVISION_DATABASE_URL']);
   const { database: requested, reset } = parseArguments();
 
   const owner = readRole('owner');

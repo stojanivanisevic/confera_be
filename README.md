@@ -27,7 +27,8 @@ The commands are the same in PowerShell, cmd, Git Bash, macOS and Linux.
 
 Ports used on your machine, all bound to 127.0.0.1: **3001** (API), **5432**
 (PostgreSQL), **8025** and **1025** (Mailpit), and **4010** when you start the stub slot
-(section 9). They must be free.
+(section 9). They must be free. A second checkout on the same machine gets ports of its
+own for PostgreSQL and Mailpit (section 2, "One stack per checkout").
 
 ## 2. First start
 
@@ -51,6 +52,10 @@ secret.
 - Windows (PowerShell or cmd): `copy .env.example .env`
 - macOS, Linux, Git Bash: `cp .env.example .env`
 
+If another checkout of `confera_be` on this machine (a clone, a git worktree) runs its
+stack, give this one ports of its own now: `corepack pnpm stack:ports` (after step 2). See
+"One stack per checkout" below.
+
 **Step 2. Install the dependencies.** The install never changes the lockfile, and it
 generates the Prisma client at the end.
 
@@ -73,6 +78,8 @@ time it downloads two images.
 ```
 corepack pnpm stack:up
 ```
+
+It ends with `The stack of this checkout is up.` and its name, folder and ports.
 
 **Step 5. Create the database roles and the database, then the schema.**
 
@@ -134,9 +141,45 @@ It ends with `Tests: ... passed` and no failure.
 corepack pnpm stack:down
 ```
 
-The data stays in the Docker volume `confera_pgdata`. To start from an empty database
-again: `corepack pnpm stack:down`, then `docker volume rm confera_pgdata`, then steps 4
-and 5.
+The data stays in the Docker volume of this checkout's stack. To start from an empty
+database again: `corepack pnpm stack:wipe` (it stops the stack and removes that volume,
+and no other), then steps 4 and 5.
+
+### One stack per checkout
+
+Every checkout of `confera_be` (a clone, a git worktree, a copy under `_tmp`) has a
+development stack of its own: its own Docker Compose project, containers, database
+volume and ports. Two checkouts can run their test suites at the same time, and neither
+can stop, empty or drop the database of the other.
+
+- **The name** of the project is derived from the folder of the checkout:
+  `confera-<folder>-<8 hex digits of its path>`, for example `confera-be-m2-c62fdd52`.
+  Set `CONFERA_STACK_NAME` in `.env` to choose another. `corepack pnpm stack:info` shows
+  name, folder and ports. The containers are `<name>-postgres-1` and `<name>-mailpit-1`,
+  the volume `<name>_pgdata`.
+- **The ports** are what `.env` says: PostgreSQL listens on the port of the three database
+  addresses (`DATABASE_URL`, `SYSTEM_DATABASE_URL`, `MIGRATION_DATABASE_URL`, which must
+  name the same port), the mail catcher on `CONFERA_MAIL_WEB_PORT` and
+  `CONFERA_MAIL_SMTP_PORT`. A fresh `.env` has 5432, 8025 and 1025. **On a second checkout
+  run `corepack pnpm stack:ports`**: it writes a free set derived from the folder (25000 +
+  n, 26000 + n, 27000 + n) into those lines of `.env` and changes nothing else. The API
+  port (3001) stays; only one checkout runs `pnpm start` at a time.
+- **The refusals.** `stack:up` refuses a port that the stack of another checkout publishes,
+  or that another program listens on, before Docker starts anything. `db:provision`,
+  `db:migrate`, `db:status`, `db:diff`, `seed:e2e`, `start`, `start:dev`, `test:int` and
+  `test:e2e` first ask Docker which container publishes the port of their database
+  address, and refuse when it belongs to the stack of another checkout, or to a container
+  that is no Confera stack at all: `... did not run: the database of DATABASE_URL at
+127.0.0.1:5432 belongs to the stack "confera-be-1a2b3c4d" of another checkout,
+D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisioned or
+  dropped. An address that is not on this machine is not the development stack and is
+  not judged.
+- Start and stop the stack only with `corepack pnpm stack:up` and `stack:down`.
+  `docker-compose.yml` refuses to start without the name and ports the script gives it.
+- Checkouts of 0.1.0 shared the project `confera`, the containers `confera-postgres` and
+  `confera-mailpit` and the volume `confera_pgdata`. When no checkout of 0.1.0 needs them
+  any more: `docker rm -f confera-postgres confera-mailpit` and
+  `docker volume rm confera_pgdata`.
 
 ## 3. Commands
 
@@ -154,7 +197,10 @@ and 5.
 | `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                                        |
 | `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                                                          |
 | `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                                                              |
-| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker.                                                                                                                                                  |
+| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                |
+| `corepack pnpm stack:wipe`              | Stops the stack of this checkout and removes its database volume.                                                                                                                                   |
+| `corepack pnpm stack:ports`             | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                        |
+| `corepack pnpm stack:info`              | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                              |
 | `corepack pnpm stubs`                   | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                         |
 | `corepack pnpm seed:e2e`                | Writes the invented organisations and people of the end-to-end tests into the development database. It refuses to run unless `STAGE` is `local` or `test`.                                          |
 | `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                                                        |
@@ -350,7 +396,7 @@ To add one:
   (lint rules on code samples, who imports the system client, who reads the environment,
   no credential compared with configuration, no `DEV_` key in a compose or deploy file),
   the test tools (`seed:e2e` refuses, the stub slot, the secret scanner with its two
-  corpora and its manifest), and probes of single units (Serbian text and the glyph check
+  corpora and its manifest, the rules of one stack per checkout), and probes of single units (Serbian text and the glyph check
   in every field of a PDF).
 - **Build:** the built application refuses every bad stage, instance and `DEV_` key,
   and a refused start loads no application code; no dev-tools code in `dist/`, and no
@@ -367,7 +413,8 @@ To add one:
   writes into another organisation, the catalogue check, what the roles cannot do, the
   start-up role check (memberships, `SET ROLE`, the predefined roles), a database that
   never answers, two `db:provision` at once and one after an interrupted `DROP DATABASE`,
-  and a clean production start with a canary in every secret.
+  a clean production start with a canary in every secret, and every database command
+  refusing the stack of another checkout (a container labelled as one).
 - **End to end:** supertest against the real application (`createApp` of
   `src/bootstrap.ts`, nothing replaced) with the configuration of a server, connected as
   the application role: every route of the OpenAPI files, the error format, the headers,
@@ -401,7 +448,8 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
 ```
 
 - **The mail catcher** shows every mail the stack sends at <http://localhost:8025>; it
-  listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine.
+  listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine. (On a checkout with
+  ports of its own: `CONFERA_MAIL_WEB_PORT` and `CONFERA_MAIL_SMTP_PORT` of `.env`.)
 - **The stub slot** is where the stand-ins for outside services run: the PayPal stub
   arrives with 0.7.0, the fixture rate provider with 0.5.0. In 0.1.0 it is empty:
   `GET http://127.0.0.1:4010/health` answers `{"status":"ok","stubs":[]}` and everything
@@ -668,5 +716,11 @@ eslint/              the lint rules with a security purpose
   PostgreSQL".** The stack is not up: `corepack pnpm stack:up`. Its other sentences name
   what else happened: PostgreSQL still starting or recovering, a refused superuser
   password, or a database that does not accept connections.
+- **"... did not run: the database of ... belongs to the stack ... of another checkout"**.
+  Your `.env` points at the stack of another clone or worktree. Run
+  `corepack pnpm stack:ports`, then `corepack pnpm stack:up` (section 2, "One stack per
+  checkout").
+- **`stack:up` says a port "is in use by another program"**. Something else listens there
+  (an old stack of 0.1.0, a PostgreSQL of your own): `corepack pnpm stack:ports`.
 - **Never write `\uXXXX`-style invisible characters into a file as real characters.**
   Use the escape in the source, so that a reviewer can see them.

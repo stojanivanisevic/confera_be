@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
 import { repoRoot } from './lib/process.mjs';
+import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
 import { requireStage } from './lib/stage.mjs';
 
 const TOOL = 'seed:e2e';
@@ -80,6 +81,8 @@ async function main() {
   if (!address) {
     fail('MIGRATION_DATABASE_URL is not set. Copy .env.example to .env first.');
   }
+  // One stack per checkout (M1-ISS-13): never write into the database of another checkout.
+  refuseUnlessOwnDatabase(TOOL, ['MIGRATION_DATABASE_URL']);
   const seed = readSeed();
 
   const client = new pg.Client({ connectionString: address });

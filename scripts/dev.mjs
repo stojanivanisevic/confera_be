@@ -10,7 +10,13 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { repoRoot } from './lib/process.mjs';
+import { loadDotEnv, repoRoot } from './lib/process.mjs';
+import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
+
+// One stack per checkout (M1-ISS-13): the API of this checkout never runs on the database
+// of another checkout's stack.
+loadDotEnv();
+refuseUnlessOwnDatabase('start:dev', ['DATABASE_URL', 'SYSTEM_DATABASE_URL']);
 
 const ENTRY = path.join('dist-dev', 'modules', 'dev-tools', 'main.dev.js');
 

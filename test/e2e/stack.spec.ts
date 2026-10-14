@@ -14,8 +14,9 @@ import { connect, e2eDatabase, rows } from './support/e2e-database';
  * The stub slot (`pnpm stubs`) needs no Docker and is tested in test/tooling.
  */
 
-const MAILPIT = 'http://127.0.0.1:8025';
-const SMTP_PORT = 1025;
+/** The ports of the mail catcher of THIS checkout's stack (.env; README, section 2). */
+const MAILPIT = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
+const SMTP_PORT = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
 
 /** One SMTP conversation: each line is sent after the server's answer to the one before. */
 function smtp(lines: readonly string[]): Promise<string[]> {
@@ -71,12 +72,18 @@ describe('the development stack', () => {
 
     it('is reachable on the loopback address only, as docker-compose.yml publishes it', () => {
       const compose = readFileSync(join(repoRoot, 'docker-compose.yml'), 'utf8');
+      // `- '127.0.0.1:${CONFERA_DB_PORT:?...}:5432'`: the host port is this checkout's own
+      // (M1-ISS-13), the address in front of it is always the loopback address.
       const published = [...compose.matchAll(/^\s*-\s*'([^']+)'/gm)]
         .map((match) => match[1] ?? '')
-        .filter((entry) => /^\S+:\d+$/.test(entry) && !entry.includes('/'));
-      expect(published.length).toBeGreaterThanOrEqual(3);
+        .filter((entry) => /:\d+$/.test(entry) && !entry.includes('/'));
+      expect(published.map((entry) => /:(\d+)$/.exec(entry)?.[1]).sort()).toEqual([
+        '1025',
+        '5432',
+        '8025',
+      ]);
       for (const entry of published) {
-        expect(entry).toMatch(/^127\.0\.0\.1:\d+:\d+$/);
+        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
     });
 

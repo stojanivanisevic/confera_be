@@ -7,6 +7,10 @@ version at every milestone (ADR-19).
 
 ## [Unreleased]
 
+### Changed
+
+- One development stack per checkout (M1-ISS-13): the Docker Compose project is named after the folder of the checkout (`confera-<folder>-<hash>`, or `CONFERA_STACK_NAME`), so containers and the database volume are its own; the ports come from `.env` (the port of the database addresses, `CONFERA_MAIL_WEB_PORT`, `CONFERA_MAIL_SMTP_PORT`), and `pnpm stack:ports` writes a free set derived from the checkout. `stack:up` refuses a port of another checkout's stack or of another program; `db:provision`, `db:migrate`, `db:status`, `db:diff`, `seed:e2e`, `start`, `start:dev`, `test:int` and `test:e2e` refuse a database that another checkout's stack (or a container of no Confera stack) serves, before they connect. New: `stack:wipe`, `stack:ports`, `stack:info`. The shared project `confera` and volume `confera_pgdata` of 0.1.0 are no longer used.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added
