@@ -41,7 +41,7 @@ const PROBLEM = {
     'is required and must be a PostgreSQL address of the form postgresql://role:password@host:port/database',
   logLevel: `must be one of: ${LOG_LEVELS.join(', ')}`,
   flag: 'must be exactly true or false',
-  dataKey:
+  dataKeyShape:
     'is required and must be 43 to 128 characters of letters, digits, - and _ (32 random bytes in base64url; see .env.example)',
   smallNumber: 'must be a whole number between 0 and 86400',
 } as const;
@@ -92,8 +92,8 @@ const flag = z
  * encryption key is derived from it (src/modules/mail/secret-box.ts); it is never used
  * as it stands, and it never accepts free text.
  */
-const dataKey = z.string({ error: PROBLEM.dataKey }).regex(/^[A-Za-z0-9_-]{43,128}$/, {
-  error: PROBLEM.dataKey,
+const dataKey = z.string({ error: PROBLEM.dataKeyShape }).regex(/^[A-Za-z0-9_-]{43,128}$/, {
+  error: PROBLEM.dataKeyShape,
 });
 
 /** A count or a number of seconds; `0` switches a worker off. */

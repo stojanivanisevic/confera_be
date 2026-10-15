@@ -125,12 +125,14 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
      * decision: it gets a line here, in a diff a reviewer sees. None of them is, or may
      * become, something a person types to get in.
      */
-    const REVIEWED_SECRETS: Readonly<Record<string, string>> = {
-      DATABASE_URL: 'PostgreSQL address of the application role; handed to the driver',
-      SYSTEM_DATABASE_URL: 'PostgreSQL address of the system role; handed to the driver',
-      DATA_KEY:
+    const REVIEWED_SECRETS: Readonly<Record<string, string>> = Object.fromEntries([
+      ['DATABASE_URL', 'PostgreSQL address of the application role; handed to the driver'],
+      ['SYSTEM_DATABASE_URL', 'PostgreSQL address of the system role; handed to the driver'],
+      [
+        'DATA_KEY',
         'the data key of ADR-11, 43 to 128 characters of base64url; the secret box derives the encryption key of the stored mail passwords from it, and nothing compares it with anything',
-    };
+      ],
+    ]);
 
     /** What a master password would look like: free text. No variable may accept it. */
     const PASSPHRASES = ['correct horse battery staple!', 'Sup3r $ecret', 'lozinka šđčćž 123'];

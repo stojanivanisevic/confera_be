@@ -37,6 +37,8 @@
     "stack:info": "node scripts/stack.mjs info",
     "stubs": "node --env-file-if-exists=.env scripts/stubs.mjs",
     "seed:e2e": "node --env-file-if-exists=.env scripts/seed-e2e.mjs",
+    "seed:production": "node --env-file-if-exists=.env scripts/seed-production.mjs",
+    "first-admin": "node --env-file-if-exists=.env scripts/first-admin.mjs",
     "db:provision": "node scripts/db-provision.mjs",
     "db:migrate": "node scripts/stack.mjs check-database --tool db:migrate MIGRATION_DATABASE_URL && prisma migrate deploy",
     "db:status": "node scripts/stack.mjs check-database --tool db:status MIGRATION_DATABASE_URL && prisma migrate status",

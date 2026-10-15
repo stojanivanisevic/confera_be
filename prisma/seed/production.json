@@ -1,0 +1,14 @@
+{
+  "$comment": "The production seed (M2-BE-11, FR-CONF-02, ADR-24): the organisation and the five conferences as drafts, with their codes and websites. No user, no password, no price, no discount, no edition and no dates: those are data an admin enters. The organisation id is fixed so that the seed is safe to run again.",
+  "organisation": {
+    "id": "5eed0000-0000-4000-8000-0000000000c1",
+    "name": "UdEkoM Balkans"
+  },
+  "conferences": [
+    { "code": "IT", "name": "ITEMA", "site": "https://www.itema-conference.com" },
+    { "code": "ER", "name": "ERAZ", "site": "https://eraz-conference.com" },
+    { "code": "EM", "name": "EMAN", "site": "https://eman-conference.org" },
+    { "code": "LI", "name": "LIMEN", "site": "https://limen-conference.com" },
+    { "code": "AI", "name": "AI-SMART", "site": "https://www.ai-smart-conference.com" }
+  ]
+}

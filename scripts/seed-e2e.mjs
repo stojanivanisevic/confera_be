@@ -12,10 +12,16 @@
 // applies to the seed too. Safe to run again: the same rows, never a second copy.
 //
 // The data is test/e2e/seed/e2e-seed.json; tests of both repositories read the same file.
+// Each person has the invented password of that file (it starts with `invented-`), hashed
+// as the application hashes it, so that the sign-in tests of the web application can sign
+// in; the default email templates are written for each organisation. Both exist only on
+// the stages this tool runs on.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { hash } from '@node-rs/argon2';
 import pg from 'pg';
 import { repoRoot } from './lib/process.mjs';
+import { seedTemplates } from './lib/seed-data.mjs';
 import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
 import { requireStage } from './lib/stage.mjs';
 
@@ -23,6 +29,9 @@ const TOOL = 'seed:e2e';
 const SEED_STAGES = ['local', 'test'];
 const INVENTED_DOMAIN = 'example.test';
 const SEED_FILE = path.join(repoRoot, 'test', 'e2e', 'seed', 'e2e-seed.json');
+const PLACEHOLDER_PREFIX = 'invented-';
+/** The parameters of src/modules/access/password-hasher.ts (argon2id, 19 MiB, 2 passes). */
+const HASH_OPTIONS = { algorithm: 2, memoryCost: 19_456, timeCost: 2, parallelism: 1 };
 
 function fail(message) {
   process.stderr.write(`${TOOL} failed: ${message}\n`);
@@ -36,6 +45,11 @@ function readSeed() {
       const domain = user.email.slice(user.email.lastIndexOf('@') + 1);
       if (domain !== INVENTED_DOMAIN && !domain.endsWith(`.${INVENTED_DOMAIN}`)) {
         fail(`a seeded person is not on ${INVENTED_DOMAIN}; the seed holds invented people only.`);
+      }
+      if (user.password !== undefined && !user.password.startsWith(PLACEHOLDER_PREFIX)) {
+        fail(
+          `a seeded password does not start with ${PLACEHOLDER_PREFIX}; the seed holds invented ones only.`,
+        );
       }
     }
   }
@@ -52,10 +66,21 @@ async function seedOrganisation(client, organisation) {
       [organisation.id, organisation.name],
     );
     for (const user of organisation.users) {
+      const passwordHash =
+        user.password === undefined ? null : await hash(user.password, HASH_OPTIONS);
       await client.query(
-        `INSERT INTO users (id, organisation_id, email, display_name) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name`,
-        [user.id, organisation.id, user.email, user.displayName],
+        `INSERT INTO users (id, organisation_id, email, display_name, status, password_hash)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name,
+           status = EXCLUDED.status, password_hash = EXCLUDED.password_hash`,
+        [
+          user.id,
+          organisation.id,
+          user.email,
+          user.displayName,
+          passwordHash === null ? 'invited' : 'active',
+          passwordHash,
+        ],
       );
       await client.query('DELETE FROM user_roles WHERE organisation_id = $1 AND user_id = $2', [
         organisation.id,
@@ -66,6 +91,7 @@ async function seedOrganisation(client, organisation) {
         [organisation.id, user.id, user.role],
       );
     }
+    await seedTemplates(client, organisation.id);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

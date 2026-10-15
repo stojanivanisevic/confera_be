@@ -183,34 +183,36 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
 
 ## 3. Commands
 
-| Command                                 | What it does                                                                                                                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `corepack pnpm check`                   | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, PDF timing, supply-chain checks and their planted cases. Green before a change is handed over. |
-| `corepack pnpm test`                    | Unit and architecture tests. No build, no Docker.                                                                                                                                                   |
-| `corepack pnpm test:build`              | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                                                                  |
-| `corepack pnpm test:timing`             | Makes PDFs in fresh Node processes and expects each kind in under 5 seconds. Builds by itself; run it alone.                                                                                        |
-| `corepack pnpm test:int`                | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                                                                 |
-| `corepack pnpm test:e2e`                | End-to-end tests: HTTP requests against the real application on PostgreSQL in Docker, as the application role. Needs `stack:up`.                                                                    |
-| `corepack pnpm test:supply-chain`       | Plants a fake secret, a vulnerable package and an unlisted build script in a copy under `tmp/` and expects the supply-chain checks to catch each. Part of `check`.                                  |
-| `corepack pnpm build`                   | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                                                    |
-| `corepack pnpm start`                   | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                                                            |
-| `corepack pnpm start:dev`               | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                                        |
-| `corepack pnpm lint` / `format`         | ESLint; Prettier (writes).                                                                                                                                                                          |
-| `corepack pnpm typecheck`               | `tsc --noEmit` over sources and tests.                                                                                                                                                              |
-| `corepack pnpm stack:up` / `stack:down` | Starts and stops PostgreSQL and Mailpit in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                |
-| `corepack pnpm stack:wipe`              | Stops the stack of this checkout and removes its database volume.                                                                                                                                   |
-| `corepack pnpm stack:ports`             | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                        |
-| `corepack pnpm stack:info`              | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                              |
-| `corepack pnpm stubs`                   | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                         |
-| `corepack pnpm seed:e2e`                | Writes the invented organisations and people of the end-to-end tests into the development database. It refuses to run unless `STAGE` is `local` or `test`.                                          |
-| `corepack pnpm db:provision`            | Creates the database roles and the database. Safe to repeat.                                                                                                                                        |
-| `corepack pnpm db:migrate`              | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                                                       |
-| `corepack pnpm db:status`               | Says which migrations are applied.                                                                                                                                                                  |
-| `corepack pnpm db:diff`                 | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                                    |
-| `corepack pnpm openapi:generate`        | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                                      |
-| `corepack pnpm openapi:check`           | Fails when those files differ from the code, or a response property is named like a secret.                                                                                                         |
-| `corepack pnpm pdf:sample`              | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                                    |
-| `corepack pnpm supply-chain`            | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                                         |
+| Command                                                       | What it does                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `corepack pnpm check`                                         | Formatting, lint, typecheck, unit tests, both builds, OpenAPI check, tests of the built application, PDF timing, supply-chain checks and their planted cases. Green before a change is handed over.                                                                  |
+| `corepack pnpm test`                                          | Unit and architecture tests. No build, no Docker.                                                                                                                                                                                                                    |
+| `corepack pnpm test:build`                                    | Tests that start the built application. Needs `build` and `build:dev` first; `check` runs them in the right order.                                                                                                                                                   |
+| `corepack pnpm test:timing`                                   | Makes PDFs in fresh Node processes and expects each kind in under 5 seconds. Builds by itself; run it alone.                                                                                                                                                         |
+| `corepack pnpm test:int`                                      | Integration tests against PostgreSQL in Docker. Needs `stack:up`; builds by itself.                                                                                                                                                                                  |
+| `corepack pnpm test:e2e`                                      | End-to-end tests: HTTP requests against the real application on PostgreSQL in Docker, as the application role. Needs `stack:up`.                                                                                                                                     |
+| `corepack pnpm test:supply-chain`                             | Plants a fake secret, a vulnerable package and an unlisted build script in a copy under `tmp/` and expects the supply-chain checks to catch each. Part of `check`.                                                                                                   |
+| `corepack pnpm build`                                         | The **production build** into `dist/`. It does not contain the dev-tools module.                                                                                                                                                                                     |
+| `corepack pnpm start`                                         | Runs the production build (`dist/main.js`) with the variables of `.env`.                                                                                                                                                                                             |
+| `corepack pnpm start:dev`                                     | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                                                                                                         |
+| `corepack pnpm lint` / `format`                               | ESLint; Prettier (writes).                                                                                                                                                                                                                                           |
+| `corepack pnpm typecheck`                                     | `tsc --noEmit` over sources and tests.                                                                                                                                                                                                                               |
+| `corepack pnpm stack:up` / `stack:down`                       | Starts and stops PostgreSQL and Mailpit in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                                                                                 |
+| `corepack pnpm stack:wipe`                                    | Stops the stack of this checkout and removes its database volume.                                                                                                                                                                                                    |
+| `corepack pnpm stack:ports`                                   | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                                                                                         |
+| `corepack pnpm stack:info`                                    | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                                                                                               |
+| `corepack pnpm stubs`                                         | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                                                                                          |
+| `corepack pnpm seed:e2e`                                      | Writes the invented organisations and people of the end-to-end tests into the development database, each person with the invented password of `test/e2e/seed/e2e-seed.json`, and the default email templates. It refuses to run unless `STAGE` is `local` or `test`. |
+| `corepack pnpm seed:production`                               | Writes the organisation "UdEkoM Balkans", its default email templates and the five conferences as drafts. No user, no password, no price. Safe to repeat; never changes what an admin edited.                                                                        |
+| `corepack pnpm first-admin --email <address> --name "<name>"` | Invites the first admin: an invited person with the admin role and an invitation link valid for 72 hours, **printed once to the terminal** and kept nowhere else. Refused once the organisation has an active admin.                                                 |
+| `corepack pnpm db:provision`                                  | Creates the database roles and the database. Safe to repeat.                                                                                                                                                                                                         |
+| `corepack pnpm db:migrate`                                    | `prisma migrate deploy`: applies the committed migrations, as the owner role.                                                                                                                                                                                        |
+| `corepack pnpm db:status`                                     | Says which migrations are applied.                                                                                                                                                                                                                                   |
+| `corepack pnpm db:diff`                                       | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                                                                                                     |
+| `corepack pnpm openapi:generate`                              | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                                                                                                       |
+| `corepack pnpm openapi:check`                                 | Fails when those files differ from the code, or a response property is named like a secret.                                                                                                                                                                          |
+| `corepack pnpm pdf:sample`                                    | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                                                                                                     |
+| `corepack pnpm supply-chain`                                  | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                                                                                                          |
 
 ## 4. Configuration, STAGE and INSTANCE
 
@@ -342,6 +344,59 @@ the two equal. The OpenAPI document carries the declaration of every operation
   application's content security policy, from any origin, with a body limit of 16 KB and
   60 reports per address and hour; the log line holds the directive and the addresses
   without query, fragment or link token, never the client address.
+
+### Mail: servers, templates, the outbox and the log
+
+- **Mail servers** (ADR-11) belong to the organisation; one may be the default and one the
+  fallback. The password is write-only: sealed with AES-256-GCM under a key derived from
+  `DATA_KEY`, bound to its row, never returned (`credentialSet` says whether one is
+  stored). Changing host, port, user or TLS mode without a new password **clears it**.
+  Every change asks for the password again and is told to all admins.
+- **TLS is required**: `implicit` (port 465) or `starttls`, TLS 1.2 at least, the
+  certificate verified. `none` exists for Mailpit and is refused unless `STAGE` is
+  `local`, `dev` or `test`. On `prod` a target may not be a loopback, private or
+  container-network address (checked again on every address the name resolves to), and
+  only the ports 25, 465, 587 and 2525 are allowed. The test message answers `sent`,
+  `failed` or `refused` with the rule, never the server's words.
+- **Templates** (ADR-12) are documents of a closed format, not HTML:
+  `src/modules/templates/document.ts` checks them, `render.ts` makes HTML and plain text
+  and escapes every value. The catalogue says which placeholders each type may use; a
+  secure link is the address of a link node, never text. `contracts/template-vectors.json`
+  holds the format and the vectors the editor of the web application must agree with.
+  The defaults, English and Serbian, are `prisma/seed/default-templates.json`.
+- **The outbox** (ADR-13): a message is queued in the transaction of the change. The
+  worker (every `MAIL_WORKER_INTERVAL_SECONDS`, default 5; 0 is off) claims each due row
+  inside its organisation, chooses the template (conference and language, conference in
+  English, organisation and language, organisation in English) and the servers (the
+  template's, else the conference's, else the default; then the fallback), **makes the
+  secure link now**, sends to one recipient, and logs every attempt. The log shows each
+  link as `[link]`; the organisation can switch the content off (`mailLogContent`). A
+  server never sends faster than its `sendRatePerMinute`. Five attempts with backoff,
+  then `failed`; a row left in `sending` by a crash becomes `stuck` and is not sent again
+  by itself. With no server or no template a message waits and the application stays
+  healthy.
+
+### The first admin and the production seed
+
+On a fresh installation, after `db:migrate`: `corepack pnpm seed:production`, then
+`corepack pnpm first-admin --email <address> --name "<name>"` with `ADMIN_ORIGIN` set.
+The command prints the invitation link once; copy it to the person by hand. Nobody but
+that person ever knows their password. Then the admin adds a mail server in the
+application. `seed:e2e` and its invented passwords never run on a server.
+
+### The inventory of secrets (ADR-11)
+
+| Secret                             | Where it lives                         | Who holds it                     | Backup                               | Rotation                                                           |
+| ---------------------------------- | -------------------------------------- | -------------------------------- | ------------------------------------ | ------------------------------------------------------------------ |
+| `DATA_KEY`                         | the API's environment on the server    | the operator; two people offline | a sealed copy off the server         | a new key with a new key id; stored secrets sealed again (runbook) |
+| Form-token key (0.3.0)             | the API's environment                  | the operator                     | none needed (tokens are short-lived) | replace; open forms ask for a new token                            |
+| `confera_owner` password           | the migration job's environment only   | the operator                     | the association's password manager   | `ALTER ROLE` and the job's environment                             |
+| `confera_app` password             | `DATABASE_URL` of the API              | the operator                     | the association's password manager   | `ALTER ROLE`, then restart the API                                 |
+| `confera_system` password          | `SYSTEM_DATABASE_URL` of the API       | the operator                     | the association's password manager   | `ALTER ROLE`, then restart the API                                 |
+| Backup encryption password (1.0.0) | the backup job                         | the operator; two people         | offline                              | new backups with the new password; old ones keep theirs            |
+| Registry credential                | the pipeline's secret store            | the maintainer                   | none needed                          | revoke and issue a new one                                         |
+| Mail server passwords              | `mail_servers.password_sealed`, sealed | the admins who type them         | the database backup (sealed)         | an admin sets a new one; a changed target clears it                |
+| PayPal credentials (0.7.0)         | sealed like the mail passwords         | the admins                       | the database backup (sealed)         | the same rule: a changed target clears them                        |
 
 ## 6. Errors and logs
 
@@ -567,8 +622,9 @@ Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 `openapi/openapi.json` (admin API) and `openapi/openapi.public.json` (public API) are
 generated from the code and **committed**; the frontend vendors `openapi.json`. Their
 `info.version` is the version of this repository. The same command writes the other
-contract of the API, `contracts/password-rules.json` (section 5, "The password rule set"),
-and the check fails while either is stale.
+contracts of the API, `contracts/password-rules.json` (section 5, "The password rule set")
+and `contracts/template-vectors.json` (section 5, "Mail"), and the check fails while any
+of them is stale.
 
 After changing a controller or a DTO: `corepack pnpm openapi:generate`, look at the diff,
 commit it. `corepack pnpm check` fails while the files are stale. Response types come from
@@ -813,9 +869,13 @@ src/modules/links    secure links (invitation, reset, email change)
 src/modules/users    user administration
 src/modules/organisation  the organisation profile and its payment details
 src/modules/audit    the audit recorder, its field allowlist, the log's route, the security summary
-src/modules/mail     the outbox (queued in the same transaction; the sender arrives with 0.2.0 part B)
+src/modules/mail     the outbox, the secret box, the SMTP transport, the sender and the worker
+src/modules/mail-servers  mail servers and the rules of their target (ADR-11)
+src/modules/mail-log the mail log, read only
+src/modules/templates the template document format, its serialiser, the catalogue and the read API
+src/modules/conferences  conferences and their listed sites
 src/modules/csp-reports  the route for the web application's content-security-policy reports
-contracts/           the password rule set with its vectors, generated and committed
+contracts/           the password rule set and the template format with their vectors, generated and committed
 test/architecture    rules that hold for the whole code base
 test/tooling         tests of the test tools (seed:e2e, the stub slot)
 test/qa              probes of single units by the test engineer (PDF fields)

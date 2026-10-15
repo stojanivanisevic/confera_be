@@ -4,7 +4,7 @@ import type { Client } from 'pg';
 import { TenantDatabase } from '../../src/platform/prisma/tenant-database';
 import { TenantContext } from '../../src/platform/tenancy/tenant-context';
 import { repoRoot, runNode } from '../support/run-node';
-import { type E2eApp, startE2eApp } from './support/e2e-app';
+import { ADMIN_HOST, type E2eApp, startE2eApp } from './support/e2e-app';
 import { connect, connectAsOwner, e2eDatabase, rows } from './support/e2e-database';
 import { assertInvented, Factories } from './support/factories';
 
@@ -27,6 +27,7 @@ interface SeedFile {
       readonly email: string;
       readonly displayName: string;
       readonly role: string;
+      readonly password?: string;
     }[];
   }[];
 }
@@ -72,7 +73,8 @@ describe('seed:e2e', () => {
         expect(() => {
           assertInvented(person.email);
         }).not.toThrow();
-        expect(person).not.toHaveProperty('password');
+        // A password, where there is one, is an invented placeholder; never a hash.
+        expect(person.password ?? 'invented-').toMatch(/^invented-/);
         expect(person).not.toHaveProperty('passwordHash');
       }
     });
@@ -181,18 +183,22 @@ describe('seed:e2e', () => {
             displayName: user.displayName,
             role: user.roles.map((role) => role.role).join(','),
             organisationId: user.organisationId,
-            passwordHash: user.passwordHash,
+            status: user.status,
+            argon2id: user.passwordHash?.startsWith('$argon2id$v=19$m=19456,t=2,p=1$') ?? false,
           })),
         ).toEqual(
           [...organisation.users]
             .sort((x, y) => (x.email < y.email ? -1 : 1))
-            .map((user) => ({
+            .map(({ password, ...user }) => ({
               ...user,
               organisationId: organisation.id,
-              // Nobody is seeded with a password (ADR-03): sign-in arrives with 0.2.0.
-              passwordHash: null,
+              // A person with an invented password is active and signs in (the web
+              // application's sign-in tests); the hash is the application's argon2id.
+              status: password === undefined ? 'invited' : 'active',
+              argon2id: password !== undefined,
             })),
         );
+        expect(await context.run(organisation.id, () => database.db.mailTemplate.count())).toBe(14);
       },
     );
 
@@ -213,6 +219,19 @@ describe('seed:e2e', () => {
       );
       expect(stored?.displayName).toBe(person.displayName);
     });
+  });
+
+  it('signs a seeded person in with the password of the seed file', async () => {
+    expect((await run('test')).exitCode).toBe(0);
+    const person = seededPeople.find((user) => user.password !== undefined);
+    expect(person).toBeDefined();
+    const response = await e2e
+      .http()
+      .post('/api/v1/session')
+      .set('Host', ADMIN_HOST)
+      .set('Origin', e2e.config.origins.admin)
+      .send({ email: person?.email, password: person?.password });
+    expect(response.status).toBe(200);
   });
 
   describe('when the database is not there', () => {

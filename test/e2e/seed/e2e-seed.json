@@ -8,13 +8,15 @@
           "id": "0e2e0000-0000-4000-8000-0000000000a1",
           "email": "zivana.djordjevic@a.example.test",
           "displayName": "Živana Đorđević",
-          "role": "admin"
+          "role": "admin",
+          "password": "invented-Jasen-Kula-Reka-42"
         },
         {
           "id": "0e2e0000-0000-4000-8000-0000000000a2",
           "email": "caslav.scepanovic@a.example.test",
           "displayName": "Časlav Šćepanović",
-          "role": "reviewer"
+          "role": "reviewer",
+          "password": "invented-Jasen-Kula-Reka-42"
         }
       ]
     },
@@ -26,13 +28,15 @@
           "id": "0e2e0000-0000-4000-8000-0000000000b1",
           "email": "djordje.zikic@b.example.test",
           "displayName": "Đorđe Žikić",
-          "role": "admin"
+          "role": "admin",
+          "password": "invented-Jasen-Kula-Reka-42"
         },
         {
           "id": "0e2e0000-0000-4000-8000-0000000000b2",
           "email": "ana.colic@b.example.test",
           "displayName": "Ana Čolić",
-          "role": "reviewer"
+          "role": "reviewer",
+          "password": "invented-Jasen-Kula-Reka-42"
         }
       ]
     }
