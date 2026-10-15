@@ -278,6 +278,71 @@ client can send it.
 There is no CORS: no response ever carries an `Access-Control-*` header, and every
 `OPTIONS` request is answered 405.
 
+### Access: sign-in, sessions and who may call what
+
+Every route declares who may call it, or the application does not start (ADR-05, guards
+deny by default): `@Permission('users.manage')` for a signed-in user whose role holds the
+permission, `@Public()` for sign-in, a password reset, a secure link, a browser's report.
+The permissions are the code constants of `src/modules/access/permissions.ts`; which role
+holds which is seeded by migration (`role_permissions`), and an integration test keeps
+the two equal. The OpenAPI document carries the declaration of every operation
+(`x-confera-access`, `x-confera-fresh-password`); the authorisation matrix of
+`test/e2e/authorisation-matrix.spec.ts` is generated from it for five actors.
+
+- **Sign-in** (`POST /api/v1/session`, ADR-03): the session is a random token in the
+  cookie `__Host-confera_session` (HttpOnly, Secure, SameSite=Lax, Path=/, no Domain);
+  the table holds its SHA-256. A new token at every sign-in. The answer holds the user,
+  the organisation, the permissions and the **CSRF value** of the session, which every
+  changing request sends in `X-CSRF-Token`; it is bound to the session and never in a
+  cookie. A changing request must also carry an `Origin` equal to the origin of its
+  surface, exactly; the public host's origin is refused on the admin surface.
+- **Lifetime:** a session ends 24 hours after its last use, and at the latest 7 days
+  after sign-in (G2-24). Use renews it; a request with the header `X-Confera-Background`
+  (a refetch the person did not ask for) does not. Sign-out, "sign out everywhere", an
+  own password change (the other sessions), a reset or an email change (all), a change of
+  role, a deactivation, a removal and an admin's "end this user's sessions" end sessions
+  on the server, each with its reason in the row. The model is ready for the second
+  factor of 0.9.0 (`sessions.second_factor`).
+- **The password asked again:** a change of users, roles or the payment details (routes
+  marked `@FreshPassword()`) needs `POST /api/v1/session/password-confirmation` within
+  the last 5 minutes, in that session; otherwise 403 `password_confirmation_required`.
+  Every such change, and a sign-in from a new browser, puts a notice to every active
+  admin into the mail outbox.
+- **The brake** (`src/modules/access/brake.service.ts`, SEC-A-14): failed sign-ins slow
+  an account and an address down, never lock them: 5 free failures per account and 20 per
+  address in an hour, then a wait of 30 s that doubles up to 15 minutes. A browser that
+  signed in before (the cookie `__Host-confera_device`, bound to the account) is exempt
+  from the account's brake only. The owner is told by mail at most once a day. Sign-in and
+  a reset request answer every failure alike, and not sooner than 300 ms.
+- **The client address** is what the one proxy in front of the API writes into
+  `X-Forwarded-For` (`trust proxy` is 1): the brake, the limits and the security events
+  use it. Failed sign-ins are security events of the instance (kept 90 days); those for
+  unknown addresses appear in the audit log of every organisation as one summed entry
+  (`SecuritySummary.run()`).
+- **Secure links** (ADR-04): invitation (72 hours), password reset and email change (30
+  minutes). The token is in the path; only its SHA-256 is stored; opening a link (GET)
+  shows and uses nothing up; the action is a POST that uses it up atomically; each path
+  accepts one purpose; a newer link ends the older one of the same purpose and person.
+  Every failure answers 404 `link_invalid`. The outbox row of a message says which link it
+  needs; the sender of 0.2.0 part B makes the link when it sends, so no link is ever stored.
+- **The password rule set** (G2-25, FR-USR-06): at least 12 characters (code points, at
+  most 128); not a common or leaked password; not the person's own name or email name nor
+  the organisation's; both entries match. The server refuses with 400 `password_refused`
+  and each broken rule named (`password_length`, `password_common`, `password_personal`,
+  `password_mismatch`). The rule set with its 38 vectors is `contracts/password-rules.json`,
+  written by `pnpm openapi:generate` and held current by `pnpm openapi:check`; the web
+  application vendors it and its live checklist must give the same four results for every
+  vector. The rules are in `src/modules/access/password-rules.ts`, the list of common
+  passwords beside it.
+- **The audit log** (ADR-06, FR-AUD-01 to 03) is insert-only for both run-time roles. An
+  entry holds who, when, what, which fields changed and a trace id; old and new values
+  only for the fields of `src/modules/audit/audit-fields.ts` (the issuer data and bank
+  accounts of the organisation), and the recorder refuses the values of any other.
+- **CSP reports** (M1-ISS-11): `POST /public/v1/csp-reports` takes the reports of the web
+  application's content security policy, from any origin, with a body limit of 16 KB and
+  60 reports per address and hour; the log line holds the directive and the addresses
+  without query, fragment or link token, never the client address.
+
 ## 6. Errors and logs
 
 - **One error format**, `application/problem+json`: `code`, `traceId`, and for an error
@@ -413,15 +478,26 @@ To add one:
   writes into another organisation, the catalogue check, what the roles cannot do, the
   start-up role check (memberships, `SET ROLE`, the predefined roles), a database that
   never answers, two `db:provision` at once and one after an interrupted `DROP DATABASE`,
-  a clean production start with a canary in every secret, and every database command
-  refusing the stack of another checkout (a container labelled as one).
+  a clean production start with a canary in every secret, every database command
+  refusing the stack of another checkout (a container labelled as one), the audit log
+  that only grows for both run-time roles, the seeded role permissions, and the security
+  events out of reach of a statement inside an organisation. A start or a refused start
+  may take 120 s here: a guard against a hang, not an assertion of speed.
 - **End to end:** supertest against the real application (`createApp` of
   `src/bootstrap.ts`, nothing replaced) with the configuration of a server, connected as
   the application role: every route of the OpenAPI files, the error format, the headers,
   no CORS grant, odd `Host` headers, many requests at once, the request log, readiness
   while the database hangs and after it answers again; the harness
   itself (schema from `migrate deploy`, the role, the factories); `seed:e2e`; the stack
-  (the three roles, the mail catcher).
+  (the three roles, the mail catcher). From 0.2.0, on the two-organisation fixture of
+  `test/e2e/support/actors.ts`: the authorisation matrix generated from the OpenAPI file
+  for five actors (anonymous, an ended session, a reviewer, the other organisation's
+  admin, an admin), sessions and sign-in (cookies, CSRF, Origin, expiry, the password
+  asked again, the forwarded-for header), the brake, secure links and the password rules,
+  users, the organisation profile with the sweep that no reading route shows the other
+  organisation anything, the audit log, the CSP report route. Tests that need a link make
+  it the way the sender will (`test/e2e/support/links.ts`), and the links suite ends by
+  searching every text column and the log for every token it minted.
 
 Test people are invented and live on `example.test`. The end-to-end tests make them with
 the factories of `test/e2e/support/factories.ts`, which refuse any other domain and
@@ -490,7 +566,9 @@ Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 
 `openapi/openapi.json` (admin API) and `openapi/openapi.public.json` (public API) are
 generated from the code and **committed**; the frontend vendors `openapi.json`. Their
-`info.version` is the version of this repository.
+`info.version` is the version of this repository. The same command writes the other
+contract of the API, `contracts/password-rules.json` (section 5, "The password rule set"),
+and the check fails while either is stale.
 
 After changing a controller or a DTO: `corepack pnpm openapi:generate`, look at the diff,
 commit it. `corepack pnpm check` fails while the files are stale. Response types come from
@@ -730,6 +808,14 @@ src/platform/prisma  tenant client, resolvers, start-up role check
 src/platform/tenancy the organisation of the current request
 src/platform/pdf     PDF renderer, fonts, glyph check
 src/modules/         one folder per feature; dev-tools is left out of the production build
+src/modules/access   sign-in, sessions, the brake, the password rule set, the own account
+src/modules/links    secure links (invitation, reset, email change)
+src/modules/users    user administration
+src/modules/organisation  the organisation profile and its payment details
+src/modules/audit    the audit recorder, its field allowlist, the log's route, the security summary
+src/modules/mail     the outbox (queued in the same transaction; the sender arrives with 0.2.0 part B)
+src/modules/csp-reports  the route for the web application's content-security-policy reports
+contracts/           the password rule set with its vectors, generated and committed
 test/architecture    rules that hold for the whole code base
 test/tooling         tests of the test tools (seed:e2e, the stub slot)
 test/qa              probes of single units by the test engineer (PDF fields)

@@ -96,6 +96,7 @@ describe('data access architecture', () => {
         'src/modules/access/account.service.ts',
         'src/modules/access/session.service.ts',
         'src/modules/access/sign-in.service.ts',
+        'src/modules/audit/security-summary.ts',
         'src/modules/links/secure-links.ts',
         'src/platform/prisma/database-role-check.ts',
         'src/platform/prisma/prisma.module.ts',

@@ -21,7 +21,8 @@ describe('CSP reports', () => {
     await e2e.close();
   });
 
-  const TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+  /** Something shaped like a link token: it must never reach the log. */
+  const TOKEN_SHAPE = 'A'.repeat(43);
 
   const post = (body: unknown, type = 'application/csp-report', from = '203.0.113.1') =>
     e2e
@@ -38,13 +39,13 @@ describe('CSP reports', () => {
   it('takes a report in the report-uri shape and logs what matters, without the query, the token or the address', async () => {
     const response = await post({
       'csp-report': {
-        'document-uri': `https://admin.confera.test/invitations/${TOKEN}?next=/users&token=${TOKEN}`,
-        referrer: `https://evil.example/?session=${TOKEN}`,
+        'document-uri': `https://admin.confera.test/invitations/${TOKEN_SHAPE}?next=/users&token=${TOKEN_SHAPE}`,
+        referrer: `https://evil.example/?session=${TOKEN_SHAPE}`,
         'violated-directive': 'script-src-elem',
         'effective-directive': 'script-src-elem',
         'original-policy': "default-src 'self'",
         disposition: 'report',
-        'blocked-uri': `https://cdn.example/x.js?key=${TOKEN}#frag`,
+        'blocked-uri': `https://cdn.example/x.js?key=${TOKEN_SHAPE}#frag`,
         'status-code': 200,
         'script-sample': 'alert(document.cookie) and much more than forty characters of text',
       },
@@ -63,7 +64,7 @@ describe('CSP reports', () => {
       }),
     );
     const text = JSON.stringify(entry);
-    expect(text).not.toContain(TOKEN);
+    expect(text).not.toContain(TOKEN_SHAPE);
     expect(text).not.toContain('203.0.113.1');
     expect(text).not.toContain('evil.example');
     expect(text).not.toContain('next=');
