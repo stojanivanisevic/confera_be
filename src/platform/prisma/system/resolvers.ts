@@ -22,6 +22,11 @@ export interface ResolvedLink {
   readonly linkId: string;
 }
 
+export interface ResolvedMessage {
+  readonly organisationId: string;
+  readonly messageId: string;
+}
+
 /**
  * The resolvers: the only code that uses the system role (ADR-05, finding SEC-A-11).
  *
@@ -36,7 +41,7 @@ export interface ResolvedLink {
  *   - the organisations a job loops over            (organisationsWithUsers)
  *   - form by public key, a form's site list                      (0.3.0)
  *   - PayPal order by order id                                    (0.7.0)
- *   - the claim of a job or outbox row                            (0.2.0 part B)
+ *   - the claim of a job or outbox row                            (outboxDue)
  *
  * An architecture test asserts that this class has no other public member than the
  * resolvers on that list, and that every resolver returns ids only.
@@ -93,6 +98,36 @@ export class SystemResolvers implements OnModuleDestroy {
     const rows = await this.#client.$queryRaw<{ organisationId: string }[]>`
       SELECT DISTINCT organisation_id::text AS "organisationId" FROM users ORDER BY 1`;
     return rows.map(({ organisationId }) => organisationId);
+  }
+
+  /**
+   * The outbox rows the worker looks at now (ADR-05, ADR-13): `due` are queued and due,
+   * oldest first; `stale` were left in `sending` before `staleBefore` (a crash), to be
+   * flagged and never sent again by themselves. Ids only; the worker claims and reads each
+   * row afterwards inside its organisation.
+   */
+  async outboxDue(
+    now: Date,
+    staleBefore: Date,
+    limit: number,
+  ): Promise<{ due: ResolvedMessage[]; stale: ResolvedMessage[] }> {
+    const select = { id: true, organisationId: true } as const;
+    const [due, stale] = await Promise.all([
+      this.#client.mailMessage.findMany({
+        where: { status: 'queued', nextAttemptAt: { lte: now } },
+        select,
+        orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }],
+        take: limit,
+      }),
+      this.#client.mailMessage.findMany({
+        where: { status: 'sending', claimedAt: { lt: staleBefore } },
+        select,
+        take: limit,
+      }),
+    ]);
+    const ids = (rows: { id: string; organisationId: string }[]) =>
+      rows.map((row) => ({ organisationId: row.organisationId, messageId: row.id }));
+    return { due: ids(due), stale: ids(stale) };
   }
 
   /** For the start-up check only: what the system role is allowed to do. No tenant data. */

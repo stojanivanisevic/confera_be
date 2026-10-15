@@ -29,6 +29,14 @@ export const AUDIT_ACTIONS = [
   'organisation.updated',
   'organisation.payment_details_changed',
   'security.unknown_address_sign_ins',
+  'mail_server.created',
+  'mail_server.updated',
+  'mail_server.deleted',
+  'mail_server.tested',
+  'conference.created',
+  'conference.updated',
+  'conference.state_changed',
+  'conference.copied',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

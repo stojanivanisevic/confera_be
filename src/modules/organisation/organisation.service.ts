@@ -55,6 +55,9 @@ export class OrganisationService {
           data[field] = input[field];
         }
       }
+      if (input.mailLogContent !== undefined) {
+        data.mailLogContent = input.mailLogContent;
+      }
       const after = await this.write(tx, before, input.version, data);
       await this.audit.record(tx, {
         organisationId: actor.organisationId,
@@ -62,7 +65,7 @@ export class OrganisationService {
         action: 'organisation.updated',
         subjectType: 'organisation',
         subjectId: actor.organisationId,
-        changes: this.changes(before, after, PROFILE_FIELDS),
+        changes: this.changes(before, after, [...PROFILE_FIELDS, 'mailLogContent']),
       });
       return this.describe(tx, after);
     });
@@ -170,6 +173,7 @@ export class OrganisationService {
       paypalPayee: organisation.paypalPayee,
       paymentDetailsChangedAt: organisation.paymentDetailsChangedAt?.toISOString() ?? null,
       paymentDetailsChangedBy: changer,
+      mailLogContent: organisation.mailLogContent,
       version: organisation.version,
     };
   }

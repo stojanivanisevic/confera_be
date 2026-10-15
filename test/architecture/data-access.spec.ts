@@ -81,6 +81,7 @@ describe('data access architecture', () => {
         'sessionByTokenHash',
         'linkByTokenHash',
         'organisationsWithUsers',
+        'outboxDue',
       ];
       /** Not resolvers: the start-up self-description and Nest's shutdown hook. They return no tenant data. */
       const INFRASTRUCTURE = ['constructor', 'describeRole', 'onModuleDestroy'];
@@ -90,7 +91,7 @@ describe('data access architecture', () => {
       expect(Object.keys(resolversModule.SystemResolvers.prototype)).toEqual([]);
     });
 
-    it('is used through SystemResolvers by the start-up check, sign-in, sessions and secure links, and by nothing else', () => {
+    it('is used through SystemResolvers by the start-up check, sign-in, sessions, secure links and the mail worker, and by nothing else', () => {
       // Every new user of the resolvers shows up here, in a diff a reviewer sees.
       expect(importers((specifier) => /(^|\/)system\/resolvers$/.test(specifier))).toEqual([
         'src/modules/access/account.service.ts',
@@ -98,6 +99,7 @@ describe('data access architecture', () => {
         'src/modules/access/sign-in.service.ts',
         'src/modules/audit/security-summary.ts',
         'src/modules/links/secure-links.ts',
+        'src/modules/mail/mail-worker.ts',
         'src/platform/prisma/database-role-check.ts',
         'src/platform/prisma/prisma.module.ts',
       ]);

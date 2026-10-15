@@ -56,6 +56,8 @@ model Organisation {
   /// Raised by every change; a change that names an older version is refused (409).
   version                 Int       @default(1)
   updatedAt               DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  /// Whether the mail log keeps the subject and body of what was sent (FR-SMTP-04).
+  mailLogContent          Boolean   @default(true) @map("mail_log_content")
 
   users        User[]
   userRoles    UserRole[]
@@ -99,8 +101,9 @@ model MailServer {
   updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
   version           Int       @default(1)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   conferences  Conference[]
+  templates    MailTemplate[]
 
   @@unique([organisationId, id])
   @@map("mail_servers")
@@ -151,11 +154,14 @@ model MailTemplate {
   language       String
   subject        Json
   body           Json
+  /// The mail server of this template, first in the order of FR-SMTP-02.
+  mailServerId   String?  @map("mail_server_id") @db.Uuid
   updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
   version        Int      @default(1)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   conference   Conference?  @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Cascade)
+  mailServer   MailServer?  @relation(fields: [organisationId, mailServerId], references: [organisationId, id], onDelete: Restrict)
 
   @@unique([organisationId, id])
   @@unique([organisationId, conferenceId, type, language])
@@ -169,8 +175,12 @@ model MailLogEntry {
   organisationId String   @map("organisation_id") @db.Uuid
   messageId      String   @map("message_id") @db.Uuid
   mailServerId   String?  @map("mail_server_id") @db.Uuid
+  /// The name of the server when it was used: the log outlives the server.
+  serverName     String?  @map("server_name")
   recipient      String   @db.Citext
+  /// The template: its type and language.
   kind           String
+  language       String
   conferenceId   String?  @map("conference_id") @db.Uuid
   attempt        Int
   /// sent or failed.

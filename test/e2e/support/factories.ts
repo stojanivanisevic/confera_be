@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { hash } from '@node-rs/argon2';
 import type { Client } from 'pg';
 import { HASH_OPTIONS } from '../../../src/modules/access/password-hasher';
@@ -197,6 +199,35 @@ export class Factories {
       users.push(await this.user(organisation));
     }
     return { organisation, users };
+  }
+
+  /**
+   * The default email templates of prisma/seed/default-templates.json, for the organisation
+   * or for one of its conferences: what the production seed and `seed:e2e` write.
+   */
+  async templates(organisationId: string, conferenceId: string | null = null): Promise<void> {
+    const file = JSON.parse(
+      readFileSync(
+        join(__dirname, '..', '..', '..', 'prisma', 'seed', 'default-templates.json'),
+        'utf8',
+      ),
+    ) as { templates: { type: string; language: string; subject: unknown; body: unknown }[] };
+    await inOrganisation(this.owner, organisationId, async () => {
+      for (const template of file.templates) {
+        await this.owner.query(
+          `INSERT INTO mail_templates (organisation_id, conference_id, type, language, subject, body)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            organisationId,
+            conferenceId,
+            template.type,
+            template.language,
+            JSON.stringify(template.subject),
+            JSON.stringify(template.body),
+          ],
+        );
+      }
+    });
   }
 
   /** Empties every tenant table and the instance tables. The schema and the roles stay. */

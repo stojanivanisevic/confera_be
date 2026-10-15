@@ -52,6 +52,8 @@ export function e2eEnvironment(overrides: RawEnvironment = {}): Record<string, s
     ...validProductionEnvironment(),
     DATABASE_URL: e2eDatabase.applicationUrl,
     SYSTEM_DATABASE_URL: e2eDatabase.systemUrl,
+    // The outbox worker runs when a test calls its tick, not on a timer of its own.
+    MAIL_WORKER_INTERVAL_SECONDS: '0',
     ...overrides,
   };
 }
@@ -64,6 +66,7 @@ export function e2eLocalEnvironment(
     ...validEnvironment(),
     DATABASE_URL: e2eDatabase.applicationUrl,
     SYSTEM_DATABASE_URL: e2eDatabase.systemUrl,
+    MAIL_WORKER_INTERVAL_SECONDS: '0',
     ...overrides,
   };
 }

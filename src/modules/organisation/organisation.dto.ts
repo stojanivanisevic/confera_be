@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, MaxLength, Min } from 'class-validator';
 import {
   isBic,
   isIban,
@@ -45,6 +45,8 @@ export class OrganisationDto {
   paymentDetailsChangedAt!: string | null;
   /** Who changed them. */
   paymentDetailsChangedBy!: UserReferenceDto | null;
+  /** Whether the mail log keeps the subject and body of what was sent (FR-SMTP-04). */
+  mailLogContent!: boolean;
   /** Sent back with a change: a change made on an older version is refused (409). */
   version!: number;
 }
@@ -87,6 +89,11 @@ export class UpdateOrganisationDto {
   @Satisfies('isMultilineText', isMultilineText)
   @MaxLength(1000)
   vatNoteEn?: string | null;
+
+  /** Whether the mail log keeps the content of what was sent (FR-SMTP-04). */
+  @IsOptional()
+  @IsBoolean()
+  mailLogContent?: boolean;
 
   @IsInt()
   @Min(1)

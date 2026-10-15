@@ -21,6 +21,34 @@ export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
     'eurIban',
     'eurSwift',
     'eurBankName',
+    'mailLogContent',
+  ],
+  // A mail server's target and settings (FR-SMTP-01): the user name and the sender address
+  // may be a person's address, and the password is never a value anywhere.
+  mail_server: [
+    'name',
+    'host',
+    'port',
+    'tlsMode',
+    'fromName',
+    'isDefault',
+    'isFallback',
+    'enabled',
+    'sendRatePerMinute',
+  ],
+  // A conference's settings (FR-CONF-01): data of an event, not of a person.
+  conference: [
+    'name',
+    'code',
+    'editionYear',
+    'startsOn',
+    'endsOn',
+    'venue',
+    'listedSites',
+    'languages',
+    'timeZone',
+    'state',
+    'mailServerId',
   ],
 };
 

@@ -21,6 +21,18 @@ export const PERMISSIONS = [
   'organisation.manage',
   /** Read the audit log. */
   'audit.read',
+  /** Read the mail servers (never a password). */
+  'mail_servers.read',
+  /** Add, change, switch off, delete and test mail servers. */
+  'mail_servers.manage',
+  /** Read the conferences. */
+  'conferences.read',
+  /** Create, change, copy conferences and change their state. */
+  'conferences.manage',
+  /** Read the email templates and their placeholder catalogue. */
+  'templates.read',
+  /** Read the mail log, the content of what was sent included. */
+  'mail_log.read',
 ] as const;
 
 export type PermissionName = (typeof PERMISSIONS)[number];

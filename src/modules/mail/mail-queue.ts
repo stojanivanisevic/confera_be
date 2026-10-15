@@ -22,6 +22,8 @@ export const MAIL_KINDS = [
   'security_notice',
   /** To the owner of an account that the brake slows down; at most one a day (ADR-03). */
   'sign_in_brake',
+  /** The test message of a mail server (FR-SMTP-01); sent at once, not by the worker. */
+  'test_message',
 ] as const;
 
 export type MailKind = (typeof MAIL_KINDS)[number];
@@ -39,7 +41,10 @@ export type SecurityChange =
   | 'password_reset'
   | 'own_email_change_requested'
   | 'organisation_payment_details_changed'
-  | 'new_device_sign_in';
+  | 'new_device_sign_in'
+  | 'mail_server_created'
+  | 'mail_server_changed'
+  | 'mail_server_deleted';
 
 export interface QueuedMessage {
   readonly organisationId: string;

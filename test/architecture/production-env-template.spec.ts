@@ -82,6 +82,7 @@ describe('deploy/api.env.example, the environment template of a server', () => {
       PUBLIC_ORIGIN: 'https://forms.confera.test',
       DATABASE_URL: 'postgresql://confera_app:invented-app@127.0.0.1:5432/confera',
       SYSTEM_DATABASE_URL: 'postgresql://confera_system:invented-system@127.0.0.1:5432/confera',
+      DATA_KEY: 'invented-data-key-of-the-server-template-0123456789ab',
     });
     expect(result).toEqual(expect.objectContaining({ ok: true }));
   });

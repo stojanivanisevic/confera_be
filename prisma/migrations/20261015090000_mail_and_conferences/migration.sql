@@ -14,6 +14,9 @@ ADD COLUMN     "last_error_code" TEXT,
 ADD COLUMN     "next_attempt_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN     "sent_at" TIMESTAMPTZ(3);
 
+-- AlterTable
+ALTER TABLE "organisations" ADD COLUMN     "mail_log_content" BOOLEAN NOT NULL DEFAULT true;
+
 -- CreateTable
 CREATE TABLE "mail_servers" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -69,6 +72,7 @@ CREATE TABLE "mail_templates" (
     "language" TEXT NOT NULL,
     "subject" JSONB NOT NULL,
     "body" JSONB NOT NULL,
+    "mail_server_id" UUID,
     "updated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "version" INTEGER NOT NULL DEFAULT 1,
 
@@ -81,8 +85,10 @@ CREATE TABLE "mail_log" (
     "organisation_id" UUID NOT NULL,
     "message_id" UUID NOT NULL,
     "mail_server_id" UUID,
+    "server_name" TEXT,
     "recipient" CITEXT NOT NULL,
     "kind" TEXT NOT NULL,
+    "language" TEXT NOT NULL,
     "conference_id" UUID,
     "attempt" INTEGER NOT NULL,
     "result" TEXT NOT NULL,
@@ -102,13 +108,15 @@ CREATE UNIQUE INDEX "mail_servers_organisation_id_id_key" ON "mail_servers"("org
 CREATE UNIQUE INDEX "conferences_organisation_id_id_key" ON "conferences"("organisation_id", "id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "conferences_organisation_id_code_edition_year_key" ON "conferences"("organisation_id", "code", "edition_year");
+-- NULLS NOT DISTINCT (hand-edited): one draft without an edition per code, one template
+-- of the organisation (no conference) per type and language.
+CREATE UNIQUE INDEX "conferences_organisation_id_code_edition_year_key" ON "conferences"("organisation_id", "code", "edition_year") NULLS NOT DISTINCT;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "mail_templates_organisation_id_id_key" ON "mail_templates"("organisation_id", "id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "mail_templates_organisation_id_conference_id_type_language_key" ON "mail_templates"("organisation_id", "conference_id", "type", "language");
+CREATE UNIQUE INDEX "mail_templates_organisation_id_conference_id_type_language_key" ON "mail_templates"("organisation_id", "conference_id", "type", "language") NULLS NOT DISTINCT;
 
 -- CreateIndex
 CREATE INDEX "mail_log_organisation_id_sent_at_idx" ON "mail_log"("organisation_id", "sent_at");
@@ -133,6 +141,9 @@ ALTER TABLE "mail_templates" ADD CONSTRAINT "mail_templates_organisation_id_fkey
 
 -- AddForeignKey
 ALTER TABLE "mail_templates" ADD CONSTRAINT "mail_templates_organisation_id_conference_id_fkey" FOREIGN KEY ("organisation_id", "conference_id") REFERENCES "conferences"("organisation_id", "id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "mail_templates" ADD CONSTRAINT "mail_templates_organisation_id_mail_server_id_fkey" FOREIGN KEY ("organisation_id", "mail_server_id") REFERENCES "mail_servers"("organisation_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "mail_log" ADD CONSTRAINT "mail_log_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -161,6 +172,19 @@ ALTER TABLE "conferences" ADD CONSTRAINT "conferences_state_check"
     CHECK ("state" IN ('draft', 'open', 'closed', 'archived'));
 ALTER TABLE "mail_templates" ADD CONSTRAINT "mail_templates_language_check" CHECK ("language" IN ('en', 'sr'));
 ALTER TABLE "mail_log" ADD CONSTRAINT "mail_log_result_check" CHECK ("result" IN ('sent', 'failed'));
+ALTER TABLE "mail_log" ADD CONSTRAINT "mail_log_language_check" CHECK ("language" IN ('en', 'sr'));
+ALTER TABLE "mail_templates" ADD CONSTRAINT "mail_templates_type_check" CHECK ("type" IN
+    ('invitation', 'password_reset', 'email_change_confirmation', 'email_change_notice',
+     'security_notice', 'sign_in_brake', 'test_message'));
+
+-- The permissions of this milestone's modules (src/modules/access/permissions.ts).
+INSERT INTO "role_permissions" ("role", "permission") VALUES
+    ('admin', 'conferences.manage'),
+    ('admin', 'conferences.read'),
+    ('admin', 'mail_log.read'),
+    ('admin', 'mail_servers.manage'),
+    ('admin', 'mail_servers.read'),
+    ('admin', 'templates.read');
 
 -- The mail log keeps the id of the server a message went through, without a foreign key:
 -- the log is history and outlives a deleted server (FR-SMTP-04).
