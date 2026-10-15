@@ -39,6 +39,11 @@ const CANARY_ROLES = {
 
 type SecretName = keyof typeof CANARY_ROLES;
 
+/** The secrets that are no database role: a canary as their value, in the form the schema accepts. */
+const CANARY_VALUES: Readonly<Record<string, string>> = {
+  DATA_KEY: `${CANARY}-data-key-${'x'.repeat(24)}`,
+};
+
 const canaryOf = (name: string): string => `${CANARY}-${name.toLowerCase()}`;
 
 const ADMIN_HOST = 'admin.confera.test';
@@ -108,6 +113,9 @@ describe('a clean production start', () => {
       await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${role}`);
       env[name] = addressFor(testDatabase.applicationUrl, role, canaryOf(name));
     }
+    for (const [name, value] of Object.entries(CANARY_VALUES)) {
+      env[name] = value;
+    }
     api = await startApi(PRODUCTION_ENTRY, env);
   });
 
@@ -118,9 +126,11 @@ describe('a clean production start', () => {
   });
 
   it('has a canary in every secret variable of the schema', () => {
-    expect(SECRET_VARIABLE_NAMES.slice().sort()).toEqual(Object.keys(CANARY_ROLES).sort());
+    expect(SECRET_VARIABLE_NAMES.slice().sort()).toEqual(
+      [...Object.keys(CANARY_ROLES), ...Object.keys(CANARY_VALUES)].sort(),
+    );
     for (const name of SECRET_VARIABLE_NAMES) {
-      expect(env[name]).toContain(canaryOf(name));
+      expect(env[name]).toContain(CANARY);
     }
   });
 

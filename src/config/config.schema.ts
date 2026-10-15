@@ -41,6 +41,9 @@ const PROBLEM = {
     'is required and must be a PostgreSQL address of the form postgresql://role:password@host:port/database',
   logLevel: `must be one of: ${LOG_LEVELS.join(', ')}`,
   flag: 'must be exactly true or false',
+  dataKey:
+    'is required and must be 43 to 128 characters of letters, digits, - and _ (32 random bytes in base64url; see .env.example)',
+  smallNumber: 'must be a whole number between 0 and 86400',
 } as const;
 
 export function isOrigin(value: string): boolean {
@@ -83,6 +86,24 @@ const flag = z
   .enum(['true', 'false'], { error: PROBLEM.flag })
   .transform((value) => value === 'true');
 
+/**
+ * The data key (ADR-11): at least 43 characters of letters, digits, `-` and `_` (what
+ * 32 random bytes give in base64url; a placeholder starts with `local-only-`). The
+ * encryption key is derived from it (src/modules/mail/secret-box.ts); it is never used
+ * as it stands, and it never accepts free text.
+ */
+const dataKey = z.string({ error: PROBLEM.dataKey }).regex(/^[A-Za-z0-9_-]{43,128}$/, {
+  error: PROBLEM.dataKey,
+});
+
+/** A count or a number of seconds; `0` switches a worker off. */
+const smallNumber = (limit: number) =>
+  z
+    .string()
+    .regex(/^(?:0|[1-9]\d{0,4})$/, { error: PROBLEM.smallNumber })
+    .transform(Number)
+    .refine((value) => value <= limit, { error: PROBLEM.smallNumber });
+
 export const environmentSchema = z.object({
   STAGE: z.enum(STAGES, { error: PROBLEM.stage }),
   INSTANCE: z.enum(INSTANCES, { error: PROBLEM.instance }).optional(),
@@ -101,6 +122,8 @@ export const environmentSchema = z.object({
   DATABASE_URL: databaseUrl,
   SYSTEM_DATABASE_URL: databaseUrl,
   LOG_LEVEL: z.enum(LOG_LEVELS, { error: PROBLEM.logLevel }).optional(),
+  DATA_KEY: dataKey,
+  MAIL_WORKER_INTERVAL_SECONDS: smallNumber(86_400).optional(),
   DEV_API_DOCS: flag.optional(),
   DEV_LOG_QUERIES: flag.optional(),
 });
@@ -164,6 +187,18 @@ export const VARIABLES = {
   },
   LOG_LEVEL: {
     description: `Lowest level that is logged: ${LOG_LEVELS.join(', ')}. Default info. On prod: info or higher.`,
+    secret: false,
+    required: false,
+  },
+  DATA_KEY: {
+    description:
+      'The data key (ADR-11): the mail server passwords are encrypted under a key derived from it. 32 random bytes in base64url; held off the server by two people (ADR-26).',
+    secret: true,
+    required: true,
+  },
+  MAIL_WORKER_INTERVAL_SECONDS: {
+    description:
+      'How often the mail worker looks at the outbox, in seconds. Default 5; 0 switches the worker off (tests drive it by hand).',
     secret: false,
     required: false,
   },

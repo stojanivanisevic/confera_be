@@ -16,6 +16,7 @@ export function validEnvironment(overrides: RawEnvironment = {}): TestEnvironmen
     DATABASE_URL: 'postgresql://confera_app:invented-app-password@127.0.0.1:5432/confera_unit',
     SYSTEM_DATABASE_URL:
       'postgresql://confera_system:invented-system-password@127.0.0.1:5432/confera_unit',
+    DATA_KEY: 'invented-data-key-of-the-unit-tests-0123456789ab',
     ...overrides,
   };
 }

@@ -128,6 +128,8 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
     const REVIEWED_SECRETS: Readonly<Record<string, string>> = {
       DATABASE_URL: 'PostgreSQL address of the application role; handed to the driver',
       SYSTEM_DATABASE_URL: 'PostgreSQL address of the system role; handed to the driver',
+      DATA_KEY:
+        'the data key of ADR-11, 43 to 128 characters of base64url; the secret box derives the encryption key of the stored mail passwords from it, and nothing compares it with anything',
     };
 
     /** What a master password would look like: free text. No variable may accept it. */
@@ -203,7 +205,7 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
       },
     );
 
-    it('a secret is unwrapped in two reviewed places, each handing it to the database driver', () => {
+    it('a secret is unwrapped in three reviewed places: the two database drivers and the secret box', () => {
       const unwrapping = applicationFiles
         .flatMap(({ name, text }) =>
           text
@@ -213,6 +215,7 @@ describe('no second master password (ST-09, govcore matrix row 2)', () => {
         )
         .sort();
       expect(unwrapping).toEqual([
+        "src/modules/mail/secret-box.ts: this.#key = Buffer.from(hkdfSync('sha256', config.dataKey.reveal(), '', INFO, 32));",
         'src/platform/prisma/system/resolvers.ts: this.#client = createSystemClient(config.database.systemUrl.reveal());',
         'src/platform/prisma/tenant-database.ts: this.#base = createBaseClient(config.database.applicationUrl.reveal(), { onQuery });',
       ]);

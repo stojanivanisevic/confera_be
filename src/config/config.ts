@@ -30,6 +30,12 @@ export interface AppConfig {
     readonly systemUrl: Secret;
   };
   readonly logLevel: LogLevel;
+  /** The data key of ADR-11, from which the encryption key of the stored secrets is derived. */
+  readonly dataKey: Secret;
+  readonly mail: {
+    /** Seconds between two looks of the worker at the outbox; 0 is off. */
+    readonly workerIntervalSeconds: number;
+  };
   /**
    * Development conveniences. Every flag is false unless STAGE is local or dev, because
    * the guard refuses the `DEV_*` keys everywhere else; and the code that acts on them
@@ -70,6 +76,8 @@ function toConfig(env: Environment): AppConfig {
       systemUrl: new Secret(env.SYSTEM_DATABASE_URL),
     },
     logLevel: env.LOG_LEVEL ?? 'info',
+    dataKey: new Secret(env.DATA_KEY),
+    mail: { workerIntervalSeconds: env.MAIL_WORKER_INTERVAL_SECONDS ?? 5 },
     devTools: {
       apiDocs: env.DEV_API_DOCS ?? false,
       logQueries: env.DEV_LOG_QUERIES ?? false,
