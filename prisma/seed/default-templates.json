@@ -1,0 +1,643 @@
+{
+  "$comment": "The email templates every organisation starts with (ADR-12, M2-BE-10), in the template document format, English and Serbian. Seeded by the production seed, by seed:e2e and by the e2e factories; an admin edits them in 0.4.0. Placeholders are objects, never text; a secure link is the address of a link node.",
+  "templates": [
+    {
+      "type": "invitation",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Your account at " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "placeholder", "key": "inviterName" },
+              { "type": "text", "text": " has invited you to " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " on Confera. Choose your password through this link:" }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Set your password" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "The link works once and for " },
+              { "type": "placeholder", "key": "expiresIn" },
+              { "type": "text", "text": ". If you did not expect this message, ignore it." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "invitation",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Vaš nalog kod " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "placeholder", "key": "inviterName" },
+              { "type": "text", "text": " Vas je pozvao/la u " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " na Conferi. Izaberite lozinku preko ovog linka:" }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Postavite lozinku" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "placeholder", "key": "expiresIn" },
+              { "type": "text", "text": ". Ako niste očekivali ovu poruku, zanemarite je." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "password_reset",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Reset your password at " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "text": "Someone asked for a new password for your account. If it was you, choose it through this link:"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Choose a new password" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "The link works once and for " },
+              { "type": "placeholder", "key": "expiresIn" },
+              {
+                "type": "text",
+                "text": ". If it was not you, ignore this message; your password stays as it is."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "password_reset",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Nova lozinka kod " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "text": "Neko je zatražio novu lozinku za Vaš nalog. Ako ste to bili Vi, izaberite je preko ovog linka:"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Izaberite novu lozinku" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "placeholder", "key": "expiresIn" },
+              {
+                "type": "text",
+                "text": ". Ako to niste bili Vi, zanemarite ovu poruku; lozinka ostaje ista."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "email_change_confirmation",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Confirm your new address at " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "You asked to use " },
+              { "type": "placeholder", "key": "newEmail" },
+              { "type": "text", "text": " for your account. Confirm it through this link:" }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Confirm the new address" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "The link works once and for " },
+              { "type": "placeholder", "key": "expiresIn" },
+              { "type": "text", "text": "." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "email_change_confirmation",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Potvrdite novu adresu kod " },
+          { "type": "placeholder", "key": "organisationName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Zatražili ste da za svoj nalog koristite adresu " },
+              { "type": "placeholder", "key": "newEmail" },
+              { "type": "text", "text": ". Potvrdite je preko ovog linka:" }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "link",
+                "href": { "placeholder": "link" },
+                "children": [{ "type": "text", "text": "Potvrdite novu adresu" }]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "placeholder", "key": "expiresIn" },
+              { "type": "text", "text": "." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "email_change_notice",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [{ "type": "text", "text": "A change of address was asked for" }]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Someone signed in to your account at " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " and asked to change its address to " },
+              { "type": "placeholder", "key": "newEmail" },
+              {
+                "type": "text",
+                "text": ". If it was not you, change your password now and tell an administrator."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "email_change_notice",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [{ "type": "text", "text": "Zatražena je promena adrese" }]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Neko se prijavio na Vaš nalog kod " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " i zatražio promenu adrese na " },
+              { "type": "placeholder", "key": "newEmail" },
+              {
+                "type": "text",
+                "text": ". Ako to niste bili Vi, odmah promenite lozinku i obavestite administratora."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "security_notice",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Security notice: " },
+          { "type": "placeholder", "key": "change" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "This happened at " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": ": " },
+              { "type": "placeholder", "key": "change" },
+              { "type": "text", "text": "." }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasActor",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Done by: " },
+                  { "type": "placeholder", "key": "actorName" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasSubject",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Concerning: " },
+                  { "type": "placeholder", "key": "subjectName" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "text": "Every administrator gets this notice. If you do not recognise the change, look at the audit log."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "security_notice",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Bezbednosno obaveštenje: " },
+          { "type": "placeholder", "key": "change" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Kod " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " se dogodilo: " },
+              { "type": "placeholder", "key": "change" },
+              { "type": "text", "text": "." }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasActor",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Uradio/la: " },
+                  { "type": "placeholder", "key": "actorName" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasSubject",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Tiče se: " },
+                  { "type": "placeholder", "key": "subjectName" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "text": "Ovo obaveštenje dobija svaki administrator. Ako ne prepoznajete promenu, pogledajte dnevnik."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "sign_in_brake",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [{ "type": "text", "text": "Failed sign-ins to your account" }]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Dear " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Someone keeps trying to sign in to your account at " },
+              { "type": "placeholder", "key": "organisationName" },
+              {
+                "type": "text",
+                "text": " with the wrong password. Sign-in is slowed down for them; your known browser is not affected. If it was not you, no action is needed; if you keep getting this message, tell an administrator."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "sign_in_brake",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [{ "type": "text", "text": "Neuspele prijave na Vaš nalog" }]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Poštovani/a " },
+              { "type": "placeholder", "key": "recipientName" },
+              { "type": "text", "text": "," }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Neko pokušava da se prijavi na Vaš nalog kod " },
+              { "type": "placeholder", "key": "organisationName" },
+              {
+                "type": "text",
+                "text": " pogrešnom lozinkom. Prijava mu je usporena; Vaš poznati pregledač nije pogođen. Ako to niste bili Vi, ništa ne morate da radite; ako poruke ne prestaju, obavestite administratora."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "test_message",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Confera test message from " },
+          { "type": "placeholder", "key": "serverName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "This is a test message of " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " through the mail server " },
+              { "type": "placeholder", "key": "serverName" },
+              {
+                "type": "text",
+                "text": ". Đorđe Šćepanović, Čačak, Žabalj: the letters arrived unchanged."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "test_message",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Confera probna poruka sa " },
+          { "type": "placeholder", "key": "serverName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Ovo je probna poruka organizacije " },
+              { "type": "placeholder", "key": "organisationName" },
+              { "type": "text", "text": " preko servera " },
+              { "type": "placeholder", "key": "serverName" },
+              {
+                "type": "text",
+                "text": ". Đorđe Šćepanović, Čačak, Žabalj: slova su stigla nepromenjena."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

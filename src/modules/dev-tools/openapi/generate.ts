@@ -15,6 +15,7 @@ import {
   PASSWORD_RULES_FILE,
   passwordRulesDocument,
 } from '../contracts/password-rules-file';
+import { TEMPLATE_VECTORS_FILE, templateVectorsDocument } from '../contracts/template-vectors-file';
 import { buildDocuments, type ConferaDocuments } from './document';
 import { compare, findDrift, formatDrift, OPENAPI_FILES, serialise, writeDocuments } from './files';
 import { formatFindings, lintResponseSchemas } from './schema-lint';
@@ -30,6 +31,7 @@ function toolingConfig() {
     DATABASE_URL: 'postgresql://confera_app:invented-openapi@127.0.0.1:5432/confera_openapi',
     SYSTEM_DATABASE_URL:
       'postgresql://confera_system:invented-openapi@127.0.0.1:5432/confera_openapi',
+    DATA_KEY: 'invented-data-key-of-the-openapi-generator-0123456789ab',
   });
   if (!result.ok) {
     throw new Error('the configuration of the OpenAPI generator is not valid');
@@ -70,8 +72,9 @@ async function main(argv: readonly string[]): Promise<number> {
     return 1;
   }
 
-  // The other contract of the API: the password rule set with its vectors (ADR-03, ST-62).
-  // With --dir alone (a test's copy), the rule set is written and checked in that folder too.
+  // The other contracts of the API: the password rule set with its vectors (ADR-03, ST-62)
+  // and the template document format with its vectors (ADR-12, ST-58). With --dir alone
+  // (a test's copy), the contracts are written and checked in that folder too.
   const contracts = resolve(
     contractsIndex >= 0
       ? (argv[contractsIndex + 1] ?? CONTRACTS_DIRECTORY)
@@ -79,36 +82,44 @@ async function main(argv: readonly string[]): Promise<number> {
         ? directory
         : CONTRACTS_DIRECTORY,
   );
-  const rules = serialise(passwordRulesDocument());
-  const rulesPath = join(contracts, PASSWORD_RULES_FILE);
+  const contractFiles = [
+    { name: PASSWORD_RULES_FILE, text: serialise(passwordRulesDocument()) },
+    { name: TEMPLATE_VECTORS_FILE, text: serialise(templateVectorsDocument()) },
+  ];
 
   if (write) {
     for (const path of writeDocuments(directory, documents)) {
       process.stdout.write(`wrote ${path}\n`);
     }
     mkdirSync(contracts, { recursive: true });
-    writeFileSync(rulesPath, rules, 'utf8');
-    process.stdout.write(`wrote ${rulesPath}\n`);
+    for (const file of contractFiles) {
+      const path = join(contracts, file.name);
+      writeFileSync(path, file.text, 'utf8');
+      process.stdout.write(`wrote ${path}\n`);
+    }
     return 0;
   }
 
   const drift = findDrift(directory, documents);
-  const rulesDrift = compare(
-    `${CONTRACTS_DIRECTORY}/${PASSWORD_RULES_FILE}`,
-    rules,
-    existsSync(rulesPath) ? readFileSync(rulesPath, 'utf8') : undefined,
-  );
-  if (rulesDrift !== undefined) {
-    drift.push(rulesDrift);
+  for (const file of contractFiles) {
+    const path = join(contracts, file.name);
+    const contractDrift = compare(
+      `${CONTRACTS_DIRECTORY}/${file.name}`,
+      file.text,
+      existsSync(path) ? readFileSync(path, 'utf8') : undefined,
+    );
+    if (contractDrift !== undefined) {
+      drift.push(contractDrift);
+    }
   }
   if (drift.length > 0) {
     process.stderr.write(
-      `OpenAPI files are stale, or the password rule set is: the code and the committed files differ.\n${formatDrift(drift)}\nRun "corepack pnpm openapi:generate", look at the diff and commit it.\n`,
+      `OpenAPI files are stale, or a contract under contracts/ is: the code and the committed files differ.\n${formatDrift(drift)}\nRun "corepack pnpm openapi:generate", look at the diff and commit it.\n`,
     );
     return 1;
   }
   process.stdout.write(
-    'OpenAPI files are current, and so is the password rule set; they pass the schema lint.\n',
+    'OpenAPI files are current, and so are the contracts; they pass the schema lint.\n',
   );
   return 0;
 }
