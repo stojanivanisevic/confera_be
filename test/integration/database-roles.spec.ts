@@ -109,8 +109,12 @@ describe('database roles', () => {
       expect(tables.map((t) => t.tablename)).toEqual([
         '_prisma_migrations',
         'audit_entries',
+        'conferences',
         'known_devices',
+        'mail_log',
         'mail_outbox',
+        'mail_servers',
+        'mail_templates',
         'organisations',
         'role_permissions',
         'roles',

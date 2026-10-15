@@ -21,7 +21,11 @@ export const INVENTED_DOMAIN = 'example.test';
  */
 export const TENANT_TABLES = [
   'audit_entries',
+  'mail_log',
   'mail_outbox',
+  'mail_templates',
+  'conferences',
+  'mail_servers',
   'secure_links',
   'known_devices',
   'sessions',

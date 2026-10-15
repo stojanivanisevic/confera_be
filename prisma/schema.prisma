@@ -64,8 +64,129 @@ model Organisation {
   secureLinks  SecureLink[]
   mailMessages MailMessage[]
   auditEntries AuditEntry[]
+  mailServers  MailServer[]
+  conferences  Conference[]
+  templates    MailTemplate[]
+  mailLog      MailLogEntry[]
 
   @@map("organisations")
+}
+
+/// An outgoing mail server of the organisation (ADR-11, FR-SMTP-01 to 03). The password is
+/// stored sealed (secret-box.ts), never returned, and cleared when host, port, user or TLS
+/// mode change.
+model MailServer {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId    String    @map("organisation_id") @db.Uuid
+  name              String
+  host              String
+  port              Int
+  /// implicit (TLS from the first byte, port 465), starttls, or none (local and test stages only).
+  tlsMode           String    @map("tls_mode")
+  username          String?
+  /// The sealed password; null when none is set or it was cleared.
+  passwordSealed    String?   @map("password_sealed")
+  passwordSetAt     DateTime? @map("password_set_at") @db.Timestamptz(3)
+  /// The address the messages come from.
+  fromAddress       String    @map("from_address") @db.Citext
+  fromName          String    @map("from_name")
+  isDefault         Boolean   @default(false) @map("is_default")
+  isFallback        Boolean   @default(false) @map("is_fallback")
+  enabled           Boolean   @default(true)
+  /// Messages a minute that the worker sends through this server at most.
+  sendRatePerMinute Int       @default(30) @map("send_rate_per_minute")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version           Int       @default(1)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conferences  Conference[]
+
+  @@unique([organisationId, id])
+  @@map("mail_servers")
+}
+
+/// A conference, one edition (ADR-06, FR-CONF-01 to 05). The forms, fee list, deadlines and
+/// numbering arrive with their modules; the listed sites are what may frame its forms.
+model Conference {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  name           String
+  /// Two capital letters: the code of the series (IT, ER, EM, LI, AI).
+  code           String
+  editionYear    Int?      @map("edition_year")
+  startsOn       DateTime? @map("starts_on") @db.Date
+  endsOn         DateTime? @map("ends_on") @db.Date
+  venue          String?
+  /// The origins of the sites that may embed the conference's forms (https; validated).
+  listedSites    String[]  @default([]) @map("listed_sites")
+  /// The languages offered: en, sr.
+  languages      String[]  @default(["en"])
+  timeZone       String    @default("Europe/Belgrade") @map("time_zone")
+  /// draft, open, closed, archived.
+  state          String    @default("draft")
+  mailServerId   String?   @map("mail_server_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version        Int       @default(1)
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  /// A mail server in use by a conference is not deleted (409 mail_server_in_use).
+  mailServer   MailServer?    @relation(fields: [organisationId, mailServerId], references: [organisationId, id], onDelete: Restrict)
+  messages     MailMessage[]
+  templates    MailTemplate[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, code, editionYear])
+  @@map("conferences")
+}
+
+/// An email template (ADR-12): a document as data, per type and language, of the
+/// organisation or overriding it for one conference.
+model MailTemplate {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  conferenceId   String?  @map("conference_id") @db.Uuid
+  type           String
+  language       String
+  subject        Json
+  body           Json
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version        Int      @default(1)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conference   Conference?  @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, conferenceId, type, language])
+  @@map("mail_templates")
+}
+
+/// The mail log (ADR-13, FR-SMTP-04): one entry per attempt, with the content sent and
+/// every secure link as `[link]`.
+model MailLogEntry {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  mailServerId   String?  @map("mail_server_id") @db.Uuid
+  recipient      String   @db.Citext
+  kind           String
+  conferenceId   String?  @map("conference_id") @db.Uuid
+  attempt        Int
+  /// sent or failed.
+  result         String
+  errorCode      String?  @map("error_code")
+  subject        String?
+  bodyHtml       String?  @map("body_html")
+  bodyText       String?  @map("body_text")
+  sentAt         DateTime @default(now()) @map("sent_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  message      MailMessage  @relation(fields: [organisationId, messageId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, sentAt])
+  @@map("mail_log")
 }
 
 /// A member of staff. One organisation per user in the MVP (ADR-06, decision z).
@@ -211,25 +332,38 @@ model SecureLink {
 /// causes it, with a unique key. One recipient per row. A link is never stored: the row says
 /// which link to make (purpose and user), and the worker of 0.2.0 part B makes it at send time.
 model MailMessage {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId   String   @map("organisation_id") @db.Uuid
-  uniqueKey        String   @map("unique_key")
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  uniqueKey        String    @map("unique_key")
   /// The kind of message, which names its template (invitation, password_reset, ...).
   kind             String
-  recipientUserId  String?  @map("recipient_user_id") @db.Uuid
-  recipientAddress String   @map("recipient_address") @db.Citext
+  recipientUserId  String?   @map("recipient_user_id") @db.Uuid
+  recipientAddress String    @map("recipient_address") @db.Citext
   /// The link the message carries, made at send time: its purpose and the user it is for.
-  linkPurpose      String?  @map("link_purpose")
-  linkUserId       String?  @map("link_user_id") @db.Uuid
+  linkPurpose      String?   @map("link_purpose")
+  linkUserId       String?   @map("link_user_id") @db.Uuid
   /// What the template needs besides the link: ids and fixed codes, never a token.
-  parameters       Json     @default("{}")
-  status           String   @default("queued")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  parameters       Json      @default("{}")
+  /// queued, sending, sent, failed, held (by the send breaker of 0.3.0), stuck (left in sending by a crash).
+  status           String    @default("queued")
+  /// The language of the recipient: en or sr.
+  language         String    @default("en")
+  /// The conference the message is about, which chooses its templates and mail server.
+  conferenceId     String?   @map("conference_id") @db.Uuid
+  attempts         Int       @default(0)
+  nextAttemptAt    DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  claimedAt        DateTime? @map("claimed_at") @db.Timestamptz(3)
+  sentAt           DateTime? @map("sent_at") @db.Timestamptz(3)
+  lastErrorCode    String?   @map("last_error_code")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  log          MailLogEntry[]
+  conference   Conference?    @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Restrict)
 
   @@unique([organisationId, id])
   @@unique([organisationId, uniqueKey])
+  @@index([status, nextAttemptAt])
   @@index([organisationId, recipientUserId, kind, createdAt])
   @@map("mail_outbox")
 }
