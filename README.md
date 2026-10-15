@@ -329,7 +329,7 @@ the two equal. The OpenAPI document carries the declaration of every operation
   most 128); not a common or leaked password; not the person's own name or email name nor
   the organisation's; both entries match. The server refuses with 400 `password_refused`
   and each broken rule named (`password_length`, `password_common`, `password_personal`,
-  `password_mismatch`). The rule set with its 38 vectors is `contracts/password-rules.json`,
+  `password_mismatch`). The rule set with its 37 vectors is `contracts/password-rules.json`,
   written by `pnpm openapi:generate` and held current by `pnpm openapi:check`; the web
   application vendors it and its live checklist must give the same four results for every
   vector. The rules are in `src/modules/access/password-rules.ts`, the list of common

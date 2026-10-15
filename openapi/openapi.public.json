@@ -25,7 +25,7 @@
             }
           }
         },
-        "summary": "Receives the reports. Always 204; what the browser sent is never echoed.",
+        "summary": "Receives the reports: 204, whatever they hold (a body that is no JSON is refused by the\nparser with 400 before it gets here). What the browser sent is never echoed.",
         "tags": [
           "CspReports"
         ],
