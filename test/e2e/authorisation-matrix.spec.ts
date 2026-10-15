@@ -100,6 +100,24 @@ const SAMPLE_BODIES: Readonly<Record<string, () => object>> = {
   deactivateUser: () => ({ version: 99 }),
   reactivateUser: () => ({ version: 99 }),
   updateOrganisation: () => ({ version: 99 }),
+  createMailServer: () => ({
+    name: 'Matrica',
+    host: 'smtp.a.example.test',
+    port: 587,
+    tlsMode: 'starttls',
+    fromAddress: 'office@a.example.test',
+    fromName: 'Matrica Probna',
+  }),
+  updateMailServer: () => ({ name: 'Matrica', version: 99 }),
+  sendTestMessage: () => ({ to: 'nobody@a.example.test' }),
+  createConference: () => ({
+    name: 'Matrica (izmišljeno)',
+    code: 'ZZ',
+    editionYear: 2000 + ((randomBytes(1)[0] ?? 0) % 100),
+  }),
+  updateConference: () => ({ name: 'Matrica (izmišljeno)', version: 99 }),
+  changeConferenceState: () => ({ state: 'open', version: 99 }),
+  copyConference: () => ({ name: 'Matrica kopija (izmišljeno)', editionYear: 2100 }),
   changePaymentDetails: () => ({
     rsdAccount: null,
     eurIban: null,
@@ -111,7 +129,10 @@ const SAMPLE_BODIES: Readonly<Record<string, () => object>> = {
 };
 
 /** The query of the operations that take one. */
-const SAMPLE_QUERIES: Readonly<Record<string, string>> = { removeUser: '?version=99' };
+const SAMPLE_QUERIES: Readonly<Record<string, string>> = {
+  removeUser: '?version=99',
+  deleteMailServer: '?version=99',
+};
 
 /**
  * The codes with which the door stays shut. An operation that answers 401 or 403 with a
@@ -132,6 +153,54 @@ function verdict(response: { status: number; body: unknown }): { status: number;
   return { status: response.status, code: (response.body as { code?: string }).code ?? '' };
 }
 
+/**
+ * One object of each kind that a path names, in organisation A, written as the owner role
+ * inside the organisation: a mail server, a conference, a template and a mail-log entry.
+ * Paths of users take the reviewer of A.
+ */
+async function objectsOfA(owner: Client, organisationId: string): Promise<Record<string, string>> {
+  await owner.query('BEGIN');
+  try {
+    await owner.query("SELECT set_config('app.org_id', $1, true)", [organisationId]);
+    const one = async (sql: string, values: unknown[]) =>
+      (await owner.query<{ id: string }>(sql, values)).rows[0]?.id ?? '';
+    const server = await one(
+      `INSERT INTO mail_servers (organisation_id, name, host, port, tls_mode, from_address, from_name)
+       VALUES ($1, 'Matrica', 'smtp.a.example.test', 587, 'starttls', 'office@a.example.test', 'Matrica') RETURNING id`,
+      [organisationId],
+    );
+    const conference = await one(
+      `INSERT INTO conferences (organisation_id, name, code) VALUES ($1, 'Matrica (izmišljeno)', 'MX') RETURNING id`,
+      [organisationId],
+    );
+    const template = await one(
+      `INSERT INTO mail_templates (organisation_id, type, language, subject, body)
+       VALUES ($1, 'test_message', 'en', '{"type":"subject","children":[]}', '{"type":"doc","children":[]}') RETURNING id`,
+      [organisationId],
+    );
+    const message = await one(
+      `INSERT INTO mail_outbox (organisation_id, unique_key, kind, recipient_address, status)
+       VALUES ($1, 'matrix', 'test_message', 'nobody@a.example.test', 'sent') RETURNING id`,
+      [organisationId],
+    );
+    const entry = await one(
+      `INSERT INTO mail_log (organisation_id, message_id, recipient, kind, language, attempt, result)
+       VALUES ($1, $2, 'nobody@a.example.test', 'test_message', 'en', 1, 'sent') RETURNING id`,
+      [organisationId, message],
+    );
+    await owner.query('COMMIT');
+    return {
+      '/api/v1/mail-servers/': server,
+      '/api/v1/conferences/': conference,
+      '/api/v1/mail-templates/': template,
+      '/api/v1/mail-log/': entry,
+    };
+  } catch (error) {
+    await owner.query('ROLLBACK');
+    throw error;
+  }
+}
+
 /** The permissions a reviewer holds (the seeded role_permissions; see permissions.ts). */
 const REVIEWER_PERMISSIONS = new Set(['account.manage']);
 
@@ -147,6 +216,7 @@ describe('the authorisation matrix of the admin API', () => {
     await new Factories(owner).reset();
     e2e = await startE2eApp();
     actors = await createActors(e2e, owner);
+    objects = await objectsOfA(owner, actors.a.organisation.id);
   });
 
   afterAll(async () => {
@@ -154,11 +224,15 @@ describe('the authorisation matrix of the admin API', () => {
     await owner.end();
   });
 
+  /** The objects of organisation A that a path with `{id}` names, by the start of the path. */
+  let objects: Readonly<Record<string, string>>;
+
   /** A path of the document with its parameters replaced by objects of organisation A. */
   function concrete(operation: Operation): string {
+    const prefix = Object.keys(objects).find((start) => operation.path.startsWith(start));
     return (
       operation.path
-        .replace('{id}', actors.a.reviewer.id)
+        .replace('{id}', prefix === undefined ? actors.a.reviewer.id : (objects[prefix] ?? ''))
         .replace(/\{token\}/g, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA') +
       (SAMPLE_QUERIES[operation.id] ?? '')
     );
@@ -279,7 +353,7 @@ describe('the authorisation matrix of the admin API', () => {
   describe('the password asked again', () => {
     const sensitive = protectedOperations.filter((operation) => operation.freshPassword);
 
-    it('users, roles and the payment details are sensitive changes', () => {
+    it('users, roles, the payment details and mail servers are sensitive changes', () => {
       expect(
         sensitive.map((operation) => `${operation.method.toUpperCase()} ${operation.path}`),
       ).toEqual(
@@ -288,6 +362,9 @@ describe('the authorisation matrix of the admin API', () => {
           'PUT /api/v1/users/{id}/role',
           'DELETE /api/v1/users/{id}',
           'PUT /api/v1/organisation/payment-details',
+          'POST /api/v1/mail-servers',
+          'PATCH /api/v1/mail-servers/{id}',
+          'DELETE /api/v1/mail-servers/{id}',
         ]),
       );
     });

@@ -11,10 +11,15 @@ import { ConfigModule } from './config/config.module';
 import { AccessGuard } from './modules/access/access.guard';
 import { AccessModule } from './modules/access/access.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { ConferencesModule } from './modules/conferences/conferences.module';
 import { CspReportsModule } from './modules/csp-reports/csp-reports.module';
 import { HealthModule } from './modules/health/health.module';
+import { MailModule } from './modules/mail/mail.module';
+import { MailLogModule } from './modules/mail-log/mail-log.module';
+import { MailServersModule } from './modules/mail-servers/mail-servers.module';
 import { MetaModule } from './modules/meta/meta.module';
 import { OrganisationModule } from './modules/organisation/organisation.module';
+import { TemplatesModule } from './modules/templates/templates.module';
 import { UsersModule } from './modules/users/users.module';
 import { PdfModule } from './platform/pdf/pdf.module';
 import { PrismaModule } from './platform/prisma/prisma.module';
@@ -56,6 +61,11 @@ export class AppModule {
         OrganisationModule,
         AuditModule,
         CspReportsModule,
+        MailModule,
+        MailServersModule,
+        ConferencesModule,
+        TemplatesModule,
+        MailLogModule,
         ...extraImports,
       ],
       providers: [

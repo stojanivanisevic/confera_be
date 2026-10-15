@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REFUSED_VECTORS, RENDERED_VECTORS } from '../dev-tools/contracts/template-vectors';
-import { checkBody, checkSubject, DocumentError } from './document';
-import { catalogueOf, LANGUAGES, TEMPLATE_TYPES } from './placeholders';
-import { renderTemplate } from './render';
+import { serialise } from '../openapi/files';
+import { CONTRACTS_DIRECTORY } from './password-rules-file';
+import { REFUSED_VECTORS, RENDERED_VECTORS } from './template-vectors';
+import { TEMPLATE_VECTORS_FILE, templateVectorsDocument } from './template-vectors-file';
+import { checkBody, checkSubject, DocumentError } from '../../templates/document';
+import { catalogueOf, LANGUAGES, TEMPLATE_TYPES } from '../../templates/placeholders';
+import { renderTemplate } from '../../templates/render';
 
 /** The template document format against its shared vectors (ADR-12, ST-58, ST-22). */
 describe('the template document format', () => {
@@ -93,7 +96,7 @@ describe('the template document format', () => {
   describe('the default templates', () => {
     const file = JSON.parse(
       readFileSync(
-        join(__dirname, '..', '..', '..', 'prisma', 'seed', 'default-templates.json'),
+        join(__dirname, '..', '..', '..', '..', 'prisma', 'seed', 'default-templates.json'),
         'utf8',
       ),
     ) as {
@@ -128,5 +131,13 @@ describe('the template document format', () => {
         });
       }
     });
+  });
+
+  it('the committed contract is the format of the code, with these vectors', () => {
+    const committed = readFileSync(
+      join(__dirname, '..', '..', '..', '..', CONTRACTS_DIRECTORY, TEMPLATE_VECTORS_FILE),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    expect(committed).toBe(serialise(templateVectorsDocument()));
   });
 });

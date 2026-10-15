@@ -113,7 +113,15 @@
                 "user.sessions_ended",
                 "organisation.updated",
                 "organisation.payment_details_changed",
-                "security.unknown_address_sign_ins"
+                "security.unknown_address_sign_ins",
+                "mail_server.created",
+                "mail_server.updated",
+                "mail_server.deleted",
+                "mail_server.tested",
+                "conference.created",
+                "conference.updated",
+                "conference.state_changed",
+                "conference.copied"
               ]
             }
           },
@@ -202,6 +210,298 @@
         ],
         "x-confera-access": {
           "permission": "audit.read"
+        }
+      }
+    },
+    "/api/v1/conferences": {
+      "get": {
+        "operationId": "listConferences",
+        "parameters": [
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "open",
+                "closed",
+                "archived"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.read"
+        }
+      },
+      "post": {
+        "operationId": "createConference",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.manage"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}": {
+      "get": {
+        "operationId": "getConference",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.read"
+        }
+      },
+      "patch": {
+        "operationId": "updateConference",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.manage"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}/copy": {
+      "post": {
+        "operationId": "copyConference",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyConferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A new draft as a copy of this conference (FR-CONF-03).",
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.manage"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}/state": {
+      "post": {
+        "operationId": "changeConferenceState",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConferenceStateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Conferences"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.manage"
         }
       }
     },
@@ -370,6 +670,575 @@
         ],
         "x-confera-access": {
           "public": true
+        }
+      }
+    },
+    "/api/v1/mail-log": {
+      "get": {
+        "operationId": "listMailLog",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "invitation",
+                "password_reset",
+                "email_change_confirmation",
+                "email_change_notice",
+                "security_notice",
+                "sign_in_brake",
+                "test_message"
+              ]
+            }
+          },
+          {
+            "name": "result",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sent",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "conferenceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailLogPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MailLog"
+        ],
+        "x-confera-access": {
+          "permission": "mail_log.read"
+        }
+      }
+    },
+    "/api/v1/mail-log/{id}": {
+      "get": {
+        "operationId": "getMailLogEntry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailLogEntryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MailLog"
+        ],
+        "x-confera-access": {
+          "permission": "mail_log.read"
+        }
+      }
+    },
+    "/api/v1/mail-servers": {
+      "get": {
+        "operationId": "listMailServers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailServerListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.read"
+        }
+      },
+      "post": {
+        "operationId": "createMailServer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMailServerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailServerDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/mail-servers/{id}": {
+      "get": {
+        "operationId": "getMailServer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailServerDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.read"
+        }
+      },
+      "patch": {
+        "operationId": "updateMailServer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMailServerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailServerDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "409 `version_conflict` when another admin changed it first.",
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.manage"
+        },
+        "x-confera-fresh-password": true
+      },
+      "delete": {
+        "operationId": "deleteMailServer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "409 `mail_server_in_use` while a conference or a template names it.",
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.manage"
+        },
+        "x-confera-fresh-password": true
+      }
+    },
+    "/api/v1/mail-servers/{id}/test-message": {
+      "post": {
+        "operationId": "sendTestMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestMessageResultDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sends a test message through this server to one address; the result is generic.",
+        "tags": [
+          "MailServers"
+        ],
+        "x-confera-access": {
+          "permission": "mail_servers.manage"
+        }
+      }
+    },
+    "/api/v1/mail-templates": {
+      "get": {
+        "operationId": "listMailTemplates",
+        "parameters": [
+          {
+            "name": "conferenceId",
+            "required": false,
+            "in": "query",
+            "description": "Only the templates of this conference; without it, only the organisation's own.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "invitation",
+                "password_reset",
+                "email_change_confirmation",
+                "email_change_notice",
+                "security_notice",
+                "sign_in_brake",
+                "test_message"
+              ]
+            }
+          },
+          {
+            "name": "language",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "sr"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailTemplateListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
+    "/api/v1/mail-templates/catalogue": {
+      "get": {
+        "operationId": "getTemplateCatalogue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateCatalogueDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The placeholder catalogue per type: what a template of the type may use.",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
+    "/api/v1/mail-templates/{id}": {
+      "get": {
+        "operationId": "getMailTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailTemplateDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
         }
       }
     },
@@ -1522,6 +2391,121 @@
           "version"
         ]
       },
+      "ConferenceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Two capital letters: IT, ER, EM, LI, AI."
+          },
+          "editionYear": {
+            "type": "number",
+            "nullable": true
+          },
+          "startsOn": {
+            "type": "string",
+            "nullable": true,
+            "description": "YYYY-MM-DD."
+          },
+          "endsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true
+          },
+          "listedSites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "An IANA time zone, for example Europe/Belgrade."
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "open",
+              "closed",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "editionYear",
+          "startsOn",
+          "endsOn",
+          "venue",
+          "listedSites",
+          "languages",
+          "timeZone",
+          "state",
+          "mailServerId",
+          "version"
+        ]
+      },
+      "ConferenceListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConferenceDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ConferenceStateDto": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "open",
+              "closed",
+              "archived"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "state",
+          "version"
+        ]
+      },
       "ConfirmationDto": {
         "type": "object",
         "properties": {
@@ -1532,6 +2516,160 @@
         },
         "required": [
           "confirmationValidUntil"
+        ]
+      },
+      "CopyConferenceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "code": {
+            "type": "string"
+          },
+          "editionYear": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 2000,
+            "maximum": 2100
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CreateConferenceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "code": {
+            "type": "string"
+          },
+          "editionYear": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 2000,
+            "maximum": 2100
+          },
+          "startsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "endsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "listedSites": {
+            "description": "At most 20; each is checked and kept as an origin (ST-30).",
+            "maxItems": 21,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "languages": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "en",
+                "sr"
+              ]
+            }
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "name",
+          "code"
+        ]
+      },
+      "CreateMailServerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "tlsMode": {
+            "type": "string",
+            "enum": [
+              "implicit",
+              "starttls",
+              "none"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "description": "Write-only. Stored sealed (AES-256-GCM), never returned.",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "isFallback": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "sendRatePerMinute": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 600
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "port",
+          "tlsMode",
+          "fromAddress",
+          "fromName"
         ]
       },
       "EmailChangeLinkDto": {
@@ -1614,6 +2752,337 @@
           "displayName",
           "organisationName",
           "expiresAt"
+        ]
+      },
+      "MailLogEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "The template type."
+          },
+          "language": {
+            "type": "string"
+          },
+          "conferenceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "serverName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The name of the server when it was used."
+          },
+          "attempt": {
+            "type": "number"
+          },
+          "result": {
+            "enum": [
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "A code, never the server's words."
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodyHtml": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodyText": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "messageId",
+          "recipient",
+          "kind",
+          "language",
+          "conferenceId",
+          "mailServerId",
+          "serverName",
+          "attempt",
+          "result",
+          "errorCode",
+          "sentAt",
+          "subject",
+          "bodyHtml",
+          "bodyText"
+        ]
+      },
+      "MailLogPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailLogSummaryDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "MailLogSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "The template type."
+          },
+          "language": {
+            "type": "string"
+          },
+          "conferenceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "serverName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The name of the server when it was used."
+          },
+          "attempt": {
+            "type": "number"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "failed"
+            ]
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "A code, never the server's words."
+          },
+          "sentAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "messageId",
+          "recipient",
+          "kind",
+          "language",
+          "conferenceId",
+          "mailServerId",
+          "serverName",
+          "attempt",
+          "result",
+          "errorCode",
+          "sentAt"
+        ]
+      },
+      "MailServerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "number"
+          },
+          "tlsMode": {
+            "description": "implicit (TLS from the first byte), starttls (required), none (developer machines only).",
+            "enum": [
+              "implicit",
+              "starttls",
+              "none"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          },
+          "credentialSet": {
+            "type": "boolean",
+            "description": "Whether a password is stored. The password itself is never returned."
+          },
+          "credentialSetAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the stored password was set."
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "The organisation's default server, last in the order of FR-SMTP-02."
+          },
+          "isFallback": {
+            "type": "boolean",
+            "description": "Tried when sending through the chosen server fails."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "sendRatePerMinute": {
+            "type": "number",
+            "description": "Messages a minute the worker sends through this server at most."
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "host",
+          "port",
+          "tlsMode",
+          "username",
+          "credentialSet",
+          "credentialSetAt",
+          "fromAddress",
+          "fromName",
+          "isDefault",
+          "isFallback",
+          "enabled",
+          "sendRatePerMinute",
+          "version"
+        ]
+      },
+      "MailServerListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailServerDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MailTemplateDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conferenceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A subject document: type subject, with text and placeholder children."
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A body document: type doc, with block children."
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The server of this template, first in the order of FR-SMTP-02."
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "conferenceId",
+          "type",
+          "language",
+          "subject",
+          "body",
+          "mailServerId",
+          "updatedAt",
+          "version"
+        ]
+      },
+      "MailTemplateListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailTemplateDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "Meta": {
@@ -1712,6 +3181,10 @@
               }
             ]
           },
+          "mailLogContent": {
+            "type": "boolean",
+            "description": "Whether the mail log keeps the subject and body of what was sent (FR-SMTP-04)."
+          },
           "version": {
             "type": "number",
             "description": "Sent back with a change: a change made on an older version is refused (409)."
@@ -1734,6 +3207,7 @@
           "paypalPayee",
           "paymentDetailsChangedAt",
           "paymentDetailsChangedBy",
+          "mailLogContent",
           "version"
         ]
       },
@@ -1962,6 +3436,231 @@
           "password"
         ]
       },
+      "TemplateCatalogueDto": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateTypeDto"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "types",
+          "languages"
+        ]
+      },
+      "TemplateTypeDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "placeholders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "carriesLink": {
+            "type": "boolean",
+            "description": "Whether a message of this type carries a secure link: the address of a link node."
+          }
+        },
+        "required": [
+          "type",
+          "placeholders",
+          "conditions",
+          "carriesLink"
+        ]
+      },
+      "TestMessageDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "sr"
+            ]
+          }
+        },
+        "required": [
+          "to"
+        ]
+      },
+      "TestMessageResultDto": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "failed",
+              "refused"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "With `refused`: tls_required, port_not_allowed or address_not_allowed."
+          }
+        },
+        "required": [
+          "result",
+          "reason"
+        ]
+      },
+      "UpdateConferenceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "code": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "editionYear": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 2000,
+            "maximum": 2100
+          },
+          "startsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "endsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300
+          },
+          "listedSites": {
+            "description": "At most 20; each is checked and kept as an origin (ST-30).",
+            "maxItems": 21,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "languages": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "en",
+                "sr"
+              ]
+            }
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "UpdateMailServerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "tlsMode": {
+            "type": "string",
+            "enum": [
+              "implicit",
+              "starttls",
+              "none"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "isFallback": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "sendRatePerMinute": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "UpdateOrganisationDto": {
         "type": "object",
         "properties": {
@@ -2000,6 +3699,10 @@
             "type": "string",
             "nullable": true,
             "maxLength": 1000
+          },
+          "mailLogContent": {
+            "type": "boolean",
+            "description": "Whether the mail log keeps the content of what was sent (FR-SMTP-04)."
           },
           "version": {
             "type": "number",
