@@ -116,16 +116,20 @@ export class UsersService {
   ): Promise<UserDto> {
     try {
       return await this.database.transaction(async (tx) => {
-        const user = await tx.user.create({
+        const created = await tx.user.create({
           data: {
             organisationId: actor.organisationId,
             email: input.email,
             displayName: input.displayName,
             status: 'invited',
-            roles: { create: { organisationId: actor.organisationId, role: input.role } },
           },
-          select: USER_SELECT,
+          select: { id: true },
         });
+        // The role row carries the organisation (ADR-06), which a nested create cannot name.
+        await tx.userRole.create({
+          data: { organisationId: actor.organisationId, userId: created.id, role: input.role },
+        });
+        const user = await this.load(tx, created.id);
         await this.queueInvitation(tx, actor, user, `created:${user.id}`);
         await this.audit.record(tx, {
           organisationId: actor.organisationId,
@@ -344,7 +348,7 @@ export class UsersService {
     if (user.status !== 'active' || toDto(user).role !== 'admin') {
       return;
     }
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera admins ${organisationId}`}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera admins ${organisationId}`}, 0))`;
     const others = await tx.user.count({
       where: { id: { not: user.id }, status: 'active', roles: { some: { role: 'admin' } } },
     });

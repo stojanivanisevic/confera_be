@@ -95,7 +95,10 @@ export class CspReportsController {
 
   constructor(private readonly logger: AppLogger) {}
 
-  /** Receives the reports. Always 204; what the browser sent is never echoed. */
+  /**
+   * Receives the reports: 204, whatever they hold (a body that is no JSON is refused by the
+   * parser with 400 before it gets here). What the browser sent is never echoed.
+   */
   @Post()
   @Public({ anyOrigin: true })
   @HttpCode(204)

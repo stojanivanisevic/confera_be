@@ -2,7 +2,7 @@ import type { Client } from 'pg';
 import { validProductionEnvironment } from '../../src/config/testing/valid-environment';
 import { describeRole, roleProblems } from '../../src/platform/prisma/database-role';
 import { createBaseClient } from '../../src/platform/prisma/tenant-client';
-import { freePort, PRODUCTION_ENTRY } from '../support/api-process';
+import { API_START_LIMIT_MS, freePort, PRODUCTION_ENTRY } from '../support/api-process';
 import { runNode } from '../support/run-node';
 import {
   addressFor,
@@ -135,7 +135,7 @@ describe('edge cases of the start-up role check (M1-REV-01)', () => {
         PORT: port,
         LISTEN_HOST: '127.0.0.1',
       },
-      timeoutMs: 30_000,
+      timeoutMs: API_START_LIMIT_MS,
     });
     expect({ exitCode: result.exitCode, timedOut: result.timedOut }).toEqual({
       exitCode: EXIT_REFUSED,

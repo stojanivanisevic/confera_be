@@ -4,6 +4,14 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { baseEnvironment, repoRoot } from './run-node';
 
+/**
+ * How long a start, or a refused start, may take before a test gives up (M1-ISS-43). The
+ * limit is a guard against a process that hangs, not an assertion of speed: under load
+ * (another suite, a mutation run on every core) a start took more than 30 s and the test
+ * failed for the wrong reason. Speed is asserted in the timing tier, in fresh processes.
+ */
+export const API_START_LIMIT_MS = 120_000;
+
 /** Entry file of the production build (`pnpm build`). */
 export const PRODUCTION_ENTRY = join('dist', 'main.js');
 
@@ -119,7 +127,7 @@ export async function startApi(
     });
   });
 
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + API_START_LIMIT_MS;
   for (;;) {
     if (exited !== undefined) {
       throw new Error(
@@ -137,7 +145,9 @@ export async function startApi(
     if (Date.now() > deadline) {
       child.kill();
       await closed;
-      throw new Error(`the API did not answer within 30 s:\n${output}`);
+      throw new Error(
+        `the API did not answer within ${String(API_START_LIMIT_MS / 1000)} s:\n${output}`,
+      );
     }
     await delay(100);
   }

@@ -2,7 +2,7 @@ import type { Client } from 'pg';
 import { validProductionEnvironment } from '../../src/config/testing/valid-environment';
 import { describeRole, roleProblems } from '../../src/platform/prisma/database-role';
 import { createBaseClient } from '../../src/platform/prisma/tenant-client';
-import { freePort, PRODUCTION_ENTRY, startApi } from '../support/api-process';
+import { API_START_LIMIT_MS, freePort, PRODUCTION_ENTRY, startApi } from '../support/api-process';
 import { runNode } from '../support/run-node';
 import {
   addressFor,
@@ -281,7 +281,7 @@ describe('database roles', () => {
       const port = String(await freePort());
       return runNode([PRODUCTION_ENTRY], {
         env: { ...environment(overrides), PORT: port, LISTEN_HOST: '127.0.0.1' },
-        timeoutMs: 30_000,
+        timeoutMs: API_START_LIMIT_MS,
       });
     };
 

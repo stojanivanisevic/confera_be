@@ -129,7 +129,7 @@ const REFUSALS = new Set([
 
 /** What a response says about the door: its status and its code. */
 function verdict(response: { status: number; body: unknown }): { status: number; code: string } {
-  return { status: response.status, code: String((response.body as { code?: string }).code ?? '') };
+  return { status: response.status, code: (response.body as { code?: string }).code ?? '' };
 }
 
 /** The permissions a reviewer holds (the seeded role_permissions; see permissions.ts). */

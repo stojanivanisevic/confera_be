@@ -1,14 +1,7 @@
 import type { Client } from 'pg';
 import { DEVICE_COOKIE, SESSION_COOKIE } from '../../src/modules/access/cookies';
 import { ABSOLUTE_MS, IDLE_MS } from '../../src/modules/access/session.service';
-import {
-  type Actors,
-  as,
-  createActors,
-  sessionCookieOf,
-  type SignedIn,
-  signIn,
-} from './support/actors';
+import { type Actors, as, createActors, signIn } from './support/actors';
 import { ADMIN_HOST, type E2eApp, PUBLIC_HOST, startE2eApp } from './support/e2e-app';
 import { connectAsOwner, rows } from './support/e2e-database';
 import { Factories, INVENTED_PASSWORD } from './support/factories';
@@ -46,9 +39,7 @@ describe('sessions', () => {
     }
   }
 
-  async function sessionIds(
-    userId: string,
-  ): Promise<
+  async function sessionIds(userId: string): Promise<
     {
       id: string;
       token_hash: string;
