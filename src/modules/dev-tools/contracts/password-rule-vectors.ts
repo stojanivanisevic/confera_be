@@ -16,10 +16,11 @@ export interface PasswordVector {
   readonly met: Readonly<Record<PasswordRuleId, boolean>>;
 }
 
-const ZIVANA: PasswordContext = {
-  email: 'zivana.djordjevic@a.example.test',
-  displayName: 'Živana Đorđević',
-  organisationName: 'Udruženje za probe A (izmišljeno)',
+// A person of the vectors alone: not one of the seed of seed:e2e, which no build may hold.
+const VESNA: PasswordContext = {
+  email: 'vesna.djurdjevic@proba.example.test',
+  displayName: 'Vesna Đurđević',
+  organisationName: 'Društvo za oglede (izmišljeno)',
 };
 
 const ALL_MET = { length: true, not_common: true, not_personal: true, match: true } as const;
@@ -40,7 +41,7 @@ function vector(
     name,
     candidate,
     repeat: options.repeat ?? candidate,
-    context: options.context ?? ZIVANA,
+    context: options.context ?? VESNA,
     met: { ...ALL_MET, ...met },
   };
 }
@@ -86,29 +87,29 @@ export const PASSWORD_VECTORS: readonly PasswordVector[] = [
     not_common: false,
   }),
   // not_personal
-  vector('the given name', 'Zivana!Sunce42', { not_personal: false }),
-  vector('the given name with its letter ž', 'Živana-Sunce42', { not_personal: false }),
-  vector('the family name as the email writes it (dj)', 'Djordjevic+Mesec1', {
+  vector('the given name', 'Vesna!Sunce42', { not_personal: false }),
+  vector('the family name with its letters đ', 'Đurđević-Sunce42', { not_personal: false }),
+  vector('the family name as the email writes it (dj)', 'Djurdjevic+Mesec1', {
     not_personal: false,
   }),
-  vector('the family name with đ written as d', 'MostDordevic99', { not_personal: false }),
-  vector('a word of the organisation', 'Probe-za-Sunce-77', { not_personal: false }),
+  vector('the family name with đ written as d', 'MostDurdevic99', { not_personal: false }),
+  vector('a word of the organisation', 'Oglede-za-Sunce-77', { not_personal: false }),
   vector('another word of the organisation', 'Izmisljeno2026x', { not_personal: false }),
   vector('words shorter than four characters are not looked for', 'Za-A-Sunce-Mesec', {}),
   vector(
     'a name in Cyrillic, in Cyrillic',
-    'Живана-Сунце-42',
+    'Весна-Сунце-42',
     { not_personal: false },
-    { context: { ...ZIVANA, displayName: 'Живана Ђорђевић' } },
+    { context: { ...VESNA, displayName: 'Весна Ђурђевић' } },
   ),
   vector(
     'a name in Cyrillic is not found in a Latin password (no transliteration)',
-    'Zivana-Sunce-42',
+    'Vesna-Sunce-42',
     {},
     {
       context: {
-        email: 'z.dj@a.example.test',
-        displayName: 'Живана Ђорђевић',
+        email: 'v.dj@proba.example.test',
+        displayName: 'Весна Ђурђевић',
         organisationName: 'Удружење',
       },
     },
@@ -117,9 +118,9 @@ export const PASSWORD_VECTORS: readonly PasswordVector[] = [
     'the name of a conference',
     'MojaSava-Reka-7',
     { not_personal: false },
-    { context: { ...ZIVANA, conferenceNames: ['Sava Conference 2026'] } },
+    { context: { ...VESNA, conferenceNames: ['Sava Conference 2026'] } },
   ),
-  vector('without a context nothing is personal', 'Zivana!Sunce42', {}, { context: {} }),
+  vector('without a context nothing is personal', 'Vesna!Sunce42', {}, { context: {} }),
   // match
   vector(
     'two entries that differ',
