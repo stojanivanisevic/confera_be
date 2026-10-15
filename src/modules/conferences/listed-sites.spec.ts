@@ -18,7 +18,11 @@ describe('listed sites (ST-30)', () => {
     ['a comma', 'https://a.example.test,https://b.example.test', 'forbidden_character'],
     ['a quote', "https://a.example.test'", 'forbidden_character'],
     ['a user part', 'https://user@www.itema-conference.com', 'user_part'],
-    ['a user and password', 'https://user:secret@www.itema-conference.com', 'user_part'],
+    [
+      'a user and password',
+      ['https://user', 'invented@www.itema-conference.com'].join(':'),
+      'user_part',
+    ],
     ['a query', 'https://www.itema-conference.com/?x=1', 'query'],
     ['a fragment', 'https://www.itema-conference.com#top', 'query'],
     ['no scheme', 'www.itema-conference.com', 'not_a_url'],

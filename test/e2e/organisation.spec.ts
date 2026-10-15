@@ -225,6 +225,16 @@ describe('the organisation', () => {
       .filter(([, item]) => 'get' in item)
       .map(([path]) => path)
       .filter((path) => !path.includes('{token}'));
+    /** The reading routes that page: they are asked for their largest page. */
+    const paged = new Set(
+      Object.entries(document.paths)
+        .filter(([, item]) =>
+          JSON.stringify(
+            (item.get as { parameters?: unknown } | undefined)?.parameters ?? [],
+          ).includes('"name":"pageSize"'),
+        )
+        .map(([path]) => path),
+    );
 
     it('every reading route, asked by the admin of B, shows nothing of A', async () => {
       expect(reads.length).toBeGreaterThanOrEqual(5);
@@ -244,7 +254,7 @@ describe('the organisation', () => {
           e2e,
           adminB,
           'get',
-          `${concrete}${concrete.includes('?') ? '&' : '?'}pageSize=100`,
+          paged.has(path) ? `${concrete}?pageSize=100` : concrete,
         );
         expect([200, 404]).toContain(response.status);
         for (const mark of marks) {
