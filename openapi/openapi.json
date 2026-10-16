@@ -2403,6 +2403,15 @@
       "ConferenceDto": {
         "type": "object",
         "properties": {
+          "state": {
+            "enum": [
+              "draft",
+              "open",
+              "closed",
+              "archived"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -2446,15 +2455,6 @@
             "type": "string",
             "description": "An IANA time zone, for example Europe/Belgrade."
           },
-          "state": {
-            "enum": [
-              "draft",
-              "open",
-              "closed",
-              "archived"
-            ],
-            "type": "string"
-          },
           "mailServerId": {
             "type": "string",
             "nullable": true
@@ -2464,6 +2464,7 @@
           }
         },
         "required": [
+          "state",
           "id",
           "name",
           "code",
@@ -2474,7 +2475,6 @@
           "listedSites",
           "languages",
           "timeZone",
-          "state",
           "mailServerId",
           "version"
         ]
@@ -2497,13 +2497,13 @@
         "type": "object",
         "properties": {
           "state": {
-            "type": "string",
             "enum": [
               "draft",
               "open",
               "closed",
               "archived"
-            ]
+            ],
+            "type": "string"
           },
           "version": {
             "type": "number",
@@ -2617,6 +2617,14 @@
       "CreateMailServerDto": {
         "type": "object",
         "properties": {
+          "tlsMode": {
+            "enum": [
+              "implicit",
+              "starttls",
+              "none"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -2629,14 +2637,6 @@
             "type": "number",
             "minimum": 1,
             "maximum": 65535
-          },
-          "tlsMode": {
-            "type": "string",
-            "enum": [
-              "implicit",
-              "starttls",
-              "none"
-            ]
           },
           "username": {
             "type": "string",
@@ -2673,10 +2673,10 @@
           }
         },
         "required": [
+          "tlsMode",
           "name",
           "host",
           "port",
-          "tlsMode",
           "fromAddress",
           "fromName"
         ]
@@ -2766,6 +2766,13 @@
       "MailLogEntryDto": {
         "type": "object",
         "properties": {
+          "result": {
+            "enum": [
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -2798,13 +2805,6 @@
           "attempt": {
             "type": "number"
           },
-          "result": {
-            "enum": [
-              "sent",
-              "failed"
-            ],
-            "type": "string"
-          },
           "errorCode": {
             "type": "string",
             "nullable": true,
@@ -2827,6 +2827,7 @@
           }
         },
         "required": [
+          "result",
           "id",
           "messageId",
           "recipient",
@@ -2836,7 +2837,6 @@
           "mailServerId",
           "serverName",
           "attempt",
-          "result",
           "errorCode",
           "sentAt",
           "subject",
@@ -2873,6 +2873,13 @@
       "MailLogSummaryDto": {
         "type": "object",
         "properties": {
+          "result": {
+            "enum": [
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -2905,13 +2912,6 @@
           "attempt": {
             "type": "number"
           },
-          "result": {
-            "type": "string",
-            "enum": [
-              "sent",
-              "failed"
-            ]
-          },
           "errorCode": {
             "type": "string",
             "nullable": true,
@@ -2922,6 +2922,7 @@
           }
         },
         "required": [
+          "result",
           "id",
           "messageId",
           "recipient",
@@ -2931,7 +2932,6 @@
           "mailServerId",
           "serverName",
           "attempt",
-          "result",
           "errorCode",
           "sentAt"
         ]
@@ -2939,6 +2939,15 @@
       "MailServerDto": {
         "type": "object",
         "properties": {
+          "tlsMode": {
+            "description": "implicit (TLS from the first byte), starttls (required), none (developer machines only).",
+            "enum": [
+              "implicit",
+              "starttls",
+              "none"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -2950,15 +2959,6 @@
           },
           "port": {
             "type": "number"
-          },
-          "tlsMode": {
-            "description": "implicit (TLS from the first byte), starttls (required), none (developer machines only).",
-            "enum": [
-              "implicit",
-              "starttls",
-              "none"
-            ],
-            "type": "string"
           },
           "username": {
             "type": "string",
@@ -2999,11 +2999,11 @@
           }
         },
         "required": [
+          "tlsMode",
           "id",
           "name",
           "host",
           "port",
-          "tlsMode",
           "username",
           "credentialSet",
           "credentialSetAt",
@@ -3518,12 +3518,12 @@
         "type": "object",
         "properties": {
           "result": {
-            "type": "string",
             "enum": [
               "sent",
               "failed",
               "refused"
-            ]
+            ],
+            "type": "string"
           },
           "reason": {
             "type": "string",
@@ -3742,6 +3742,17 @@
       "UserDto": {
         "type": "object",
         "properties": {
+          "invitationDelivery": {
+            "nullable": true,
+            "description": "For an invited user, what became of the latest invitation message: `queued` (to be\nsent), `waiting_for_server` (no mail server can send it yet; it goes out once one is\nconfigured, with a link made then), `sent` or `failed`. Null for anyone else, and for\nan invitation that was given by hand (the first admin).",
+            "enum": [
+              "queued",
+              "waiting_for_server",
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -3765,28 +3776,17 @@
           "version": {
             "type": "number",
             "description": "Sent back with a change: a change made on an older version is refused (409)."
-          },
-          "invitationDelivery": {
-            "nullable": true,
-            "description": "For an invited user, what became of the latest invitation message: `queued` (to be\nsent), `waiting_for_server` (no mail server can send it yet; it goes out once one is\nconfigured, with a link made then), `sent` or `failed`. Null for anyone else, and for\nan invitation that was given by hand (the first admin).",
-            "enum": [
-              "queued",
-              "sent",
-              "failed",
-              "waiting_for_server"
-            ],
-            "type": "string"
           }
         },
         "required": [
+          "invitationDelivery",
           "id",
           "email",
           "displayName",
           "role",
           "status",
           "createdAt",
-          "version",
-          "invitationDelivery"
+          "version"
         ]
       },
       "UserPageDto": {

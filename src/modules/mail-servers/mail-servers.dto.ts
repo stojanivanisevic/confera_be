@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsOptionalNotNull } from '../../common/validation/presence';
 import { Type } from 'class-transformer';
 import {
@@ -27,6 +28,8 @@ export class MailServerDto {
   host!: string;
   port!: number;
   /** implicit (TLS from the first byte), starttls (required), none (developer machines only). */
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: TLS_MODES })
   tlsMode!: TlsMode;
   username!: string | null;
   /** Whether a password is stored. The password itself is never returned. */
@@ -66,6 +69,8 @@ export class CreateMailServerDto {
   port!: number;
 
   @IsIn(TLS_MODES)
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: TLS_MODES })
   tlsMode!: TlsMode;
 
   @IsOptional()
@@ -201,6 +206,8 @@ export class TestMessageDto {
  * word of the server's answer, so that the test is no scanner of the network.
  */
 export class TestMessageResultDto {
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: ['sent', 'failed', 'refused'] })
   result!: 'sent' | 'failed' | 'refused';
   /** With `refused`: tls_required, port_not_allowed or address_not_allowed. */
   reason!: string | null;

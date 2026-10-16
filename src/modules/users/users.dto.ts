@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Satisfies } from '../../common/validation/satisfies';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
@@ -6,6 +7,9 @@ import { IsPlainText } from '../../common/validation/plain-text';
 import { ROLES } from '../access/permissions';
 
 export const USER_STATES = ['invited', 'active', 'deactivated', 'removed'] as const;
+
+export const INVITATION_DELIVERIES = ['queued', 'waiting_for_server', 'sent', 'failed'] as const;
+export type InvitationDelivery = (typeof INVITATION_DELIVERIES)[number];
 
 export class UserDto {
   id!: string;
@@ -24,11 +28,10 @@ export class UserDto {
    * configured, with a link made then), `sent` or `failed`. Null for anyone else, and for
    * an invitation that was given by hand (the first admin).
    */
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: INVITATION_DELIVERIES, nullable: true, type: 'string' })
   invitationDelivery!: InvitationDelivery | null;
 }
-
-export const INVITATION_DELIVERIES = ['queued', 'waiting_for_server', 'sent', 'failed'] as const;
-export type InvitationDelivery = (typeof INVITATION_DELIVERIES)[number];
 
 export class UserPageDto {
   items!: UserDto[];

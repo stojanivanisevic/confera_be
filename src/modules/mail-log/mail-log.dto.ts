@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { MAIL_KINDS } from '../mail/mail-queue';
@@ -15,6 +16,8 @@ export class MailLogSummaryDto {
   /** The name of the server when it was used. */
   serverName!: string | null;
   attempt!: number;
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: ['sent', 'failed'] })
   result!: 'sent' | 'failed';
   /** A code, never the server's words. */
   errorCode!: string | null;

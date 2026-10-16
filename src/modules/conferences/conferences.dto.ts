@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsOptionalNotNull } from '../../common/validation/presence';
 import {
   ArrayMaxSize,
@@ -47,6 +48,8 @@ export class ConferenceDto {
   languages!: string[];
   /** An IANA time zone, for example Europe/Belgrade. */
   timeZone!: string;
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: CONFERENCE_STATES })
   state!: ConferenceState;
   mailServerId!: string | null;
   version!: number;
@@ -140,6 +143,8 @@ export class UpdateConferenceDto extends ConferenceFields {
 /** A change of state (FR-CONF-04): draft, open, closed, archived. Archived is final. */
 export class ConferenceStateDto {
   @IsIn(CONFERENCE_STATES)
+  // The order of the values is fixed here, not left to the compiler (a stable contract).
+  @ApiProperty({ enum: CONFERENCE_STATES })
   state!: ConferenceState;
 
   @IsInt()
