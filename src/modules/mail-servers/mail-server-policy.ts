@@ -31,6 +31,44 @@ function ipv4Parts(address: string): number[] {
   return address.split('.').map(Number);
 }
 
+/**
+ * The eight 16-bit words of an IPv6 address, whatever its spelling (full, zero-padded,
+ * compressed, with a dotted IPv4 tail), or null. Every spelling is checked as one address.
+ */
+export function ipv6Words(address: string): number[] | null {
+  let text = address.toLowerCase().replace(/^\[|\]$/g, '');
+  const zone = text.indexOf('%');
+  if (zone >= 0) {
+    text = text.slice(0, zone);
+  }
+  const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (dotted !== null) {
+    const parts = dotted.slice(1).map(Number);
+    if (parts.some((part) => part > 255)) {
+      return null;
+    }
+    const [a = 0, b = 0, c = 0, d = 0] = parts;
+    text = `${text.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) {
+    return null;
+  }
+  const parse = (half: string | undefined) =>
+    half === undefined || half === '' ? [] : half.split(':');
+  const head = parse(halves[0]);
+  const tail = parse(halves[1]);
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) {
+    return null;
+  }
+  const words = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail];
+  if (words.length !== 8 || words.some((word) => !/^[0-9a-f]{1,4}$/.test(word))) {
+    return null;
+  }
+  return words.map((word) => parseInt(word, 16));
+}
+
 /** Whether an IP address is one no mail server of a server stage may have (SEC-A-18). */
 export function isRefusedAddress(address: string): boolean {
   const version = isIP(address);
@@ -50,17 +88,28 @@ export function isRefusedAddress(address: string): boolean {
     );
   }
   if (version === 6) {
-    const lower = address.toLowerCase();
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-    if (mapped?.[1] !== undefined) {
-      return isRefusedAddress(mapped[1]);
+    const words = ipv6Words(address);
+    if (words === null) {
+      return true;
+    }
+    const [w0 = 0, w1 = 0, w2 = 0, w3 = 0, w4 = 0, w5 = 0, w6 = 0, w7 = 0] = words;
+    const embedded = `${String(w6 >> 8)}.${String(w6 & 255)}.${String(w7 >> 8)}.${String(w7 & 255)}`;
+    const firstFive = w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0;
+    // IPv4 inside IPv6: mapped (::ffff:a.b.c.d), compatible (::a.b.c.d), translated
+    // (::ffff:0:a.b.c.d) and NAT64 (64:ff9b::a.b.c.d) reach the IPv4 address.
+    if (
+      (firstFive && (w5 === 0xffff || w5 === 0)) ||
+      (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0xffff && w5 === 0) ||
+      (w0 === 0x64 && w1 === 0xff9b && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0)
+    ) {
+      // ::, ::1 and every other ::a.b.c.d land here; 0.x.x.x is refused as "this network".
+      return isRefusedAddress(embedded);
     }
     return (
-      lower === '::' ||
-      lower === '::1' ||
-      /^f[cd]/.test(lower) || // unique local
-      /^fe[89ab]/.test(lower) || // link-local
-      lower.startsWith('ff') // multicast
+      (w0 & 0xfe00) === 0xfc00 || // unique local
+      (w0 & 0xffc0) === 0xfe80 || // link-local
+      (w0 & 0xffc0) === 0xfec0 || // site-local (deprecated)
+      (w0 & 0xff00) === 0xff00 // multicast
     );
   }
   return true;

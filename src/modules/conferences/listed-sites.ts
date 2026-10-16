@@ -11,6 +11,13 @@ import type { Stage } from '../../config/config.schema';
  */
 export const MAX_LISTED_SITES = 20;
 
+/** A host name in ASCII (punycode for an international one), or an IPv6 address in brackets. */
+const CANONICAL_HOST =
+  /^(?:(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*|\[[0-9a-f:.]+\])$/;
+
+/** The whole stored origin: scheme, host, port. Nothing else may be in it. */
+const CANONICAL_ORIGIN = /^https?:\/\/[a-z0-9.:[\]-]+$/;
+
 export type SiteProblem =
   | 'too_many'
   | 'not_a_url'
@@ -33,6 +40,10 @@ export function normaliseSite(
   const text = entry.trim();
   if (text.includes('*')) {
     return { ok: false, problem: 'wildcard' };
+  }
+  // A percent-escape is decoded by the URL parser after this check could see it: refused.
+  if (text.includes('%')) {
+    return { ok: false, problem: 'forbidden_character' };
   }
   // A space, a semicolon or comma (another directive or source), a quote, a control
   // character: nothing of that kind may reach a header.
@@ -63,10 +74,17 @@ export function normaliseSite(
     return { ok: false, problem: 'path' };
   }
   const host = url.hostname.startsWith('[') ? url.hostname : domainToASCII(url.hostname);
-  if (host === '') {
-    return { ok: false, problem: 'not_a_url' };
+  // What is stored is checked, not only what was typed: the parser folds full-width and
+  // other look-alike characters. The canonical origin is letters, digits, dots and hyphens
+  // (or an IPv6 address in brackets), and a port; anything else never reaches a header.
+  if (!CANONICAL_HOST.test(host)) {
+    return { ok: false, problem: host === '' ? 'not_a_url' : 'forbidden_character' };
   }
-  return { ok: true, origin: `${scheme}://${host}${url.port === '' ? '' : `:${url.port}`}` };
+  const origin = `${scheme}://${host}${url.port === '' ? '' : `:${url.port}`}`;
+  if (!CANONICAL_ORIGIN.test(origin)) {
+    return { ok: false, problem: 'forbidden_character' };
+  }
+  return { ok: true, origin };
 }
 
 /** The whole list: each entry normalised, duplicates dropped, at most 20. */
@@ -89,14 +107,13 @@ export function normaliseSites(entries: readonly string[], stage: Stage): SitesR
 
 /** A time zone of the IANA database that this runtime knows. */
 export function isTimeZone(value: string): boolean {
-  if (value === 'UTC') {
-    return true;
+  // The shape of an IANA name (Area/Location, or UTC and the Etc names); the runtime then
+  // says whether it knows the zone, aliases included (Asia/Kolkata, Europe/Kyiv).
+  if (!/^(?:UTC|[A-Z][A-Za-z_+-]*(?:\/[A-Za-z0-9_+-]+){1,2})$/.test(value)) {
+    return false;
   }
   try {
-    return (
-      Intl.supportedValuesOf('timeZone').includes(value) &&
-      new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone !== ''
-    );
+    return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone !== '';
   } catch {
     return false;
   }
