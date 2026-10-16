@@ -55,7 +55,7 @@ describe('odd input is a 4xx, never an unexpected error', () => {
     it('sign-in with a NUL in the address is a failed sign-in', async () => {
       const response = await publicPost(
         '/api/v1/session',
-        JSON.stringify({ email: 'a\u0000b@a.example.test', password: 'x' }),
+        JSON.stringify({ email: 'a\u0000b@a.example.test', password: 'invented-x' }),
       );
       expect(response.status).toBe(401);
       expect(response.body).toEqual(expect.objectContaining({ code: 'sign_in_failed' }));
