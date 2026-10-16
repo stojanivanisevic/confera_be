@@ -89,7 +89,13 @@ export class AccountService {
       knownDevice: true,
     };
     const brake = await this.brake.state(attempt);
-    if (brake.accountBraked || !(await this.hasher.matches(user.passwordHash, password))) {
+    if (brake.addressBraked || brake.accountBraked || brake.confirmationBraked) {
+      // Too early: answered like a wrong password without looking at it, and not counted
+      // (SEC-M2-02), as sign-in does.
+      await this.hasher.matches(null, password);
+      throw new ProblemException(403, 'password_incorrect');
+    }
+    if (!(await this.hasher.matches(user.passwordHash, password))) {
       await this.brake.recordFailure('password_confirmation_failed', attempt);
       throw new ProblemException(403, 'password_incorrect');
     }
@@ -125,8 +131,9 @@ export class AccountService {
       });
       await this.sessions.endAllOf(tx, access.userId, 'password_changed', access.sessionId);
       // Every open link of the account, an email change asked for under the old password
-      // included (E2-03).
+      // included (E2-03), and every message that would make one (SEC-M2-01).
       await this.links.revokeAll(tx, access.userId);
+      await this.mail.supersedeLinks(tx, access.userId);
       await this.audit.record(tx, {
         organisationId: access.organisationId,
         actorUserId: access.userId,
@@ -328,6 +335,7 @@ export class AccountService {
         if (link.purpose === 'password_reset') {
           await this.sessions.endAllOf(tx, link.userId, 'password_reset');
           await this.links.revokeAll(tx, link.userId);
+          await this.mail.supersedeLinks(tx, link.userId);
           await this.mail.noticeToAdmins(tx, link.organisationId, 'password_reset', {
             subjectUserId: link.userId,
           });
@@ -378,6 +386,7 @@ export class AccountService {
         });
         await this.sessions.endAllOf(tx, link.userId, 'email_changed');
         await this.links.revokeAll(tx, link.userId);
+        await this.mail.supersedeLinks(tx, link.userId);
         await this.audit.record(tx, {
           organisationId: link.organisationId,
           actorUserId: link.userId,

@@ -44,6 +44,11 @@ export interface BrakeState {
   readonly accountBraked: boolean;
   /** Failures of the account in the window, before this attempt. */
   readonly accountFailures: number;
+  /**
+   * The password asked again failed so often in the account's own sessions that this one
+   * must wait (SEC-M2-02). Only a signed-in session can fail it, so others cannot set it.
+   */
+  readonly confirmationBraked: boolean;
 }
 
 export type SecurityEventKind = 'sign_in_failed' | 'password_confirmation_failed';
@@ -70,7 +75,7 @@ export class BrakeService {
             ...(userId === undefined ? [] : [{ userId }]),
           ],
         },
-        select: { occurredAt: true, clientAddress: true, userId: true },
+        select: { occurredAt: true, clientAddress: true, userId: true, kind: true },
         orderBy: { occurredAt: 'desc' },
       }),
     );
@@ -87,6 +92,10 @@ export class BrakeService {
       addressBraked: braked(byAddress, BRAKE.addressFreeFailures),
       accountBraked: !attempt.knownDevice && braked(byAccount, BRAKE.accountFreeFailures),
       accountFailures: byAccount.length,
+      confirmationBraked: braked(
+        byAccount.filter((event) => event.kind === 'password_confirmation_failed'),
+        BRAKE.accountFreeFailures,
+      ),
     };
   }
 
