@@ -111,6 +111,23 @@ export class MailQueue {
     return admins.length;
   }
 
+  /**
+   * Ends every message of a user that would still make a link (SEC-M2-01): queued, waiting
+   * for a server or retrying. Called in the transaction of a change of the password or the
+   * address, after which no request made before it may produce a working link.
+   */
+  async supersedeLinks(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+    const ended = await tx.mailMessage.updateMany({
+      where: {
+        linkUserId: userId,
+        linkPurpose: { not: null },
+        status: { in: ['queued', 'waiting_for_server'] },
+      },
+      data: { status: 'failed', lastErrorCode: 'superseded', claimedAt: null },
+    });
+    return ended.count;
+  }
+
   /** How many messages of a kind went to a user since a moment: for cool-downs and caps. */
   countSince(
     tx: Prisma.TransactionClient,

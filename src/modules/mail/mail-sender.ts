@@ -259,10 +259,17 @@ export class MailSender {
     }
     const user = await this.database.db.user.findUnique({
       where: { id: message.linkUserId },
-      select: { status: true, email: true },
+      select: { status: true, email: true, passwordChangedAt: true },
     });
     if (user === null) {
       return 'account_gone';
+    }
+    // A request made before the password changed does not outlive it (SEC-M2-01).
+    if (
+      user.passwordChangedAt !== null &&
+      message.createdAt.getTime() < user.passwordChangedAt.getTime()
+    ) {
+      return 'superseded';
     }
     const wanted = message.linkPurpose === 'invitation' ? 'invited' : 'active';
     if (user.status !== wanted) {
