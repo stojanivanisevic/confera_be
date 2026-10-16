@@ -4,6 +4,7 @@ import { APP_CONFIG } from '../../config/config.module';
 import { ProblemException } from '../../common/http/problem';
 import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
+import { TenantContext } from '../../platform/tenancy/tenant-context';
 import type { Access } from '../access/access';
 import { AuditRecorder, type FieldChange } from '../audit/audit-recorder';
 import { MailQueue } from '../mail/mail-queue';
@@ -67,6 +68,7 @@ export class MailServersService {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly database: TenantDatabase,
+    private readonly context: TenantContext,
     private readonly box: SecretBox,
     private readonly audit: AuditRecorder,
     private readonly mail: MailQueue,
@@ -267,6 +269,9 @@ export class MailServersService {
     isDefault: boolean,
     isFallback: boolean,
   ): Promise<void> {
+    // Two admins who mark at once are taken one after the other (E2-09); a unique index
+    // of the migration holds the rule as well.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera mail server marks ${this.context.requireOrganisationId()}`}, 0))`;
     const others = except === null ? {} : { id: { not: except } };
     if (isDefault) {
       await tx.mailServer.updateMany({

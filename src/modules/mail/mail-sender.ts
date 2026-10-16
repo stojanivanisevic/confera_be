@@ -124,6 +124,15 @@ export class MailSender {
     const message = await this.database.db.mailMessage.findUniqueOrThrow({
       where: { id: messageId },
     });
+    const stale = await this.noLongerTrue(message);
+    if (stale !== null) {
+      // The account changed since the message was queued: no link is made, nothing is sent.
+      await this.database.db.mailMessage.update({
+        where: { id: message.id },
+        data: { status: 'failed', lastErrorCode: stale, claimedAt: null },
+      });
+      return { status: 'failed', error: 'send_failed' };
+    }
     const prepared = await this.prepare(message);
     if ('reason' in prepared) {
       return this.wait(message, prepared.reason, now);
@@ -236,6 +245,34 @@ export class MailSender {
         : { status: 'failed', attempts: 1, lastErrorCode: result.error, claimedAt: null },
     });
     return result;
+  }
+
+  /**
+   * Whether a message that carries a link is still true now (E2-04): the person still has
+   * the address it goes to (an email change goes to the new address, which is not theirs
+   * yet), and the account is still one that may get such a link (an invitation for an
+   * invited account, a reset or an email change for an active one).
+   */
+  private async noLongerTrue(message: MessageRow): Promise<string | null> {
+    if (message.linkPurpose === null || message.linkUserId === null) {
+      return null;
+    }
+    const user = await this.database.db.user.findUnique({
+      where: { id: message.linkUserId },
+      select: { status: true, email: true },
+    });
+    if (user === null) {
+      return 'account_gone';
+    }
+    const wanted = message.linkPurpose === 'invitation' ? 'invited' : 'active';
+    if (user.status !== wanted) {
+      return 'account_changed';
+    }
+    const sameAddress = user.email.toLowerCase() === message.recipientAddress.toLowerCase();
+    if (message.linkPurpose !== 'email_change' && !sameAddress) {
+      return 'address_changed';
+    }
+    return null;
   }
 
   private async prepare(

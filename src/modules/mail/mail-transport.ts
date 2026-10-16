@@ -54,6 +54,12 @@ export type DeliveryResult =
 /** Seconds a delivery may take at each step; a hanging server never holds the worker. */
 const TIMEOUT_MS = 15_000;
 
+/**
+ * The whole of one delivery, however the server dribbles its answers: the timeouts above
+ * are of inactivity, and a server that answers a little every few seconds never trips them.
+ */
+export const DELIVERY_DEADLINE_MS = 45_000;
+
 const CERTIFICATE_CODES = new Set([
   'DEPTH_ZERO_SELF_SIGNED_CERT',
   'SELF_SIGNED_CERT_IN_CHAIN',
@@ -152,8 +158,14 @@ export class MailTransport {
       logger: false,
       debug: false,
     });
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(Object.assign(new Error('deadline'), { code: 'ETIMEDOUT' }));
+      }, DELIVERY_DEADLINE_MS);
+    });
     try {
-      await transport.sendMail({
+      const sending = transport.sendMail({
         from: { name: headerSafe(target.fromName), address: target.fromAddress },
         to: [{ name: '', address: delivery.to }],
         envelope: { from: target.fromAddress, to: [delivery.to] },
@@ -163,10 +175,13 @@ export class MailTransport {
         disableFileAccess: true,
         disableUrlAccess: true,
       });
+      sending.catch(() => undefined);
+      await Promise.race([sending, deadline]);
       return { ok: true };
     } catch (error) {
       return { ok: false, error: deliveryErrorOf(error) };
     } finally {
+      clearTimeout(timer);
       transport.close();
     }
   }
