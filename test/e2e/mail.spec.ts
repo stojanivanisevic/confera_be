@@ -199,6 +199,8 @@ describe('mail servers, the worker and the mail log', () => {
       const response = await create({ ...server, ...change });
       expect(response.status).toBe(422);
       expect(response.body).toEqual(expect.objectContaining({ code }));
+      // The field that breaks the rule is named, for the form (UXUI-M2-10).
+      expect((response.body as { errors: { path: string }[] }).errors).toHaveLength(1);
     });
 
     it('refuses a test message to a loopback target, with a generic answer and no connection (ST-20)', async () => {
@@ -314,20 +316,76 @@ describe('mail servers, the worker and the mail log', () => {
       await e2e.close();
     });
 
-    it('lets a message wait while the organisation has no mail server, and stays healthy (ST-27)', async () => {
-      const id = await invite('bez.servera@a.example.test');
+    let waitingId = '';
+    let waitingUser = '';
+
+    it('lets a message wait for a server while the organisation has none, says so, and stays healthy (ST-27, UXUI-M2-01)', async () => {
+      waitingId = await invite('bez.servera@a.example.test');
       await worker.tick();
-      expect(await status(id)).toEqual({
-        status: 'queued',
+      expect(await status(waitingId)).toEqual({
+        status: 'waiting_for_server',
         attempts: 0,
         last_error_code: 'no_mail_server',
       });
+      // The worker leaves it alone, however often it looks.
+      await worker.tick();
+      expect(await status(waitingId)).toEqual(
+        expect.objectContaining({ status: 'waiting_for_server' }),
+      );
+      const [user] = await inA<{ id: string }>(
+        `SELECT id FROM users WHERE email = 'bez.servera@a.example.test'`,
+      );
+      waitingUser = user?.id ?? '';
+      const shown = await as(e2e, adminA, 'get', `/api/v1/users/${waitingUser}`);
+      expect(shown.body).toEqual(
+        expect.objectContaining({ invitationDelivery: 'waiting_for_server' }),
+      );
+      const listed = (await as(e2e, adminA, 'get', '/api/v1/users')).body as {
+        items: { id: string; invitationDelivery: string | null }[];
+      };
+      expect(listed.items.find((item) => item.id === waitingUser)?.invitationDelivery).toBe(
+        'waiting_for_server',
+      );
+      expect(
+        listed.items.find((item) => item.id === actors.a.admin.id)?.invitationDelivery,
+      ).toBeNull();
       expect((await e2e.http().get('/health')).status).toBe(200);
     });
 
-    it('sends an invitation with a link made at send time; Serbian letters arrive unchanged; the log shows [link] (FR-MAIL-06, FR-SMTP-04, ST-17)', async () => {
-      await inA(`UPDATE mail_outbox SET next_attempt_at = now() WHERE status = 'queued'`);
+    it('sends the waiting invitation once a server is configured, with a link that lasts from then (UXUI-M2-01)', async () => {
       await addServer(catcher());
+      expect(await status(waitingId)).toEqual(expect.objectContaining({ status: 'queued' }));
+      const before = Date.now();
+      await worker.tick();
+      expect(await status(waitingId)).toEqual(expect.objectContaining({ status: 'sent' }));
+      expect(await mailpitMessagesTo('bez.servera@a.example.test')).toHaveLength(1);
+      const [link] = await inA<{ expires_at: Date }>(
+        `SELECT expires_at FROM secure_links WHERE user_id = $1 AND purpose = 'invitation' AND revoked_at IS NULL`,
+        [waitingUser],
+      );
+      // 72 hours from the sending, not from the invitation.
+      expect(link?.expires_at.getTime()).toBeGreaterThanOrEqual(
+        before + 72 * 60 * 60 * 1000 - 5_000,
+      );
+      const shown = await as(e2e, adminA, 'get', `/api/v1/users/${waitingUser}`);
+      expect(shown.body).toEqual(expect.objectContaining({ invitationDelivery: 'sent' }));
+    });
+
+    it('refuses at save a server that sends in clear to another machine, with the field named (UXUI-M2-10)', async () => {
+      await confirmPassword(e2e, adminA);
+      const response = await as(e2e, adminA, 'post', '/api/v1/mail-servers').send(
+        catcher({ name: 'Napolje', host: 'smtp.a.example.test', isDefault: false }),
+      );
+      expect(response.status).toBe(422);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          code: 'tls_required',
+          errors: [{ path: 'tlsMode', code: 'tls_required' }],
+        }),
+      );
+    });
+
+    it('sends an invitation with a link made at send time; Serbian letters arrive unchanged; the log shows [link] (FR-MAIL-06, FR-SMTP-04, ST-17)', async () => {
       const address = 'pozvana.osoba@a.example.test';
       const id = await invite(address);
       const report = await worker.tick();

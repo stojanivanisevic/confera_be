@@ -3765,6 +3765,17 @@
           "version": {
             "type": "number",
             "description": "Sent back with a change: a change made on an older version is refused (409)."
+          },
+          "invitationDelivery": {
+            "nullable": true,
+            "description": "For an invited user, what became of the latest invitation message: `queued` (to be\nsent), `waiting_for_server` (no mail server can send it yet; it goes out once one is\nconfigured, with a link made then), `sent` or `failed`. Null for anyone else, and for\nan invitation that was given by hand (the first admin).",
+            "enum": [
+              "queued",
+              "sent",
+              "failed",
+              "waiting_for_server"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -3774,7 +3785,8 @@
           "role",
           "status",
           "createdAt",
-          "version"
+          "version",
+          "invitationDelivery"
         ]
       },
       "UserPageDto": {

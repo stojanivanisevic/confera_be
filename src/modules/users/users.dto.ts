@@ -18,7 +18,17 @@ export class UserDto {
   createdAt!: string;
   /** Sent back with a change: a change made on an older version is refused (409). */
   version!: number;
+  /**
+   * For an invited user, what became of the latest invitation message: `queued` (to be
+   * sent), `waiting_for_server` (no mail server can send it yet; it goes out once one is
+   * configured, with a link made then), `sent` or `failed`. Null for anyone else, and for
+   * an invitation that was given by hand (the first admin).
+   */
+  invitationDelivery!: InvitationDelivery | null;
 }
+
+export const INVITATION_DELIVERIES = ['queued', 'waiting_for_server', 'sent', 'failed'] as const;
+export type InvitationDelivery = (typeof INVITATION_DELIVERIES)[number];
 
 export class UserPageDto {
   items!: UserDto[];

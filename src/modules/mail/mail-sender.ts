@@ -509,7 +509,9 @@ export class MailSender {
     await this.database.db.mailMessage.update({
       where: { id: message.id },
       data: {
-        status: 'queued',
+        // Without a server the message rests until one is configured (UXUI-M2-01): the
+        // mail servers wake it; its link is made when it is sent, so it lasts from then.
+        status: reason === 'no_mail_server' ? 'waiting_for_server' : 'queued',
         claimedAt: null,
         lastErrorCode: reason,
         nextAttemptAt: new Date(now.getTime() + WAIT_MS[reason]),

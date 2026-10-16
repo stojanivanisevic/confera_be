@@ -9,7 +9,7 @@ import { type EndReason, SessionService } from '../access/session.service';
 import { AuditRecorder } from '../audit/audit-recorder';
 import { SecureLinks } from '../links/secure-links';
 import { MailQueue, type SecurityChange } from '../mail/mail-queue';
-import type { UserDto, UserPageDto, UserQueryDto } from './users.dto';
+import type { InvitationDelivery, UserDto, UserPageDto, UserQueryDto } from './users.dto';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -28,7 +28,7 @@ const USER_SELECT = {
 
 type UserRow = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
 
-function toDto(user: UserRow): UserDto {
+function toDto(user: UserRow, invitationDelivery: InvitationDelivery | null = null): UserDto {
   const roles = user.roles.map(({ role }) => role);
   return {
     id: user.id,
@@ -38,7 +38,23 @@ function toDto(user: UserRow): UserDto {
     status: user.status,
     createdAt: user.createdAt.toISOString(),
     version: user.version,
+    invitationDelivery: user.status === 'invited' ? invitationDelivery : null,
   };
+}
+
+/** What the admin is told of an invitation's message, from the state of its outbox row. */
+function deliveryOf(status: string): InvitationDelivery {
+  switch (status) {
+    case 'queued':
+    case 'sending':
+      return 'queued';
+    case 'waiting_for_server':
+      return 'waiting_for_server';
+    case 'sent':
+      return 'sent';
+    default:
+      return 'failed';
+  }
 }
 
 /** `%`, `_` and `\` of a search are text, not patterns (ADR-05: "search input is escaped"). */
@@ -98,15 +114,23 @@ export class UsersService {
         }),
       ]),
     );
-    return { items: users.map(toDto), total, page, pageSize };
+    const deliveries = await this.database.transaction((tx) => this.deliveries(tx, users));
+    return {
+      items: users.map((user) => toDto(user, deliveries.get(user.id) ?? null)),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async get(id: string): Promise<UserDto> {
-    const user = await this.database.db.user.findUnique({ where: { id }, select: USER_SELECT });
-    if (user === null) {
-      throw new ProblemException(404, 'not_found');
-    }
-    return toDto(user);
+    return this.database.transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id }, select: USER_SELECT });
+      if (user === null) {
+        throw new ProblemException(404, 'not_found');
+      }
+      return this.dto(tx, user);
+    });
   }
 
   /** Invites a user (FR-USR-02): an account without a password, and an invitation in the outbox. */
@@ -144,7 +168,7 @@ export class UsersService {
           },
         });
         await this.notice(tx, actor, 'user_invited', user.id);
-        return toDto(user);
+        return this.dto(tx, user);
       });
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -163,7 +187,7 @@ export class UsersService {
       }
       const window = Math.floor(Date.now() / RESEND_WINDOW_MS).toString(36);
       await this.queueInvitation(tx, actor, user, `resent:${user.id}:${window}`);
-      return toDto(user);
+      return this.dto(tx, user);
     });
   }
 
@@ -180,7 +204,7 @@ export class UsersService {
         changes: { displayName: { old: before.displayName, new: displayName } },
       });
       await this.notice(tx, actor, 'user_changed', id);
-      return toDto(user);
+      return this.dto(tx, user);
     });
   }
 
@@ -207,7 +231,7 @@ export class UsersService {
         changes: { role: { old: previous, new: role } },
       });
       await this.notice(tx, actor, 'user_role_changed', id);
-      return toDto(user);
+      return this.dto(tx, user);
     });
   }
 
@@ -230,7 +254,7 @@ export class UsersService {
         changes: { status: { old: before.status, new: 'deactivated' } },
       });
       await this.notice(tx, actor, 'user_deactivated', id);
-      return toDto(user);
+      return this.dto(tx, user);
     });
   }
 
@@ -256,7 +280,7 @@ export class UsersService {
         changes: { status: { old: before.status, new: status } },
       });
       await this.notice(tx, actor, 'user_reactivated', id);
-      return toDto(user);
+      return this.dto(tx, user);
     });
   }
 
@@ -315,6 +339,36 @@ export class UsersService {
       throw new ProblemException(409, 'user_removed');
     }
     return user;
+  }
+
+  /**
+   * The state of the latest invitation message of each invited user among `users`
+   * (UXUI-M2-01): queued, waiting_for_server, sent or failed; null when there is none.
+   */
+  private async deliveries(
+    tx: Prisma.TransactionClient,
+    users: readonly UserRow[],
+  ): Promise<Map<string, InvitationDelivery>> {
+    const invited = users.filter((user) => user.status === 'invited').map((user) => user.id);
+    const found = new Map<string, InvitationDelivery>();
+    if (invited.length === 0) {
+      return found;
+    }
+    const messages = await tx.mailMessage.findMany({
+      where: { kind: 'invitation', recipientUserId: { in: invited } },
+      select: { recipientUserId: true, status: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    for (const message of messages) {
+      if (message.recipientUserId !== null && !found.has(message.recipientUserId)) {
+        found.set(message.recipientUserId, deliveryOf(message.status));
+      }
+    }
+    return found;
+  }
+
+  private async dto(tx: Prisma.TransactionClient, user: UserRow): Promise<UserDto> {
+    return toDto(user, (await this.deliveries(tx, [user])).get(user.id) ?? null);
   }
 
   private async load(tx: Prisma.TransactionClient, id: string): Promise<UserRow> {

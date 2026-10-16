@@ -354,7 +354,8 @@ model MailMessage {
   linkUserId       String?   @map("link_user_id") @db.Uuid
   /// What the template needs besides the link: ids and fixed codes, never a token.
   parameters       Json      @default("{}")
-  /// queued, sending, sent, failed, held (by the send breaker of 0.3.0), stuck (left in sending by a crash).
+  /// queued, sending, sent, failed, held (by the send breaker of 0.3.0), stuck (left in sending by a crash),
+  /// waiting_for_server (no mail server can send it yet; a change of the mail servers makes it due).
   status           String    @default("queued")
   /// The language of the recipient: en or sr.
   language         String    @default("en")
