@@ -589,8 +589,9 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
   else 404. It listens on 127.0.0.1 only and refuses to start unless `STAGE` is `local`,
   `dev` or `test`. Another port: `STUBS_PORT` in `.env`.
 - **`seed:e2e`** writes what `test/e2e/seed/e2e-seed.json` holds: two invented
-  organisations with an admin and a reviewer each, on `example.test`, with fixed ids and
-  no password (sign-in arrives with 0.2.0). It is safe to run again. **seed:e2e refuses to
+  organisations with an admin and a reviewer each, on `example.test`, with fixed ids,
+  each active with the invented password `invented-Jasen-Kula-Reka-42` (for the sign-in
+  tests of the web application), and the default email templates. It is safe to run again. **seed:e2e refuses to
   run unless `STAGE` is exactly `local` or `test`** (exit code 78), before it opens a
   connection; a `STAGE` of the environment wins over the one in `.env`, so on a server,
   where every process runs `STAGE=prod`, it cannot run.
