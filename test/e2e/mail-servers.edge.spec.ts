@@ -52,16 +52,24 @@ describe('one default and one fallback mail server', () => {
       ...marks,
     });
 
-  it('four servers created as the default at the same moment leave one default', async () => {
-    await Promise.all(['R1', 'R2', 'R3', 'R4'].map((name) => create(name, { isDefault: true })));
+  it('eight servers created as the default at the same moment leave one default', async () => {
+    await Promise.all(
+      ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8'].map((name) =>
+        create(name, { isDefault: true }),
+      ),
+    );
     const list = (await as(e2e, admin, 'get', '/api/v1/mail-servers')).body as {
       items: { name: string; isDefault: boolean }[];
     };
     expect(list.items.filter((server) => server.isDefault)).toHaveLength(1);
   });
 
-  it('four servers created as the fallback at the same moment leave one fallback', async () => {
-    await Promise.all(['F1', 'F2', 'F3', 'F4'].map((name) => create(name, { isFallback: true })));
+  it('eight servers created as the fallback at the same moment leave one fallback', async () => {
+    await Promise.all(
+      ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'].map((name) =>
+        create(name, { isFallback: true }),
+      ),
+    );
     const list = (await as(e2e, admin, 'get', '/api/v1/mail-servers')).body as {
       items: { name: string; isFallback: boolean }[];
     };
