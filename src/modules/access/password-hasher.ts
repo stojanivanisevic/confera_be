@@ -27,18 +27,20 @@ export class PasswordHasher {
    */
   readonly #dummy: Promise<string> = hash(newToken(), HASH_OPTIONS);
 
+  /** Passwords are hashed and checked in NFC (FR-USR-06; NIST SP 800-63B). */
   hash(password: string): Promise<string> {
-    return hash(password, HASH_OPTIONS);
+    return hash(password.normalize('NFC'), HASH_OPTIONS);
   }
 
   /** True when the password is the one of the stored hash. Null: compare with nothing, and fail. */
   async matches(stored: string | null, password: string): Promise<boolean> {
+    const normalised = password.normalize('NFC');
     if (stored === null) {
-      await verify(await this.#dummy, password).catch(() => false);
+      await verify(await this.#dummy, normalised).catch(() => false);
       return false;
     }
     try {
-      return await verify(stored, password);
+      return await verify(stored, normalised);
     } catch {
       return false;
     }

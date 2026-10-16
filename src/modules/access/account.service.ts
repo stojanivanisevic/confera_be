@@ -17,6 +17,9 @@ import { SessionService } from './session.service';
 export const RESET_COOL_DOWN_MS = 15 * 60 * 1000;
 /** At most this many reset messages to one account in a day (ADR-04). */
 export const RESET_DAILY_CAP = 3;
+
+/** Email changes a person may ask for in 24 hours (E2-13). */
+export const EMAIL_CHANGE_DAILY_CAP = 5;
 /** Reset requests per client address and hour beyond which nothing more is done (the answer stays the same). */
 export const RESET_REQUESTS_PER_ADDRESS = 30;
 /** Failed look-ups of secure links per client address in 10 minutes (ADR-04: "a small limit"). */
@@ -78,10 +81,12 @@ export class AccountService {
       where: { id: access.userId },
       select: { passwordHash: true },
     });
+    // The session proves an earlier sign-in of this browser: like a known device, it is
+    // exempt from the account's brake (which others can trigger), not from the address's.
     const attempt = {
       clientAddress,
       user: { organisationId: access.organisationId, userId: access.userId },
-      knownDevice: false,
+      knownDevice: true,
     };
     const brake = await this.brake.state(attempt);
     if (brake.accountBraked || !(await this.hasher.matches(user.passwordHash, password))) {
@@ -119,7 +124,9 @@ export class AccountService {
         },
       });
       await this.sessions.endAllOf(tx, access.userId, 'password_changed', access.sessionId);
-      await this.links.revokeAll(tx, access.userId, ['password_reset']);
+      // Every open link of the account, an email change asked for under the old password
+      // included (E2-03).
+      await this.links.revokeAll(tx, access.userId);
       await this.audit.record(tx, {
         organisationId: access.organisationId,
         actorUserId: access.userId,
@@ -150,6 +157,16 @@ export class AccountService {
       throw new ProblemException(409, 'email_taken');
     }
     await this.database.transaction(async (tx) => {
+      // At most a few a day: the confirmation goes to an address the person types (E2-13).
+      const today = await this.mail.countSince(
+        tx,
+        access.userId,
+        'email_change_confirmation',
+        new Date(Date.now() - 24 * 60 * 60 * 1000),
+      );
+      if (today >= EMAIL_CHANGE_DAILY_CAP) {
+        throw new ProblemException(429, 'too_many_requests');
+      }
       const user = await tx.user.findUniqueOrThrow({
         where: { id: access.userId },
         select: { email: true },
@@ -310,7 +327,7 @@ export class AccountService {
         });
         if (link.purpose === 'password_reset') {
           await this.sessions.endAllOf(tx, link.userId, 'password_reset');
-          await this.links.revokeAll(tx, link.userId, ['password_reset']);
+          await this.links.revokeAll(tx, link.userId);
           await this.mail.noticeToAdmins(tx, link.organisationId, 'password_reset', {
             subjectUserId: link.userId,
           });
@@ -334,6 +351,18 @@ export class AccountService {
     if ((await this.resolvers.userByEmail(link.recipient)) !== null) {
       throw new ProblemException(409, 'email_taken');
     }
+    try {
+      await this.moveToAddress(link);
+    } catch (error) {
+      // Another account took the address between the check above and this change (E2-15).
+      if ((error as { code?: unknown }).code === 'P2002') {
+        throw new ProblemException(409, 'email_taken');
+      }
+      throw error;
+    }
+  }
+
+  private async moveToAddress(link: OpenLink): Promise<void> {
     await this.context.run(link.organisationId, () =>
       this.database.transaction(async (tx) => {
         const user = await tx.user.findUniqueOrThrow({
