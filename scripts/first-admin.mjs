@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import pg from 'pg';
+import { isMailAddress } from './lib/mail-address.mjs';
 import { repoRoot } from './lib/process.mjs';
 import { inOrganisation, requireAnyStage } from './lib/seed-data.mjs';
 import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
@@ -29,19 +30,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 function fail(message, code = 1) {
   process.stderr.write(`${TOOL} did not run: ${message}\n`);
   process.exit(code);
-}
-
-/** The address rule of the application (ST-23): one address, no name, no list. */
-function isAddress(value) {
-  return (
-    typeof value === 'string' &&
-    value.length <= 254 &&
-    // eslint-disable-next-line no-control-regex
-    !/[\s,;<>"\u0000-\u001F\u007F]/.test(value) &&
-    /^[^@]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(
-      value,
-    )
-  );
 }
 
 function isName(value) {
@@ -68,7 +56,7 @@ async function main() {
   } catch {
     fail('usage: first-admin --email <address> --name "<display name>" [--organisation <id>]', 2);
   }
-  if (!isAddress(values.email)) {
+  if (!isMailAddress(values.email)) {
     fail('--email must be one address.', 2);
   }
   if (!isName(values.name)) {
