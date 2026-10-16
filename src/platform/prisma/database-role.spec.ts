@@ -4,6 +4,7 @@ import { type DatabaseRole, REFUSED_PREDEFINED_ROLES, roleProblems } from './dat
 
 const SAFE: DatabaseRole = {
   name: 'confera_app',
+  timeZone: 'UTC',
   superuser: false,
   bypassRls: false,
   createDb: false,
@@ -23,6 +24,14 @@ describe('roleProblems', () => {
   it('accepts a role that can do nothing but its grants', () => {
     expect(roleProblems('application', SAFE)).toEqual([]);
     expect(roleProblems('system', SAFE)).toEqual([]);
+  });
+
+  it('refuses a session in another time zone than UTC, for both roles', () => {
+    for (const kind of ['application', 'system'] as const) {
+      expect(roleProblems(kind, { ...SAFE, timeZone: 'Europe/Belgrade' })).toEqual([
+        'runs its sessions in a time zone other than UTC',
+      ]);
+    }
   });
 
   it('lets the system role bypass the policies, and only the system role', () => {

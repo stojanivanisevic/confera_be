@@ -73,6 +73,9 @@ export function within<T>(work: Promise<T>, ms: number, what: string): Promise<T
   });
 }
 
+/** The settings of every session of the application's clients (libpq's `options`). */
+export const SESSION_OPTIONS = '-c TimeZone=UTC';
+
 /** A plain client for one database role. It has no tenant behaviour of its own. */
 export function createBaseClient(
   connectionString: string,
@@ -82,6 +85,10 @@ export function createBaseClient(
     connectionString,
     max: options.poolSize ?? 10,
     connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+    // Every session in UTC, whatever the server or the database is set to: the adapter
+    // reads a timestamptz as UTC, so a session in another zone would move every expiry
+    // by its offset. The start-up check refuses a session where it is not UTC.
+    options: SESSION_OPTIONS,
   });
   const { onQuery } = options;
   if (onQuery === undefined) {

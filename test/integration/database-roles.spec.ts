@@ -154,6 +154,7 @@ describe('database roles', () => {
         const role = await describeRole(client);
         expect(role).toEqual({
           name: 'confera_app',
+          timeZone: 'UTC',
           superuser: false,
           bypassRls: false,
           createDb: false,

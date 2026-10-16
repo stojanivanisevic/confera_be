@@ -63,7 +63,7 @@ export class DatabaseRoleCheck implements OnModuleInit {
     const problems = roleProblems(kind, role);
     if (problems.length > 0) {
       throw new StartupRefusal(
-        `The ${kind} database role of ${VARIABLE[kind]} ${problems.join('; ')}. The API refuses to start, because row-level security would not hold (ADR-05).`,
+        `The ${kind} database role of ${VARIABLE[kind]} ${problems.join('; ')}. The API refuses to start, because row-level security or the expiry times would not hold (ADR-05).`,
       );
     }
   }

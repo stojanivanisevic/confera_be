@@ -8,6 +8,8 @@ import type { PrismaClient } from '../../generated/prisma/client';
  */
 export interface DatabaseRole {
   readonly name: string;
+  /** The time zone of the session; it must be UTC (see SESSION_OPTIONS in tenant-client.ts). */
+  readonly timeZone: string;
   readonly superuser: boolean;
   readonly bypassRls: boolean;
   readonly createDb: boolean;
@@ -67,6 +69,7 @@ export async function describeRole(client: PrismaClient): Promise<DatabaseRole> 
   const rows = await client.$queryRaw<DatabaseRole[]>`
     SELECT
       current_user::text AS "name",
+      current_setting('TimeZone') AS "timeZone",
       r.rolsuper AS "superuser",
       r.rolbypassrls AS "bypassRls",
       r.rolcreatedb AS "createDb",
@@ -171,6 +174,10 @@ export function roleProblems(kind: RoleKind, role: DatabaseRole): string[] {
   }
   if (role.createDb || role.createRole || role.replication) {
     problems.push('may create databases or roles, or replicate');
+  }
+  if (role.timeZone !== 'UTC') {
+    // Not a right of the role, but of its sessions: every expiry would move by the offset.
+    problems.push('runs its sessions in a time zone other than UTC');
   }
   return problems;
 }
