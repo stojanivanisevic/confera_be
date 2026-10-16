@@ -1,6 +1,6 @@
 {
   "name": "confera-be",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Confera API: conferences and membership of UdEkoM Balkans (NestJS, Prisma, PostgreSQL)",
   "license": "UNLICENSED",

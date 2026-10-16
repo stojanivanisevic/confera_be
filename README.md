@@ -89,7 +89,17 @@ corepack pnpm db:provision
 corepack pnpm db:migrate
 ```
 
-`db:provision` ends with `Database "confera" is provisioned.`. `db:migrate` ends with
+`db:provision` ends with these lines:
+
+```
+Database "confera" is provisioned.
+  owner        confera_owner  (migrations only)
+  application  confera_app  (no schema rights, bound by row-level security)
+  system       confera_system  (resolvers only, may bypass row-level security)
+Next: corepack pnpm db:migrate
+```
+
+`db:migrate` ends with
 `All migrations have been successfully applied.` the first time, and with
 `No pending migrations to apply.` when the schema is already up to date: both mean
 success. Both commands are safe to run again, and two
@@ -385,6 +395,12 @@ On a fresh installation, after `db:migrate`: `corepack pnpm seed:production`, th
 The command prints the invitation link once; copy it to the person by hand. Nobody but
 that person ever knows their password. Then the admin adds a mail server in the
 application. `seed:e2e` and its invented passwords never run on a server.
+
+On a developer machine, `first-admin` refuses ("has an active admin already") when the
+database was used before, for example by the real-API browser run of `confera_fe`, which
+seeds and signs in its own people. Start from an empty database first:
+`corepack pnpm stack:wipe`, `corepack pnpm stack:up`, `db:provision`, `db:migrate`, then
+`seed:production` and `first-admin`.
 
 ### The inventory of secrets (ADR-11)
 
@@ -920,6 +936,10 @@ eslint/              the lint rules with a security purpose
   to a name like `password` or `token`, or a connection address holds a password. Start
   the value with `invented-` (`password: 'invented-x'`); the rule is in section 12.
 - **Port 3001 is in use.** An earlier `pnpm start` or `start:dev` is still running.
+- **"A worker process has failed to exit gracefully"** in the unit tests of `check` is
+  harmless: a guard timer of one test (the slow-server case of
+  `src/modules/mail/mail-transport.edge.spec.ts`) is still running when the suite ends,
+  and Jest stops the worker. Every test has passed when it is printed.
 - **`seed:e2e did not run`** (exit code 78). `STAGE` is not `local` or `test`: look at
   `.env` and at the environment of your terminal, which wins over `.env`.
 - **`db:provision` (also inside `test:int` and `test:e2e`) fails with "cannot reach
