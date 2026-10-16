@@ -281,18 +281,37 @@ describe('sessions', () => {
           await attempt(email, password);
           return performance.now() - started;
         };
-        const samples = {
-          unknown: await timed('nobody.at.all@a.example.test'),
-          wrong: await timed(actors.a.admin.email),
-          invited: await timed(invited, INVENTED_PASSWORD),
-          deactivated: await timed(deactivated, INVENTED_PASSWORD),
+        const kinds: Record<string, () => Promise<number>> = {
+          unknown: () => timed('nobody.at.all@a.example.test'),
+          wrong: () => timed(actors.a.admin.email),
+          invited: () => timed(invited, INVENTED_PASSWORD),
+          deactivated: () => timed(deactivated, INVENTED_PASSWORD),
         };
-        for (const [name, ms] of Object.entries(samples)) {
-          expect({ name, ms }).toEqual({ name, ms: expect.any(Number) });
-          expect(ms).toBeGreaterThanOrEqual(290);
+        // The failures of the earlier tests are forgotten, so that no brake (5 per account,
+        // 20 per address) changes what is measured; these are forgotten afterwards too.
+        await owner.query('DELETE FROM security_events');
+        // One round to warm up, then three rounds with the kinds interleaved: a pause of
+        // the machine lands on one sample, not on one kind.
+        for (const run of Object.values(kinds)) {
+          await run();
         }
-        // The band: the slowest answer within 400 ms of the fastest (the floor is 300 ms).
-        const values = Object.values(samples);
+        const samples: Record<string, number[]> = {};
+        for (let round = 0; round < 3; round += 1) {
+          for (const [name, run] of Object.entries(kinds)) {
+            (samples[name] ??= []).push(await run());
+          }
+        }
+        for (const [name, values] of Object.entries(samples)) {
+          // The floor holds for every single answer.
+          for (const ms of values) {
+            expect({ name, ms: ms >= 290 }).toEqual({ name, ms: true });
+          }
+        }
+        // The band: the typical (median) answer of each kind within 400 ms of the others'
+        // (the floor is 300 ms). A kind that took a slower path would be slower every time.
+        const median = (values: number[]) => [...values].sort((x, y) => x - y)[1] ?? 0;
+        const values = Object.values(samples).map(median);
+        await owner.query('DELETE FROM security_events');
         expect(Math.max(...values) - Math.min(...values)).toBeLessThan(400);
       });
     });
