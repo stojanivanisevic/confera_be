@@ -64,7 +64,8 @@ corepack pnpm install
 ```
 
 **Step 3. Run all checks.** They need no database and no Docker, only the network (for
-the vulnerability audit). Three to six minutes.
+the vulnerability audit). About seven minutes on a fresh clone, up to twelve on a busy
+machine (the planted cases of the supply chain take two of them).
 
 ```
 corepack pnpm check
@@ -117,7 +118,8 @@ Stop the API with Ctrl+C.
 
 **Step 7. Run the tests that need the database.** They build the application, create a
 database of their own (`confera_integration_test`) with the same two commands as step 5,
-and leave your development database alone. Four to eight minutes.
+and leave your development database alone. `test:int` takes about five minutes and
+`test:e2e` about five more (with the stack of this version: Mailpit greets at once).
 
 ```
 corepack pnpm test:int
