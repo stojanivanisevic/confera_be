@@ -60,6 +60,10 @@ export class SystemResolvers implements OnModuleDestroy {
    * hash is read afterwards through the tenant client.
    */
   async userByEmail(email: string): Promise<ResolvedUser | null> {
+    // PostgreSQL stores no NUL in a text: such an address is nobody's, and is answered so.
+    if (email.includes('\u0000') || email.length > 320) {
+      return null;
+    }
     const user = await this.#client.user.findUnique({
       where: { email },
       select: { id: true, organisationId: true },

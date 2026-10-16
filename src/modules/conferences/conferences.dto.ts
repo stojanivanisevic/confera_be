@@ -1,3 +1,4 @@
+import { IsOptionalNotNull } from '../../common/validation/presence';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -84,21 +85,21 @@ class ConferenceFields {
   venue?: string | null;
 
   /** At most 20; each is checked and kept as an origin (ST-30). */
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsArray()
   @ArrayMaxSize(21)
   @IsString({ each: true })
   @MaxLength(300, { each: true })
   listedSites?: string[];
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsArray()
   @ArrayMinSize(1)
   @ArrayUnique()
   @IsIn(CONFERENCE_LANGUAGES, { each: true })
   languages?: string[];
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsString()
   @Satisfies('isTimeZone', isTimeZone)
   timeZone?: string;
@@ -121,13 +122,13 @@ export class CreateConferenceDto extends ConferenceFields {
 
 /** A change of a conference. A field left out stays; null clears it. Refused when archived. */
 export class UpdateConferenceDto extends ConferenceFields {
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsPlainText()
   @MinLength(1)
   @MaxLength(200)
   name?: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @Matches(CODE)
   code?: string;
 

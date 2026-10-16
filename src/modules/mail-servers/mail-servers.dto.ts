@@ -1,3 +1,4 @@
+import { IsOptionalNotNull } from '../../common/validation/presence';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -87,19 +88,19 @@ export class CreateMailServerDto {
   @MaxLength(100)
   fromName!: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   isDefault?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   isFallback?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   enabled?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsInt()
   @Min(1)
   @Max(600)
@@ -112,24 +113,24 @@ export class CreateMailServerDto {
  * null clears it too.
  */
 export class UpdateMailServerDto {
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsPlainText()
   @MinLength(1)
   @MaxLength(100)
   name?: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsString()
   @Satisfies('isHostName', isHostName)
   host?: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsInt()
   @Min(1)
   @Max(65_535)
   port?: number;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsIn(TLS_MODES)
   tlsMode?: TlsMode;
 
@@ -144,29 +145,29 @@ export class UpdateMailServerDto {
   @MaxLength(500)
   password?: string | null;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsMailAddress()
   fromAddress?: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsPlainText()
   @MinLength(1)
   @MaxLength(100)
   fromName?: string;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   isDefault?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   isFallback?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   enabled?: boolean;
 
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsInt()
   @Min(1)
   @Max(600)

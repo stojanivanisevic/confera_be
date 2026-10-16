@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { DestinationStream } from 'pino';
 import { AppModule } from './app.module';
 import { bodyLimit } from './common/http/body-limit';
+import { refuseDeepBodies } from './common/http/json-depth';
 import { TRUSTED_PROXY_HOPS } from './common/http/client-address';
 import {
   CSP_REPORT_BODY_LIMIT,
@@ -69,6 +70,9 @@ export function configureHttp(app: NestExpressApplication, logger: AppLogger): v
     limit: JSON_BODY_LIMIT,
     type: ['application/json', 'application/csp-report', 'application/reports+json'],
   });
+  // A body nested deeper than any request of the API is refused right after it is parsed:
+  // the validation walks it recursively, and thousands of levels end its stack (E2-07).
+  app.use(refuseDeepBodies);
 }
 
 /**

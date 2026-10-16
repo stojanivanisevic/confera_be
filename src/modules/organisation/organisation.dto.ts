@@ -1,3 +1,4 @@
+import { IsGiven, IsOptionalNotNull, NullOr } from '../../common/validation/presence';
 import { IsBoolean, IsInt, IsOptional, MaxLength, Min } from 'class-validator';
 import {
   isBic,
@@ -53,7 +54,7 @@ export class OrganisationDto {
 
 /** A change of the profile. A field left out stays as it is; null clears it. */
 export class UpdateOrganisationDto {
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsPlainText()
   @MaxLength(200)
   name?: string;
@@ -91,7 +92,7 @@ export class UpdateOrganisationDto {
   vatNoteEn?: string | null;
 
   /** Whether the mail log keeps the content of what was sent (FR-SMTP-04). */
-  @IsOptional()
+  @IsOptionalNotNull()
   @IsBoolean()
   mailLogContent?: boolean;
 
@@ -105,24 +106,29 @@ export class UpdateOrganisationDto {
  * announced to every active admin (ADR-03, ST-19). Each field is given; null clears it.
  */
 export class PaymentDetailsDto {
-  @IsOptional()
+  @NullOr()
+  @IsGiven()
   @Satisfies('isSerbianAccount', isSerbianAccount)
   rsdAccount!: string | null;
 
-  @IsOptional()
+  @NullOr()
+  @IsGiven()
   @Satisfies('isIban', isIban)
   eurIban!: string | null;
 
-  @IsOptional()
+  @NullOr()
+  @IsGiven()
   @Satisfies('isBic', isBic)
   eurSwift!: string | null;
 
-  @IsOptional()
+  @NullOr()
+  @IsGiven()
   @IsPlainText()
   @MaxLength(200)
   eurBankName!: string | null;
 
-  @IsOptional()
+  @NullOr()
+  @IsGiven()
   @IsMailAddress()
   paypalPayee!: string | null;
 

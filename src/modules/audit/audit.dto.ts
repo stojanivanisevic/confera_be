@@ -1,5 +1,7 @@
+import { isMoment } from '../../common/validation/presence';
+import { Satisfies } from '../../common/validation/satisfies';
 import { Type } from 'class-transformer';
-import { IsISO8601, IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { AUDIT_ACTIONS } from './audit-recorder';
 
 export class AuditChangeDto {
@@ -52,12 +54,12 @@ export class AuditQueryDto {
 
   /** Entries from this moment on. */
   @IsOptional()
-  @IsISO8601()
+  @Satisfies('isMoment', isMoment)
   from?: string;
 
   /** Entries before this moment. */
   @IsOptional()
-  @IsISO8601()
+  @Satisfies('isMoment', isMoment)
   to?: string;
 
   @IsOptional()

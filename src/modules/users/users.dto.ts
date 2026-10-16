@@ -1,3 +1,4 @@
+import { Satisfies } from '../../common/validation/satisfies';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { IsMailAddress } from '../../common/validation/mail-address';
@@ -32,6 +33,7 @@ export class UserQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
+  @Satisfies('noControlCharacter', (value: string) => !/\p{Cc}/u.test(value))
   search?: string;
 
   /** One state; without it every user but the removed ones. */
@@ -94,6 +96,14 @@ export class ChangeRoleDto {
 
 export class VersionDto {
   /** The version the change is made on. */
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+/** The version a removal is made on, in the query of DELETE /users/{id}. */
+export class RemoveUserQueryDto {
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   version!: number;

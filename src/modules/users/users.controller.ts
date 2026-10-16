@@ -11,8 +11,6 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { Type } from 'class-transformer';
-import { IsInt, Min } from 'class-validator';
 import { AdminController } from '../../common/http/surface';
 import { CurrentAccess, FreshPassword, Permission } from '../access/access.decorators';
 import type { Access } from '../access/access';
@@ -20,6 +18,7 @@ import type { RoleName } from '../access/permissions';
 import {
   ChangeRoleDto,
   InviteUserDto,
+  RemoveUserQueryDto,
   UpdateUserDto,
   UserDto,
   UserPageDto,
@@ -27,14 +26,6 @@ import {
   VersionDto,
 } from './users.dto';
 import { UsersService } from './users.service';
-
-export class RemoveUserQueryDto {
-  /** The version the removal is made on. */
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  version!: number;
-}
 
 const ID = new ParseUUIDPipe({ version: '4', errorHttpStatusCode: HttpStatus.NOT_FOUND });
 

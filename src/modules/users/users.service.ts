@@ -169,7 +169,7 @@ export class UsersService {
 
   async update(actor: Access, id: string, displayName: string, version: number): Promise<UserDto> {
     return this.database.transaction(async (tx) => {
-      const before = await this.load(tx, id);
+      const before = await this.loadPresent(tx, id);
       const user = await this.write(tx, before, version, { displayName });
       await this.audit.record(tx, {
         organisationId: actor.organisationId,
@@ -186,7 +186,7 @@ export class UsersService {
 
   async changeRole(actor: Access, id: string, role: RoleName, version: number): Promise<UserDto> {
     return this.database.transaction(async (tx) => {
-      const before = await this.load(tx, id);
+      const before = await this.loadPresent(tx, id);
       const previous = toDto(before).role;
       if (previous === 'admin' && role !== 'admin') {
         await this.keepAnAdmin(tx, actor.organisationId, before);
@@ -295,7 +295,7 @@ export class UsersService {
   /** An admin's "end this user's sessions" (ADR-03). */
   async endUserSessions(actor: Access, id: string): Promise<void> {
     await this.database.transaction(async (tx) => {
-      await this.load(tx, id);
+      await this.loadPresent(tx, id);
       await this.endSessions(tx, id, 'ended_by_admin');
       await this.audit.record(tx, {
         organisationId: actor.organisationId,
@@ -306,6 +306,15 @@ export class UsersService {
       });
       await this.notice(tx, actor, 'user_sessions_ended', id);
     });
+  }
+
+  /** A user who is still there: a removed one is a name on past actions only (409). */
+  private async loadPresent(tx: Prisma.TransactionClient, id: string): Promise<UserRow> {
+    const user = await this.load(tx, id);
+    if (user.status === 'removed') {
+      throw new ProblemException(409, 'user_removed');
+    }
+    return user;
   }
 
   private async load(tx: Prisma.TransactionClient, id: string): Promise<UserRow> {
