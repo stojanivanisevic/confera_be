@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { hash } from '@node-rs/argon2';
 import type { Client } from 'pg';
 import { HASH_OPTIONS } from '../../../src/modules/access/password-hasher';
+import { snapshotDatabase } from './trace';
 
 /**
  * Factories for the end-to-end tests: invented organisations and invented people
@@ -232,6 +233,8 @@ export class Factories {
 
   /** Empties every tenant table and the instance tables. The schema and the roles stay. */
   async reset(): Promise<void> {
+    // What the previous test file left is kept for the scan after the run (M2-QA-01).
+    await snapshotDatabase('before a reset');
     const tables = [...TENANT_TABLES, ...INSTANCE_TABLES].map((table) => `"${table}"`).join(', ');
     await this.owner.query(`TRUNCATE ${tables} CASCADE`);
   }

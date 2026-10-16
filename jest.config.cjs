@@ -62,6 +62,8 @@ module.exports = {
       testMatch: ['<rootDir>/test/e2e/**/*.spec.ts'],
       // Creates the e2e database with db:provision and prisma migrate deploy.
       globalSetup: '<rootDir>/test/e2e/support/global-setup.ts',
+      // Scans the trace of the whole run for live tokens and personal data (M2-QA-01).
+      globalTeardown: '<rootDir>/test/e2e/support/global-teardown.ts',
     },
   ],
 };

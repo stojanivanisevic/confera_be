@@ -8,6 +8,7 @@ import {
   validProductionEnvironment,
 } from '../../../src/config/testing/valid-environment';
 import { e2eDatabase } from './e2e-database';
+import { traceLog } from './trace';
 
 /**
  * The application under test: the REAL application (`createApp` of src/bootstrap.ts, the
@@ -80,7 +81,13 @@ export async function startE2eApp(env: RawEnvironment = e2eEnvironment()): Promi
 
   let text = '';
   const app = await createApp(config, {
-    logDestination: { write: (chunk: string) => void (text += chunk) },
+    logDestination: {
+      write: (chunk: string) => {
+        text += chunk;
+        // The trace of the whole run, scanned after it (M2-QA-01).
+        traceLog(chunk);
+      },
+    },
   });
   // A real socket on a free port of the loopback address: requests travel as they do on
   // a server, and many requests at once share one listening server.

@@ -1,4 +1,5 @@
 import { prepareTestDatabase } from '../../support/prepare-database';
+import { startTrace } from './trace';
 
 /**
  * Runs once before the end-to-end tests (`pnpm test:e2e`): creates the database
@@ -13,6 +14,7 @@ const E2E_DATABASE = 'confera_e2e_test';
 
 export default function globalSetup(): void {
   const urls = prepareTestDatabase(E2E_DATABASE);
+  startTrace();
 
   // Handed to the test files, which run in this process (--runInBand) or its children.
   process.env.CONFERA_E2E_DATABASE = urls.name;
