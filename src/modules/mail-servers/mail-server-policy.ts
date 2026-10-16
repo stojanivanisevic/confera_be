@@ -88,7 +88,17 @@ export function isRefusedAddress(address: string): boolean {
     );
   }
   if (version === 6) {
-    const words = ipv6Words(address);
+    return isRefusedIpv6(ipv6Words(address));
+  }
+  return true;
+}
+
+/**
+ * The IPv6 half of the rule, on the words of an address. Null (a text the parser cannot
+ * read) is refused: the rule fails closed.
+ */
+export function isRefusedIpv6(words: readonly number[] | null): boolean {
+  {
     if (words === null) {
       return true;
     }
@@ -112,7 +122,6 @@ export function isRefusedAddress(address: string): boolean {
       (w0 & 0xff00) === 0xff00 // multicast
     );
   }
-  return true;
 }
 
 /** Whether a host is this machine: localhost or a loopback address, however written. */

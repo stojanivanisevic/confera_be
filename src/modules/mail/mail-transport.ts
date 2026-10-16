@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import type { AppConfig } from '../../config/config';
 import { APP_CONFIG } from '../../config/config.module';
@@ -35,6 +35,14 @@ export interface Delivery {
   readonly html: string;
   readonly text: string;
 }
+
+/** How a host name becomes addresses: the system's resolver, or a test's (SEC-M2-13). */
+export type HostLookup = (host: string) => Promise<readonly { address: string }[]>;
+
+/** The token of a lookup other than the system's. Only tests provide one. */
+export const MAIL_LOOKUP = Symbol('MAIL_LOOKUP');
+
+const systemLookup: HostLookup = (host) => lookup(host, { all: true, verbatim: true });
 
 /** Why a delivery failed: a code, never the server's words (they may hold an address or a secret). */
 export type DeliveryError =
@@ -116,7 +124,10 @@ export function deliveryErrorOf(error: unknown): DeliveryError {
 
 @Injectable()
 export class MailTransport {
-  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() @Inject(MAIL_LOOKUP) private readonly lookupAll: HostLookup = systemLookup,
+  ) {}
 
   /** Sends one message to one recipient. Never throws: the result says what happened. */
   async deliver(target: DeliveryTarget, delivery: Delivery): Promise<DeliveryResult> {
@@ -192,7 +203,7 @@ export class MailTransport {
       return [bare];
     }
     try {
-      const entries = await lookup(bare, { all: true, verbatim: true });
+      const entries = await this.lookupAll(bare);
       return entries.length === 0 ? null : entries.map((entry) => entry.address);
     } catch {
       return null;

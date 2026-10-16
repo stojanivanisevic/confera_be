@@ -2,6 +2,8 @@ import {
   chooseServers,
   isHostName,
   isRefusedAddress,
+  isRefusedIpv6,
+  ipv6Words,
   MAIL_PORTS,
   type SelectableServer,
   targetProblem,
@@ -169,5 +171,19 @@ describe('mail server policy', () => {
         expect(isHostName(value)).toBe(false);
       }
     });
+  });
+});
+
+describe('an IPv6 text the parser cannot read (SEC-M2-13)', () => {
+  it.each(['1:2:3:4:5:6:7:8:9', ':::1', '12345::1', '1::2::3', '::g', '1.2.3.4.5'])(
+    'is no address: %s',
+    (text) => {
+      expect(ipv6Words(text)).toBeNull();
+    },
+  );
+
+  it('is refused: the rule fails closed', () => {
+    expect(isRefusedIpv6(null)).toBe(true);
+    expect(isRefusedIpv6(ipv6Words('2001:db8::1'))).toBe(false);
   });
 });
