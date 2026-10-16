@@ -287,32 +287,36 @@ describe('sessions', () => {
           invited: () => timed(invited, INVENTED_PASSWORD),
           deactivated: () => timed(deactivated, INVENTED_PASSWORD),
         };
-        // The failures of the earlier tests are forgotten, so that no brake (5 per account,
-        // 20 per address) changes what is measured; these are forgotten afterwards too.
+        // The failures of the earlier tests are forgotten (the brake: 5 per account, 20 per
+        // address); these are forgotten afterwards too.
         await owner.query('DELETE FROM security_events');
-        // One round to warm up, then three rounds with the kinds interleaved: a pause of
-        // the machine lands on one sample, not on one kind.
+        // One round to warm up, then five rounds with the kinds interleaved: a pause of
+        // the machine lands on one sample, not on one kind. The failures of each round are
+        // forgotten before the next, so that no brake changes what is measured.
         for (const run of Object.values(kinds)) {
           await run();
         }
         const samples: Record<string, number[]> = {};
-        for (let round = 0; round < 3; round += 1) {
+        for (let round = 0; round < 5; round += 1) {
+          await owner.query('DELETE FROM security_events');
           for (const [name, run] of Object.entries(kinds)) {
             (samples[name] ??= []).push(await run());
           }
         }
+        await owner.query('DELETE FROM security_events');
         for (const [name, values] of Object.entries(samples)) {
           // The floor holds for every single answer.
           for (const ms of values) {
             expect({ name, ms: ms >= 290 }).toEqual({ name, ms: true });
           }
         }
-        // The band: the typical (median) answer of each kind within 400 ms of the others'
-        // (the floor is 300 ms). A kind that took a slower path would be slower every time.
-        const median = (values: number[]) => [...values].sort((x, y) => x - y)[1] ?? 0;
+        // The band: the typical (median) answer of each kind within 150 ms of the others'.
+        // With the floor of 300 ms every kind answers at the floor when it takes the same
+        // path; a kind whose path were even 300 ms slower would be slower in every round,
+        // and its median would leave the band. A single slow sample does not move a median.
+        const median = (values: number[]) => [...values].sort((x, y) => x - y)[2] ?? 0;
         const values = Object.values(samples).map(median);
-        await owner.query('DELETE FROM security_events');
-        expect(Math.max(...values) - Math.min(...values)).toBeLessThan(400);
+        expect(Math.max(...values) - Math.min(...values)).toBeLessThan(150);
       });
     });
   });
