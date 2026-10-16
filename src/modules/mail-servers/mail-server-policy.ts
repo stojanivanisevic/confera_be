@@ -115,12 +115,30 @@ export function isRefusedAddress(address: string): boolean {
   return true;
 }
 
+/** Whether a host is this machine: localhost or a loopback address, however written. */
+export function isThisMachine(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '').toLowerCase();
+  if (bare === 'localhost' || bare.endsWith('.localhost')) {
+    return true;
+  }
+  if (isIP(bare) === 4) {
+    return bare.startsWith('127.');
+  }
+  if (isIP(bare) === 6) {
+    const words = ipv6Words(bare);
+    return words !== null && words.slice(0, 7).every((word) => word === 0) && words[7] === 1;
+  }
+  return false;
+}
+
 /** What is wrong with a target on this stage, or null. A host name is checked again when resolved. */
 export function targetProblem(
   target: { host: string; port: number; tlsMode: TlsMode },
   stage: Stage,
 ): TargetProblem | null {
-  if (target.tlsMode === 'none' && !PLAIN_STAGES.includes(stage)) {
+  // In clear only to the mail catcher of a developer machine: on its stages, and to this
+  // machine only. Anything else would send the password and the mail readable (UXUI-M2-10).
+  if (target.tlsMode === 'none' && (!PLAIN_STAGES.includes(stage) || !isThisMachine(target.host))) {
     return 'tls_required';
   }
   if (stage !== 'prod') {

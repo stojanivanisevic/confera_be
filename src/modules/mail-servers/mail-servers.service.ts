@@ -122,6 +122,7 @@ export class MailServersService {
         subjectId: server.id,
         changes: this.changes(null, server, input.password !== undefined),
       });
+      await this.wakeWaiting(tx);
       await this.mail.noticeToAdmins(tx, actor.organisationId, 'mail_server_created', {
         actorUserId: actor.userId,
       });
@@ -180,6 +181,7 @@ export class MailServersService {
         subjectId: id,
         changes: this.changes(before, after, passwordChanged),
       });
+      await this.wakeWaiting(tx);
       await this.mail.noticeToAdmins(tx, actor.organisationId, 'mail_server_changed', {
         actorUserId: actor.userId,
       });
@@ -251,10 +253,27 @@ export class MailServersService {
     return result;
   }
 
+  /**
+   * The messages that waited for a server are due again (UXUI-M2-01): the worker sends them
+   * through the servers as they are now, or they wait again when none of them fits.
+   */
+  private async wakeWaiting(tx: Prisma.TransactionClient): Promise<void> {
+    await tx.mailMessage.updateMany({
+      where: { status: 'waiting_for_server' },
+      data: { status: 'queued', nextAttemptAt: new Date(), lastErrorCode: null },
+    });
+  }
+
   private checkTarget(target: { host: string; port: number; tlsMode: TlsMode }): void {
     const problem = targetProblem(target, this.config.stage);
     if (problem !== null) {
-      throw new ProblemException(422, problem);
+      // The field that breaks the rule, so that the form can say it there (UXUI-M2-10).
+      const path = {
+        tls_required: 'tlsMode',
+        port_not_allowed: 'port',
+        address_not_allowed: 'host',
+      }[problem];
+      throw new ProblemException(422, problem, [{ path, code: problem }]);
     }
   }
 

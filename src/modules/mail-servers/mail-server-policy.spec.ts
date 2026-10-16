@@ -91,6 +91,15 @@ describe('mail server policy', () => {
       expect(targetProblem(target('smtp.example.test', 587, 'none'), 'prod')).toBe('tls_required');
       expect(targetProblem(target('127.0.0.1', 1025, 'none'), 'local')).toBeNull();
       expect(targetProblem(target('127.0.0.1', 1025, 'none'), 'test')).toBeNull();
+      expect(targetProblem(target('localhost', 1025, 'none'), 'local')).toBeNull();
+      expect(targetProblem(target('[::1]', 1025, 'none'), 'dev')).toBeNull();
+    });
+
+    it('refuses a server without TLS to another machine on every stage (UXUI-M2-10)', () => {
+      for (const stage of ['local', 'dev', 'test', 'prod'] as const) {
+        expect(targetProblem(target('smtp.example.test', 587, 'none'), stage)).toBe('tls_required');
+        expect(targetProblem(target('10.0.0.5', 25, 'none'), stage)).toBe('tls_required');
+      }
     });
 
     it.each([
