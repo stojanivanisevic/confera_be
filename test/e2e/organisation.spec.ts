@@ -164,7 +164,7 @@ describe('the organisation', () => {
       );
     });
 
-    it('are changed with who and when, the values go to the audit log, and every active admin is told', async () => {
+    it('are changed with who and when, the audit log names the changed fields, and every active admin is told', async () => {
       const response = await as(e2e, adminA, 'put', '/api/v1/organisation/payment-details').send({
         ...PAYMENT,
         version: 2,
@@ -194,7 +194,11 @@ describe('the organisation', () => {
         ),
       );
       expect(entry?.actor_user_id).toBe(actors.a.admin.id);
-      expect(entry?.changes.rsdAccount).toEqual({ old: null, new: PAYMENT.rsdAccount });
+      // The log says that the account numbers changed, never to what (D9).
+      expect(entry?.fields).toEqual(expect.arrayContaining(['rsdAccount', 'eurIban']));
+      expect(entry?.changes).not.toHaveProperty('rsdAccount');
+      expect(entry?.changes).not.toHaveProperty('eurIban');
+      expect(JSON.stringify(entry?.changes)).not.toContain(PAYMENT.rsdAccount);
       expect(entry?.fields).toContain('paypalPayee');
       expect(entry?.changes).not.toHaveProperty('paypalPayee');
       const notices = await inOrganisation(actors.a.organisation.id, () =>
@@ -206,6 +210,27 @@ describe('the organisation', () => {
       expect(notices.map(({ recipient_address }) => recipient_address)).toEqual(
         [actors.a.admin.email, actors.a.ended.email].sort(),
       );
+      // The audit log as an admin reads it: the account numbers neither in this entry nor in
+      // one written while they were still on the list (0.2.0), D9.
+      await inOrganisation(actors.a.organisation.id, () =>
+        rows(
+          owner,
+          `INSERT INTO audit_entries (organisation_id, action, subject_type, fields, changes)
+           VALUES ($1, 'organisation.payment_details_changed', 'organisation', '{eurIban}',
+                   '{"eurIban":{"old":null,"new":"RS35260005601001611379"}}')`,
+          [actors.a.organisation.id],
+        ),
+      );
+      const log = await as(
+        e2e,
+        adminA,
+        'get',
+        '/api/v1/audit?action=organisation.payment_details_changed',
+      );
+      expect(log.status).toBe(200);
+      expect((log.body as { total: number }).total).toBe(2);
+      expect(JSON.stringify(log.body)).not.toContain('RS35260005601001611379');
+      expect(JSON.stringify(log.body)).not.toContain(PAYMENT.rsdAccount);
       // Nothing of it reached B.
       const b = await as(e2e, adminB, 'get', '/api/v1/organisation');
       expect(b.body).toEqual(

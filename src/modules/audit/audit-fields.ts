@@ -6,10 +6,15 @@
  *
  * Not on it, on purpose: a person's name, email, role and state (they are about a person);
  * the organisation's contact email and PayPal payee (an address that may be a person's);
- * any free text an admin types as a reason.
+ * the bank account numbers (D9); any free text an admin types as a reason.
+ *
+ * The list also applies when the log is READ: an entry written before a field left the
+ * list shows that field's name only (`visibleChanges`).
  */
 export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  // The issuer data and bank accounts of the organisation (FR-ORG-03): a legal entity's.
+  // The issuer data of the organisation (FR-ORG-03): a legal entity's. The account numbers
+  // (`rsdAccount`, `eurIban`) are NOT here (owner decision D9, 2026-10-17): the log says that
+  // the bank details changed, not to what, as the notice mail does.
   organisation: [
     'legalName',
     'address',
@@ -17,8 +22,6 @@ export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
     'taxNumber',
     'vatNoteSr',
     'vatNoteEn',
-    'rsdAccount',
-    'eurIban',
     'eurSwift',
     'eurBankName',
     'mailLogContent',
@@ -55,4 +58,18 @@ export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
 /** May the old and new values of this field of this kind of subject be recorded? */
 export function valuesMayBeRecorded(subjectType: string, field: string): boolean {
   return (AUDIT_VALUE_FIELDS[subjectType] ?? []).includes(field);
+}
+
+/** The stored values of an entry that the list allows today; the rest are not shown. */
+export function visibleChanges<T>(
+  subjectType: string,
+  changes: Readonly<Record<string, T>>,
+): Record<string, T> {
+  const shown: Record<string, T> = {};
+  for (const [field, change] of Object.entries(changes)) {
+    if (valuesMayBeRecorded(subjectType, field)) {
+      shown[field] = change;
+    }
+  }
+  return shown;
 }

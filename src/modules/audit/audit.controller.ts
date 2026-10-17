@@ -3,6 +3,7 @@ import { AdminController } from '../../common/http/surface';
 import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import { Permission } from '../access/access.decorators';
+import { visibleChanges } from './audit-fields';
 import { type AuditChangeDto, AuditPageDto, AuditQueryDto } from './audit.dto';
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -56,7 +57,11 @@ export class AuditController {
         subjectType: entry.subjectType,
         subjectId: entry.subjectId,
         fields: entry.fields,
-        changes: entry.changes as unknown as Record<string, AuditChangeDto>,
+        // Values only of the fields the list allows today (D9: no bank account number).
+        changes: visibleChanges(
+          entry.subjectType,
+          entry.changes as unknown as Record<string, AuditChangeDto>,
+        ),
         detail: entry.detail as Record<string, string | number | boolean>,
         traceId: entry.traceId,
       })),

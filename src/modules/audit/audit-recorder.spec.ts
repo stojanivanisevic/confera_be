@@ -1,4 +1,4 @@
-import { AUDIT_VALUE_FIELDS, valuesMayBeRecorded } from './audit-fields';
+import { AUDIT_VALUE_FIELDS, valuesMayBeRecorded, visibleChanges } from './audit-fields';
 import { AUDIT_ACTIONS, auditedChanges } from './audit-recorder';
 
 /**
@@ -17,11 +17,31 @@ describe('the audit recorder', () => {
 
   it('a field on the list keeps its old and new value', () => {
     const { fields, values } = auditedChanges('organisation', {
-      rsdAccount: { old: null, new: '160-0000000000123-45' },
+      eurBankName: { old: null, new: 'Banka Intesa (izmišljeno)' },
       contactEmail: { old: null, new: 'office@example.test' },
     });
-    expect(fields).toEqual(['contactEmail', 'rsdAccount']);
-    expect(values).toEqual({ rsdAccount: { old: null, new: '160-0000000000123-45' } });
+    expect(fields).toEqual(['contactEmail', 'eurBankName']);
+    expect(values).toEqual({ eurBankName: { old: null, new: 'Banka Intesa (izmišljeno)' } });
+  });
+
+  it('a bank account number is never a value: the log says that it changed (D9)', () => {
+    const { fields, values } = auditedChanges('organisation', {
+      rsdAccount: { old: null, new: '160-0000000000123-45' },
+      eurIban: { old: null, new: 'RS35260005601001611379' },
+    });
+    expect(fields).toEqual(['eurIban', 'rsdAccount']);
+    expect(values).toEqual({});
+    expect(AUDIT_VALUE_FIELDS.organisation).not.toContain('rsdAccount');
+    expect(AUDIT_VALUE_FIELDS.organisation).not.toContain('eurIban');
+  });
+
+  it('an entry written while a field was on the list shows its name only when read (D9)', () => {
+    expect(
+      visibleChanges('organisation', {
+        eurIban: { old: null, new: 'RS35260005601001611379' },
+        eurSwift: { old: null, new: 'DBDBRSBG' },
+      }),
+    ).toEqual({ eurSwift: { old: null, new: 'DBDBRSBG' } });
   });
 
   it('the same field name under another kind of subject is not on the list', () => {
