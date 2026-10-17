@@ -65,7 +65,8 @@ export class SendBreaker {
     const toDomain = await tx.submission.count({
       where: { correspondingDomain: input.domain, receivedAt: { gt: dayAgo } },
     });
-    if (toDomain >= DOMAIN_DAILY_LIMIT) {
+    // The count holds the submission at hand: the 101st to a domain is held, not the 100th (Q3-06).
+    if (toDomain > DOMAIN_DAILY_LIMIT) {
       return 'recipient_domain';
     }
     return null;

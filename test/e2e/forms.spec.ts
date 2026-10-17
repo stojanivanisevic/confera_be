@@ -458,6 +458,68 @@ describe('forms and intake (M3)', () => {
       expect(mail.Text).not.toContain('Kratak apstrakt');
     });
 
+    it('Q3-01: a refused token is renewed and the submit that follows at once is stored, not taken for a script', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const first = await tokenFor(e2e, form.slug, address);
+      await ageTokens(owner, orgA());
+      // The page sat open past the token's life.
+      await inOrganisation(
+        owner,
+        orgA(),
+        "UPDATE form_tokens SET expires_at = now() - interval '1 second'",
+      );
+      const refused = await submit(
+        e2e,
+        form.slug,
+        first.formToken,
+        { language: 'en', answers: abstractAnswers() },
+        { address },
+      );
+      expect(refused.status).toBe(403);
+      expect(refused.body).toEqual(expect.objectContaining({ code: 'form_token_invalid' }));
+      const renewed = await page(e2e, 'post', `/public/v1/forms/${form.slug}/tokens`, address)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ previousFormToken: first.formToken }));
+      expect(renewed.status).toBe(201);
+      const next = renewed.body as { formToken: string };
+      // At once, without a moment's wait: a real submission.
+      const stored = await submit(
+        e2e,
+        form.slug,
+        next.formToken,
+        { language: 'en', answers: abstractAnswers() },
+        { address },
+      );
+      expect(stored.status).toBe(201);
+      const rows = await inOrganisation(
+        owner,
+        orgA(),
+        'SELECT id FROM submissions WHERE form_id = $1',
+        [form.formId],
+      );
+      expect(rows).toHaveLength(1);
+      // A token of another form renews nothing: a submit at once is still a script.
+      const other = await openForm(e2e, admin);
+      const foreign = await tokenFor(e2e, other.slug, address);
+      const unrelated = await page(e2e, 'post', `/public/v1/forms/${form.slug}/tokens`, address)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ previousFormToken: foreign.formToken }));
+      const quick = await submit(
+        e2e,
+        form.slug,
+        (unrelated.body as { formToken: string }).formToken,
+        { language: 'en', answers: abstractAnswers() },
+        { address },
+      );
+      expect(quick.status).toBe(201);
+      expect(
+        await inOrganisation(owner, orgA(), 'SELECT id FROM submissions WHERE form_id = $1', [
+          form.formId,
+        ]),
+      ).toHaveLength(1);
+    });
+
     it('refuses answers that break the rules, with the field path and code (FR-FORM-13, ST-41)', async () => {
       const form = await openForm(e2e, admin, {
         configuration: { maxAuthors: 3, fields: { abstract: { maxWords: 5 } } },
@@ -747,14 +809,25 @@ describe('forms and intake (M3)', () => {
       );
     });
 
-    it('asks a busy address for a proof-of-work, and refuses a submit without it', async () => {
+    it('asks a client that behaved like a script for a proof-of-work, and refuses a submit without it (Q3-08)', async () => {
       const form = await openForm(e2e, admin);
       const address = freshAddress();
-      let challenge: { challenge: string; difficulty: number } | null = null;
-      for (let n = 0; n < 12 && challenge === null; n += 1) {
-        challenge = (await tokenFor(e2e, form.slug, address)).proofOfWork;
+      // Many tokens alone (a faculty behind one address) ask for no work ...
+      for (let n = 0; n < 12; n += 1) {
+        expect((await tokenFor(e2e, form.slug, address)).proofOfWork).toBeNull();
       }
-      expect(challenge).not.toBeNull();
+      // ... three acts of a script do: the trap, filled three times.
+      for (let n = 0; n < 3; n += 1) {
+        const trapped = await tokenFor(e2e, form.slug, address);
+        await ageTokens(owner, orgA());
+        await submit(
+          e2e,
+          form.slug,
+          trapped.formToken,
+          { language: 'en', answers: abstractAnswers(), website: 'x' },
+          { address },
+        );
+      }
       const { formToken, proofOfWork } = await tokenFor(e2e, form.slug, address);
       expect(proofOfWork).not.toBeNull();
       await ageTokens(owner, orgA());
@@ -767,7 +840,8 @@ describe('forms and intake (M3)', () => {
       );
       expect(without.status).toBe(403);
       expect(without.body).toEqual(expect.objectContaining({ code: 'proof_of_work_failed' }));
-      const counter = solveProofOfWork(proofOfWork?.challenge ?? '', proofOfWork?.difficulty ?? 16);
+      expect(proofOfWork?.difficulty).toBe(13);
+      const counter = solveProofOfWork(proofOfWork?.challenge ?? '', proofOfWork?.difficulty ?? 13);
       const withIt = await submit(
         e2e,
         form.slug,

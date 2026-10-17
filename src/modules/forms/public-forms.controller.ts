@@ -8,6 +8,7 @@ import { Public } from '../access/access.decorators';
 import { UploadsService } from '../files/uploads.service';
 import {
   FormTokenDto,
+  FormTokenRequestDto,
   FrameSitesDto,
   PublicFormDto,
   SubmitDto,
@@ -58,14 +59,19 @@ export class PublicFormsController {
 
   /**
    * A single-use form token (ADR-08). Under load it asks for a proof-of-work. JSON only:
-   * the body is `{}`. 409 `form_closed` when the form takes no submissions.
+   * `{}`, or `{ "previousFormToken": "..." }` to renew a refused token (Q3-01). 409
+   * `form_closed` when the form takes no submissions.
    */
   @Post(':slug/tokens')
   @Public()
   @OwnPage('application/json')
   @HttpCode(201)
-  issueFormToken(@Param('slug') slug: string, @Req() request: Request): Promise<FormTokenDto> {
-    return this.intake.issueToken(slug, clientAddress(request));
+  issueFormToken(
+    @Param('slug') slug: string,
+    @Body() body: FormTokenRequestDto,
+    @Req() request: Request,
+  ): Promise<FormTokenDto> {
+    return this.intake.issueToken(slug, clientAddress(request), body.previousFormToken);
   }
 
   /**

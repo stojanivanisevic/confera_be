@@ -541,6 +541,11 @@ model FormToken {
   /// Uploads made with it so far (at most the file fields of the version, plus a margin).
   uploads        Int       @default(0)
   /// The proof-of-work it asks for, when it was issued under load (ADR-08).
+  /// When the author began to fill in the form: the issue of the first token of a chain of
+  /// renewals (Q3-01). The minimum fill time is measured from here.
+  fillStartedAt  DateTime? @map("fill_started_at") @db.Timestamptz(3)
+  /// The token this one renews, when the page renewed a refused one (Q3-01).
+  renewedFrom    String?   @map("renewed_from") @db.Uuid
   powChallenge   String?   @map("pow_challenge")
   powDifficulty  Int?      @map("pow_difficulty")
 

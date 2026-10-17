@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ProblemException } from '../../common/http/problem';
 import { VALIDATION_FAILED } from '../../common/http/validation';
@@ -30,6 +30,10 @@ import { type AnswerValue, checkAnswers } from './rules';
 export const FORM_TOKEN_LIFETIME_MS = 6 * 60 * 60_000;
 /** A submit sooner than this after its token is a script: a fake success (ADR-08, item 7). */
 export const MINIMUM_FILL_MS = 3_000;
+/** How long a refused token may be renewed after it was issued (Q3-01). */
+export const RENEWAL_WINDOW_MS = 24 * 60 * 60_000;
+/** Fake successes remembered for their repeats, at most. */
+const MAX_DECOYS = 10_000;
 /** Uploads a token allows beyond the file fields of its form (ADR-08: "a small margin"). */
 export const UPLOAD_MARGIN = 2;
 
@@ -58,6 +62,9 @@ function asText(value: AnswerValue | Record<string, AnswerValue>[] | undefined):
 
 @Injectable()
 export class IntakeService {
+  /** The fake successes given, by form and idempotency key, so that a repeat answers the same. */
+  readonly #decoys = new Map<string, SubmittedDto>();
+
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly resolvers: SystemResolvers,
@@ -128,6 +135,13 @@ export class IntakeService {
             terms: form.conference.publicationTermsUrl,
             privacy: form.conference.privacyNoticeUrl,
           },
+          contactEmail:
+            (
+              await tx.organisation.findUniqueOrThrow({
+                where: { id: resolved.organisationId },
+                select: { contactEmail: true },
+              })
+            ).contactEmail ?? null,
           versionNumber: form.currentVersion.number,
           definition: parseDefinition(form.currentVersion.definition) as unknown as Record<
             string,
@@ -155,11 +169,49 @@ export class IntakeService {
     );
   }
 
+  /** Whether the form is busy now: more than 20 submissions in 10 minutes (ADR-08, item 2). */
+  private async formBusy(
+    tx: Prisma.TransactionClient,
+    formId: string,
+    now: Date,
+  ): Promise<boolean> {
+    const recent = await tx.submission.count({
+      where: {
+        formId,
+        receivedAt: { gt: new Date(now.getTime() - LIMITS.powSubmissionsPerForm.windowMs) },
+      },
+    });
+    return recent > LIMITS.powSubmissionsPerForm.count;
+  }
+
+  /**
+   * The token a renewal names (Q3-01): of this form, issued within 24 hours, expired or used
+   * or not; otherwise none, and the new token starts a chain of its own.
+   */
+  private async renewable(
+    tx: Prisma.TransactionClient,
+    formId: string,
+    previous: string | undefined,
+    now: Date,
+  ): Promise<TokenRow | null> {
+    if (previous === undefined || !TOKEN_SHAPE.test(previous)) {
+      return null;
+    }
+    const row = await tx.formToken.findFirst({ where: { tokenHash: tokenHash(previous) } });
+    if (row?.formId !== formId || now.getTime() - row.issuedAt.getTime() > RENEWAL_WINDOW_MS) {
+      return null;
+    }
+    return row;
+  }
+
   /**
    * A single-use token for one form (ADR-08, item 1). Under load it carries a proof-of-work:
-   * more than 20 submissions in 10 minutes on the form, or an address that sent much.
+   * more than 20 submissions in 10 minutes on the form, or a client that behaved like a
+   * script. With `previousFormToken` (Q3-01) it renews a refused token of the same form: it
+   * keeps the moment the author began (the minimum fill time does not apply to it), takes over
+   * the files uploaded with the old one and its count of uploads, and the old one is used up.
    */
-  async issueToken(slug: string, address: string): Promise<FormTokenDto> {
+  async issueToken(slug: string, address: string, previous?: string): Promise<FormTokenDto> {
     if (!this.limits.takeToken(address)) {
       throw new ProblemException(429, 'too_many_requests');
     }
@@ -173,18 +225,13 @@ export class IntakeService {
         if (state.state !== 'open') {
           throw new ProblemException(409, 'form_closed');
         }
-        const recent = await tx.submission.count({
-          where: {
-            formId: form.id,
-            receivedAt: { gt: new Date(now.getTime() - LIMITS.powSubmissionsPerForm.windowMs) },
-          },
-        });
         const underLoad =
-          recent > LIMITS.powSubmissionsPerForm.count || this.limits.addressUnderLoad(address);
+          (await this.formBusy(tx, form.id, now)) || this.limits.addressUnderLoad(address);
+        const renewed = await this.renewable(tx, form.id, previous, now);
         const token = randomBytes(32).toString('base64url');
         const expiresAt = new Date(now.getTime() + FORM_TOKEN_LIFETIME_MS);
         const challenge = underLoad ? newChallenge() : null;
-        await tx.formToken.create({
+        const created = await tx.formToken.create({
           data: {
             organisationId: resolved.organisationId,
             formId: form.id,
@@ -192,10 +239,24 @@ export class IntakeService {
             tokenHash: tokenHash(token),
             issuedAt: now,
             expiresAt,
+            // A first token: its issue is the start (null); a renewal keeps the chain's start.
+            fillStartedAt: renewed === null ? null : (renewed.fillStartedAt ?? renewed.issuedAt),
+            renewedFrom: renewed?.id ?? null,
+            uploads: renewed?.uploads ?? 0,
             powChallenge: challenge,
             powDifficulty: challenge === null ? null : PROOF_OF_WORK_DIFFICULTY,
           },
         });
+        if (renewed !== null) {
+          await tx.formToken.updateMany({
+            where: { id: renewed.id, usedAt: null },
+            data: { usedAt: now },
+          });
+          await tx.storedFile.updateMany({
+            where: { formTokenId: renewed.id, submissionId: null },
+            data: { formTokenId: created.id },
+          });
+        }
         return {
           formToken: token,
           expiresAt: expiresAt.toISOString(),
@@ -257,6 +318,11 @@ export class IntakeService {
       if (repeated !== null) {
         return repeated;
       }
+      // A repeat of a key that was answered with a fake success gets the same answer (Q3-07).
+      const decoy = this.#decoys.get(`${resolved.formId}:${input.idempotencyKey}`);
+      if (decoy !== undefined) {
+        return decoy;
+      }
       if (!this.limits.takeSubmit(input.address)) {
         throw new ProblemException(429, 'too_many_requests');
       }
@@ -266,6 +332,9 @@ export class IntakeService {
           this.write(tx, resolved, input, payloadHash, now),
         );
       } catch (error) {
+        if (error instanceof ProblemException && error.code === 'form_token_invalid') {
+          this.limits.suspicious(input.address);
+        }
         // Two submits of one key at once: the second one lost the token to the first.
         if (error instanceof ProblemException && error.code === 'form_token_used') {
           const first = await this.repeated(resolved.formId, input.idempotencyKey, payloadHash);
@@ -324,24 +393,40 @@ export class IntakeService {
     const { form, state } = await this.load(tx, resolved.formId, now);
 
     // The trap and the minimum fill time (ADR-08, item 7): a fake success, nothing stored.
+    // The fill time counts from the first token of a chain of renewals, and a renewal is
+    // never taken for a script (Q3-01): the page renews a refused token and submits at once.
+    const started = token.fillStartedAt ?? token.issuedAt;
     if (
       (input.trap !== undefined && input.trap !== '') ||
-      now.getTime() - token.issuedAt.getTime() < MINIMUM_FILL_MS
+      (token.renewedFrom === null && now.getTime() - started.getTime() < MINIMUM_FILL_MS)
     ) {
-      return {
-        reference: `${form.conference.code}${String(now.getUTCFullYear() % 100).padStart(2, '0')}-${String(randomInt(1, 10_000)).padStart(4, '0')}`,
-        receivedAt: now.toISOString(),
-        language: input.language,
-      };
+      this.limits.suspicious(input.address);
+      return this.decoy(
+        resolved.formId,
+        input.idempotencyKey,
+        form.conference,
+        input.language,
+        now,
+      );
     }
+    // The proof-of-work is decided at the submit as well (Q3-02): a token fetched while the
+    // form was quiet is renewed by the page and then carries a challenge.
+    const required =
+      token.powChallenge !== null ||
+      (await this.formBusy(tx, form.id, now)) ||
+      this.limits.addressUnderLoad(input.address);
     if (
-      token.powChallenge !== null &&
-      !proofOfWorkHolds(
-        token.powChallenge,
-        token.powDifficulty ?? PROOF_OF_WORK_DIFFICULTY,
-        input.proofOfWork,
-      )
+      required &&
+      (token.powChallenge === null ||
+        !proofOfWorkHolds(
+          token.powChallenge,
+          token.powDifficulty ?? PROOF_OF_WORK_DIFFICULTY,
+          input.proofOfWork,
+        ))
     ) {
+      if (token.powChallenge !== null) {
+        this.limits.suspicious(input.address);
+      }
       throw new ProblemException(403, 'proof_of_work_failed');
     }
     if (state.state !== 'open') {
@@ -488,6 +573,33 @@ export class IntakeService {
       );
     }
     return { reference, receivedAt: now.toISOString(), language };
+  }
+
+  /**
+   * A fake success (ADR-08, item 7; Q3-07): shaped like the next real reference of the
+   * conference (its code, its edition, the next number), and the same for a repeat of the key.
+   */
+  private decoy(
+    formId: string,
+    idempotencyKey: string,
+    conference: { code: string; editionYear: number | null; submissionCounter: number },
+    language: FormLanguage,
+    now: Date,
+  ): SubmittedDto {
+    const year = String((conference.editionYear ?? now.getUTCFullYear()) % 100).padStart(2, '0');
+    const answer: SubmittedDto = {
+      reference: `${conference.code}${year}-${String(conference.submissionCounter + 1).padStart(4, '0')}`,
+      receivedAt: now.toISOString(),
+      language,
+    };
+    if (this.#decoys.size >= MAX_DECOYS) {
+      const oldest = this.#decoys.keys().next().value;
+      if (oldest !== undefined) {
+        this.#decoys.delete(oldest);
+      }
+    }
+    this.#decoys.set(`${formId}:${idempotencyKey}`, answer);
+    return answer;
   }
 
   /** The next reference of a conference: code, two digits of the edition, a number (IT27-0001). */

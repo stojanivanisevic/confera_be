@@ -10,7 +10,9 @@ import { createHash, randomBytes } from 'node:crypto';
  * begins with at least `difficulty` zero bits. Nothing leaves Confera. The browser finds the
  * counter with Web Crypto; contracts/form-rule-vectors.json holds vectors for both sides.
  */
-export const PROOF_OF_WORK_DIFFICULTY = 16;
+// 13 bits: about 8 000 hashes on average, measured at about 1.5 s in WebKit, 0.8 s in Firefox
+// and 0.2 s in Chromium with Web Crypto (16 bits took 12.2 s, 6.4 s and 1.3 s; Q3-08).
+export const PROOF_OF_WORK_DIFFICULTY = 13;
 
 /** A counter is at most 12 digits: enough for any difficulty this API asks. */
 const COUNTER = /^(?:0|[1-9][0-9]{0,11})$/;

@@ -260,7 +260,7 @@
   },
   "proofOfWork": {
     "rule": "SHA-256 of the UTF-8 text challenge + \":\" + counter begins with at least difficulty zero bits; counter is a decimal number of at most 12 digits, without leading zeros.",
-    "difficulty": 16,
+    "difficulty": 13,
     "vectors": [
       {
         "challenge": "confera-vector-1",

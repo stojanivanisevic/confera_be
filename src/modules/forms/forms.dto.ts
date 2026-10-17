@@ -11,7 +11,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { FORM_LANGUAGES, FORM_TYPES } from './catalogue';
+import { FIELD_KINDS, FORM_LANGUAGES, FORM_TYPES } from './catalogue';
 
 /** open: the form takes submissions; closed: it shows its closed message (FR-DL-02). */
 export const PUBLIC_FORM_STATES = ['open', 'closed'] as const;
@@ -20,6 +20,30 @@ export type PublicFormState = (typeof PUBLIC_FORM_STATES)[number];
 /** Why a form is closed: the conference is not open for submissions, or its deadline has passed. */
 export const CLOSED_REASONS = ['conference_closed', 'deadline_passed', 'not_published'] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
+
+/**
+ * A field of the catalogue as the configuration screen needs it (M3-ISS-05): what an admin
+ * may change. A mandatory field cannot be switched off and its "required" cannot change.
+ */
+export class CatalogueFieldDto {
+  /** The field's key, as in the configuration's `fields`. */
+  field!: string;
+  section!: string;
+  @ApiProperty({ enum: FIELD_KINDS })
+  kind!: (typeof FIELD_KINDS)[number];
+  mandatory!: boolean;
+  /** Required unless the admin says otherwise (a mandatory field: always as here). */
+  requiredByDefault!: boolean;
+  enabledByDefault!: boolean;
+  /** The values of its options, whose labels an admin may change; null without options. */
+  options!: string[] | null;
+  /** The most characters an admin may allow; null when the field has no such limit. */
+  maxLengthCap!: number | null;
+  /** The most words an admin may allow; null when the field counts no words. */
+  maxWordsCap!: number | null;
+  /** The file types an admin may let a file field take; null for another field. */
+  fileTypes!: string[] | null;
+}
 
 export class FormVersionSummaryDto {
   number!: number;
@@ -51,6 +75,8 @@ export class FormDto {
   /** The send breaker of this form (ADR-08): confirmations above these are held. */
   breakerPerHour!: number;
   breakerPerDay!: number;
+  /** The catalogue of its type: what the configuration may change (M3-ISS-05). */
+  catalogue!: CatalogueFieldDto[];
   updatedAt!: string;
   version!: number;
 }
@@ -146,6 +172,8 @@ export class PublicFormDto {
   conference!: { code: string; name: string; timeZone: string; languages: string[] };
   /** The links a consent text may name (D6): `terms` and `privacy`, https or null. */
   consentLinks!: { terms: string | null; privacy: string | null };
+  /** Whom an author writes to (D8): the contact email of the organisation profile, or null. */
+  contactEmail!: string | null;
   /** The number of the version: a submission keeps it. */
   versionNumber!: number;
   /** contracts/form-definition.schema.json. */
@@ -155,6 +183,21 @@ export class PublicFormDto {
 /** The sites that may frame the form (ADR-07): what `frame-ancestors` of /embed/<key> names. */
 export class FrameSitesDto {
   sites!: string[];
+}
+
+/**
+ * The request of a form token: `{}` for a first one. When the API refused a token (expired
+ * 403 `form_token_invalid`, used 409 `form_token_used`, or 403 `proof_of_work_failed` for a
+ * token without a challenge), the page asks for a new one with the refused token in
+ * `previousFormToken` (Q3-01): the renewal keeps the files uploaded with it and the moment
+ * the author began, so the submit that follows at once is not taken for a script.
+ */
+export class FormTokenRequestDto {
+  /** The refused token of this form, issued within the last 24 hours. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  previousFormToken?: string;
 }
 
 /** The proof-of-work a token asks for under load (ADR-08), or none. */
