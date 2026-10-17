@@ -24,6 +24,11 @@ export const MAIL_KINDS = [
   'sign_in_brake',
   /** The test message of a mail server (FR-SMTP-01); sent at once, not by the worker. */
   'test_message',
+  /**
+   * To the corresponding author of a submission (FR-FORM-15 as amended by SA-13): fixed
+   * text, the reference and the title only. Counted by the send breaker (ADR-08).
+   */
+  'submission_confirmation',
 ] as const;
 
 export type MailKind = (typeof MAIL_KINDS)[number];
@@ -44,7 +49,16 @@ export type SecurityChange =
   | 'new_device_sign_in'
   | 'mail_server_created'
   | 'mail_server_changed'
-  | 'mail_server_deleted';
+  | 'mail_server_deleted'
+  /** The send breaker holds confirmation emails (ADR-08, M3-BE-09): at most one notice an hour per form. */
+  | 'mail_held'
+  /** The unattached uploads reached their quota (ADR-10): uploads are refused. */
+  | 'upload_quota_reached'
+  /** Files wait for their virus scan because ClamAV does not answer (ADR-10, fail closed). */
+  | 'virus_scan_pending';
+
+/** Why the send breaker holds a message (ADR-08). */
+export type HeldReason = 'send_breaker_form' | 'send_breaker_organisation' | 'recipient_domain';
 
 export interface QueuedMessage {
   readonly organisationId: string;
@@ -57,6 +71,15 @@ export interface QueuedMessage {
   readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
   /** Makes the queueing idempotent: the same key is queued once. */
   readonly uniqueKey: string;
+  /** The language of the recipient, en or sr. Default en. */
+  readonly language?: 'en' | 'sr';
+  /** The conference the message is about: it chooses the templates and the mail server. */
+  readonly conferenceId?: string | null;
+  /** The form and submission of a confirmation, for the send breaker and the detail view. */
+  readonly formId?: string | null;
+  readonly submissionId?: string | null;
+  /** When set, the message is held for an admin (the send breaker) instead of queued. */
+  readonly held?: HeldReason | null;
 }
 
 @Injectable()
@@ -79,6 +102,12 @@ export class MailQueue {
         linkPurpose: message.linkPurpose ?? null,
         linkUserId: message.linkUserId ?? null,
         parameters: message.parameters ?? {},
+        language: message.language ?? 'en',
+        conferenceId: message.conferenceId ?? null,
+        formId: message.formId ?? null,
+        submissionId: message.submissionId ?? null,
+        status: message.held === undefined || message.held === null ? 'queued' : 'held',
+        heldReason: message.held ?? null,
       },
     });
   }
@@ -92,12 +121,14 @@ export class MailQueue {
     organisationId: string,
     change: SecurityChange,
     parameters: Readonly<Record<string, string | null>> = {},
+    /** An event of its own name is told once: an alert repeated within its hour is one notice. */
+    eventKey?: string,
   ): Promise<number> {
     const admins = await tx.user.findMany({
       where: { organisationId, status: 'active', roles: { some: { role: 'admin' } } },
       select: { id: true, email: true },
     });
-    const event = randomUUID();
+    const event = eventKey ?? randomUUID();
     for (const admin of admins) {
       await this.enqueue(tx, {
         organisationId,

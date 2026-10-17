@@ -83,6 +83,8 @@ describe('deploy/api.env.example, the environment template of a server', () => {
       DATABASE_URL: 'postgresql://confera_app:invented-app@127.0.0.1:5432/confera',
       SYSTEM_DATABASE_URL: 'postgresql://confera_system:invented-system@127.0.0.1:5432/confera',
       DATA_KEY: 'invented-data-key-of-the-server-template-0123456789ab',
+      FILE_STORAGE_DIR: '/var/lib/confera/files',
+      CLAMAV_ADDRESS: 'clamav:3310',
     });
     expect(result).toEqual(expect.objectContaining({ ok: true }));
   });

@@ -52,7 +52,16 @@ export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
     'timeZone',
     'state',
     'mailServerId',
+    'publicationTermsUrl',
+    'privacyNoticeUrl',
   ],
+  // A deadline of a conference (FR-DL-03): a date of an event.
+  conference_deadline: ['endsOn'],
+  // A form: the published version's number and the send breaker (switches, ADR-08). What
+  // the draft says is kept by the form versions themselves.
+  form: ['versionNumber', 'breakerPerHour', 'breakerPerDay'],
+  // The send breaker of the organisation, and how many held emails were released.
+  organisation_breaker: ['breakerPerHour', 'breakerPerDay'],
 };
 
 /** May the old and new values of this field of this kind of subject be recorded? */

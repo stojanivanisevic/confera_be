@@ -37,6 +37,13 @@ export const AUDIT_ACTIONS = [
   'conference.updated',
   'conference.state_changed',
   'conference.copied',
+  'conference.deadline_changed',
+  'form.created',
+  'form.draft_changed',
+  'form.published',
+  'form.breaker_changed',
+  'held_mail.released',
+  'organisation.breaker_changed',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

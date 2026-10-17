@@ -19,6 +19,7 @@ import {
 } from 'class-validator';
 import { IsPlainText } from '../../common/validation/plain-text';
 import { Satisfies } from '../../common/validation/satisfies';
+import { isSafeHttpsUrl } from '../forms/safe-text';
 import { isTimeZone } from './listed-sites';
 
 export const CONFERENCE_STATES = ['draft', 'open', 'closed', 'archived'] as const;
@@ -56,6 +57,10 @@ export class ConferenceDto {
   @ApiProperty({ enum: CONFERENCE_STATES })
   state!: ConferenceState;
   mailServerId!: string | null;
+  /** The terms of publication the consent of its forms links to (D6); https, or null. */
+  publicationTermsUrl!: string | null;
+  /** The privacy notice the consent of its forms links to (D6); https, or null. */
+  privacyNoticeUrl!: string | null;
   version!: number;
 }
 
@@ -114,6 +119,20 @@ class ConferenceFields {
   @IsOptional()
   @IsUUID('4')
   mailServerId?: string | null;
+
+  /** An https address without a user part (the consent's "terms" link, D6). Null clears it. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  @Satisfies('isHttpsUrl', isSafeHttpsUrl)
+  publicationTermsUrl?: string | null;
+
+  /** An https address without a user part (the consent's "privacy" link, D6). Null clears it. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  @Satisfies('isHttpsUrl', isSafeHttpsUrl)
+  privacyNoticeUrl?: string | null;
 }
 
 /** A new conference; it starts as a draft. */

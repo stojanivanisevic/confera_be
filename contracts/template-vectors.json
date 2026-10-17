@@ -118,6 +118,17 @@
         "serverName"
       ],
       "conditions": []
+    },
+    "submission_confirmation": {
+      "placeholders": [
+        "organisationName",
+        "conferenceName",
+        "reference",
+        "title"
+      ],
+      "conditions": [
+        "hasTitle"
+      ]
     }
   },
   "languages": [

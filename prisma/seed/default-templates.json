@@ -44,7 +44,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "The link works once and for " },
+              { "type": "text", "text": "The link works once and expires in " },
               { "type": "placeholder", "key": "expiresIn" },
               { "type": "text", "text": ". If you did not expect this message, ignore it." }
             ]
@@ -95,7 +95,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "text", "text": "Link važi jednom i ističe za " },
               { "type": "placeholder", "key": "expiresIn" },
               { "type": "text", "text": ". Ako niste očekivali ovu poruku, zanemarite je." }
             ]
@@ -146,7 +146,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "The link works once and for " },
+              { "type": "text", "text": "The link works once and expires in " },
               { "type": "placeholder", "key": "expiresIn" },
               {
                 "type": "text",
@@ -200,7 +200,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "text", "text": "Link važi jednom i ističe za " },
               { "type": "placeholder", "key": "expiresIn" },
               {
                 "type": "text",
@@ -253,7 +253,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "The link works once and for " },
+              { "type": "text", "text": "The link works once and expires in " },
               { "type": "placeholder", "key": "expiresIn" },
               { "type": "text", "text": "." }
             ]
@@ -303,7 +303,7 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Link važi jednom i " },
+              { "type": "text", "text": "Link važi jednom i ističe za " },
               { "type": "placeholder", "key": "expiresIn" },
               { "type": "text", "text": "." }
             ]
@@ -633,6 +633,122 @@
               {
                 "type": "text",
                 "text": ". Đorđe Šćepanović, Čačak, Žabalj: slova su stigla nepromenjena."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "submission_confirmation",
+      "language": "en",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Your submission " },
+          { "type": "placeholder", "key": "reference" },
+          { "type": "text", "text": " to " },
+          { "type": "placeholder", "key": "conferenceName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Thank you. Your submission to " },
+              { "type": "placeholder", "key": "conferenceName" },
+              { "type": "text", "text": " has been received." }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Its reference is " },
+              { "type": "placeholder", "key": "reference" },
+              { "type": "text", "text": ". Please give it in every message about the submission." }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasTitle",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Title: " },
+                  { "type": "placeholder", "key": "title" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "This is an automatic message from " },
+              { "type": "placeholder", "key": "organisationName" },
+              {
+                "type": "text",
+                "text": ". You receive it because this address was given in the submission form. If you did not submit anything, you can ignore it."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "submission_confirmation",
+      "language": "sr",
+      "subject": {
+        "type": "subject",
+        "children": [
+          { "type": "text", "text": "Vaša prijava " },
+          { "type": "placeholder", "key": "reference" },
+          { "type": "text", "text": " za " },
+          { "type": "placeholder", "key": "conferenceName" }
+        ]
+      },
+      "body": {
+        "type": "doc",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Hvala. Vaša prijava za " },
+              { "type": "placeholder", "key": "conferenceName" },
+              { "type": "text", "text": " je primljena." }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Broj prijave je " },
+              { "type": "placeholder", "key": "reference" },
+              { "type": "text", "text": ". Navedite ga u svakoj poruci o ovoj prijavi." }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "hasTitle",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Naslov: " },
+                  { "type": "placeholder", "key": "title" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "text", "text": "Ovo je automatska poruka organizacije " },
+              { "type": "placeholder", "key": "organisationName" },
+              {
+                "type": "text",
+                "text": ". Dobili ste je jer je ova adresa navedena u obrascu za prijavu. Ako niste ništa prijavili, možete je zanemariti."
               }
             ]
           }

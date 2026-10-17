@@ -121,7 +121,14 @@
                 "conference.created",
                 "conference.updated",
                 "conference.state_changed",
-                "conference.copied"
+                "conference.copied",
+                "conference.deadline_changed",
+                "form.created",
+                "form.draft_changed",
+                "form.published",
+                "form.breaker_changed",
+                "held_mail.released",
+                "organisation.breaker_changed"
               ]
             }
           },
@@ -452,6 +459,149 @@
         }
       }
     },
+    "/api/v1/conferences/{id}/deadlines": {
+      "get": {
+        "operationId": "listDeadlines",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Deadlines"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.read"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}/deadlines/{kind}": {
+      "put": {
+        "operationId": "setDeadline",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDeadlineDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Deadlines"
+        ],
+        "x-confera-access": {
+          "permission": "conferences.manage"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}/forms": {
+      "post": {
+        "operationId": "createForm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFormDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "ConferenceForms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.manage"
+        }
+      }
+    },
     "/api/v1/conferences/{id}/state": {
       "post": {
         "operationId": "changeConferenceState",
@@ -584,6 +734,408 @@
         }
       }
     },
+    "/api/v1/forms": {
+      "get": {
+        "operationId": "listForms",
+        "parameters": [
+          {
+            "name": "conferenceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.read"
+        }
+      }
+    },
+    "/api/v1/forms/{id}": {
+      "get": {
+        "operationId": "getForm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.read"
+        }
+      }
+    },
+    "/api/v1/forms/{id}/breaker": {
+      "patch": {
+        "operationId": "setFormBreaker",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormBreakerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The send breaker of the form (ADR-08, M3-BE-09).",
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.manage"
+        }
+      }
+    },
+    "/api/v1/forms/{id}/draft": {
+      "put": {
+        "operationId": "saveFormDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormDraftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The draft: the configuration over the catalogue (contracts/form-configuration.schema.json).",
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.manage"
+        }
+      }
+    },
+    "/api/v1/forms/{id}/publish": {
+      "post": {
+        "operationId": "publishForm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormVersionRefDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Publishes the draft as a new version; the public form shows it from the next load.",
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.manage"
+        }
+      }
+    },
+    "/api/v1/forms/{id}/versions/{number}": {
+      "get": {
+        "operationId": "getFormVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormVersionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A published version: the definition its submissions were made with.",
+        "tags": [
+          "Forms"
+        ],
+        "x-confera-access": {
+          "permission": "forms.read"
+        }
+      }
+    },
+    "/api/v1/held-mail": {
+      "get": {
+        "operationId": "listHeldMail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "HeldMail"
+        ],
+        "x-confera-access": {
+          "permission": "held_mail.manage"
+        }
+      }
+    },
+    "/api/v1/held-mail/breaker": {
+      "patch": {
+        "operationId": "setOrganisationBreaker",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganisationBreakerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "HeldMail"
+        ],
+        "x-confera-access": {
+          "permission": "held_mail.manage"
+        }
+      }
+    },
+    "/api/v1/held-mail/release": {
+      "post": {
+        "operationId": "releaseHeldMail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseHeldMailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "HeldMail"
+        ],
+        "x-confera-access": {
+          "permission": "held_mail.manage"
+        }
+      }
+    },
     "/api/v1/invitations/{token}": {
       "get": {
         "operationId": "openInvitation",
@@ -690,7 +1242,8 @@
                 "email_change_notice",
                 "security_notice",
                 "sign_in_brake",
-                "test_message"
+                "test_message",
+                "submission_confirmation"
               ]
             }
           },
@@ -1117,7 +1670,8 @@
                 "email_change_notice",
                 "security_notice",
                 "sign_in_brake",
-                "test_message"
+                "test_message",
+                "submission_confirmation"
               ]
             }
           },
@@ -1701,6 +2255,143 @@
         ],
         "x-confera-access": {
           "permission": "account.manage"
+        }
+      }
+    },
+    "/api/v1/submissions": {
+      "get": {
+        "operationId": "listSubmissions",
+        "parameters": [
+          {
+            "name": "conferenceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.read"
+        }
+      }
+    },
+    "/api/v1/submissions/{id}": {
+      "get": {
+        "operationId": "getSubmission",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.read"
+        }
+      }
+    },
+    "/api/v1/submissions/{id}/files/{fileId}": {
+      "get": {
+        "operationId": "downloadSubmissionFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.read"
         }
       }
     },
@@ -2460,6 +3151,16 @@
             "type": "string",
             "nullable": true
           },
+          "publicationTermsUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "The terms of publication the consent of its forms links to (D6); https, or null."
+          },
+          "privacyNoticeUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "The privacy notice the consent of its forms links to (D6); https, or null."
+          },
           "version": {
             "type": "number"
           }
@@ -2477,6 +3178,8 @@
           "languages",
           "timeZone",
           "mailServerId",
+          "publicationTermsUrl",
+          "privacyNoticeUrl",
           "version"
         ]
       },
@@ -2608,11 +3311,37 @@
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "publicationTermsUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https address without a user part (the consent's \"terms\" link, D6). Null clears it.",
+            "maxLength": 500
+          },
+          "privacyNoticeUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https address without a user part (the consent's \"privacy\" link, D6). Null clears it.",
+            "maxLength": 500
           }
         },
         "required": [
           "name",
           "code"
+        ]
+      },
+      "CreateFormDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "abstract"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
         ]
       },
       "CreateMailServerDto": {
@@ -2713,6 +3442,288 @@
         "required": [
           "path",
           "code"
+        ]
+      },
+      "FormBreakerDto": {
+        "type": "object",
+        "properties": {
+          "breakerPerHour": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "breakerPerDay": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "breakerPerHour",
+          "breakerPerDay",
+          "version"
+        ]
+      },
+      "FormDraftDto": {
+        "type": "object",
+        "properties": {
+          "configuration": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "contracts/form-configuration.schema.json."
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "configuration",
+          "version"
+        ]
+      },
+      "FormDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "abstract"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "description": "What the public form shows now.",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "closedReason": {
+            "nullable": true,
+            "enum": [
+              "conference_closed",
+              "deadline_passed",
+              "not_published"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "conferenceId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "description": "The form's address: /f/<slug> (hosted) and /embed/<slug> (frame)."
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The draft: what the admin set over the catalogue (contracts/form-configuration.schema.json)."
+          },
+          "draftDefinition": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The definition the draft makes, for the preview (contracts/form-definition.schema.json)."
+          },
+          "currentVersion": {
+            "nullable": true,
+            "description": "The published version the public form shows; null before the first publish.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FormVersionSummaryDto"
+              }
+            ]
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormVersionSummaryDto"
+            }
+          },
+          "breakerPerHour": {
+            "type": "number",
+            "description": "The send breaker of this form (ADR-08): confirmations above these are held."
+          },
+          "breakerPerDay": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "state",
+          "closedReason",
+          "id",
+          "conferenceId",
+          "slug",
+          "configuration",
+          "draftDefinition",
+          "currentVersion",
+          "versions",
+          "breakerPerHour",
+          "breakerPerDay",
+          "updatedAt",
+          "version"
+        ]
+      },
+      "FormListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "FormSummaryDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "abstract"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "closedReason": {
+            "nullable": true,
+            "enum": [
+              "conference_closed",
+              "deadline_passed",
+              "not_published"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "conferenceId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "currentVersionNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "The number of the published version, null before the first publish."
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "state",
+          "closedReason",
+          "id",
+          "conferenceId",
+          "slug",
+          "currentVersionNumber",
+          "version"
+        ]
+      },
+      "FormVersionDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "displayName"
+            ]
+          },
+          "definition": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "number",
+          "publishedAt",
+          "publishedBy",
+          "definition"
+        ]
+      },
+      "FormVersionRefDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "FormVersionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "displayName"
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "publishedAt",
+          "publishedBy"
         ]
       },
       "InviteUserDto": {
@@ -3112,6 +4123,10 @@
           "version"
         ]
       },
+      "OrganisationBreakerDto": {
+        "type": "object",
+        "properties": {}
+      },
       "OrganisationDto": {
         "type": "object",
         "properties": {
@@ -3304,6 +4319,10 @@
           "traceId"
         ]
       },
+      "ReleaseHeldMailDto": {
+        "type": "object",
+        "properties": {}
+      },
       "ResetRequestDto": {
         "type": "object",
         "properties": {
@@ -3408,6 +4427,10 @@
           "roles",
           "permissions"
         ]
+      },
+      "SetDeadlineDto": {
+        "type": "object",
+        "properties": {}
       },
       "SetPasswordDto": {
         "type": "object",
@@ -3599,6 +4622,18 @@
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "publicationTermsUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https address without a user part (the consent's \"terms\" link, D6). Null clears it.",
+            "maxLength": 500
+          },
+          "privacyNoticeUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "An https address without a user part (the consent's \"privacy\" link, D6). Null clears it.",
+            "maxLength": 500
           }
         },
         "required": [

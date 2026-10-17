@@ -1,3 +1,4 @@
+import { join, resolve } from 'node:path';
 import {
   DEFAULT_PORT,
   type Environment,
@@ -36,6 +37,16 @@ export interface AppConfig {
     /** Seconds between two looks of the worker at the outbox; 0 is off. */
     readonly workerIntervalSeconds: number;
   };
+  readonly files: {
+    /** The absolute path of the private folder of the uploaded files (ADR-10). */
+    readonly storageDirectory: string;
+    /** host and port of clamd, or null: then every file stays pending (fail closed). */
+    readonly clamav: { readonly host: string; readonly port: number } | null;
+  };
+  readonly jobs: {
+    /** Seconds between two runs of the background jobs (scans, purge); 0 is off. */
+    readonly intervalSeconds: number;
+  };
   /**
    * Development conveniences. Every flag is false unless STAGE is local or dev, because
    * the guard refuses the `DEV_*` keys everywhere else; and the code that acts on them
@@ -59,6 +70,14 @@ export type ConfigResult =
 
 export type RawEnvironment = Readonly<Record<string, string | undefined>>;
 
+function clamavOf(address: string | undefined): AppConfig['files']['clamav'] {
+  if (address === undefined) {
+    return null;
+  }
+  const colon = address.lastIndexOf(':');
+  return { host: address.slice(0, colon), port: Number(address.slice(colon + 1)) };
+}
+
 function toConfig(env: Environment): AppConfig {
   return {
     stage: env.STAGE,
@@ -78,6 +97,11 @@ function toConfig(env: Environment): AppConfig {
     logLevel: env.LOG_LEVEL ?? 'info',
     dataKey: new Secret(env.DATA_KEY),
     mail: { workerIntervalSeconds: env.MAIL_WORKER_INTERVAL_SECONDS ?? 5 },
+    files: {
+      storageDirectory: resolve(env.FILE_STORAGE_DIR ?? join('tmp', 'files')),
+      clamav: clamavOf(env.CLAMAV_ADDRESS),
+    },
+    jobs: { intervalSeconds: env.JOBS_INTERVAL_SECONDS ?? 30 },
     devTools: {
       apiDocs: env.DEV_API_DOCS ?? false,
       logQueries: env.DEV_LOG_QUERIES ?? false,

@@ -27,6 +27,8 @@ export function validProductionEnvironment(overrides: RawEnvironment = {}): Test
     ...validEnvironment(),
     STAGE: 'prod',
     INSTANCE: 'staging',
+    FILE_STORAGE_DIR: '/var/lib/confera/files',
+    CLAMAV_ADDRESS: 'clamav.confera.test:3310',
     ADMIN_ORIGIN: 'https://admin.confera.test',
     PUBLIC_ORIGIN: 'https://forms.confera.test',
     ...overrides,

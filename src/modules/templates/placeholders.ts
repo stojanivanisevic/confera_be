@@ -16,6 +16,7 @@ export const TEMPLATE_TYPES = [
   'security_notice',
   'sign_in_brake',
   'test_message',
+  'submission_confirmation',
 ] as const;
 
 export type TemplateType = (typeof TEMPLATE_TYPES)[number];
@@ -33,6 +34,9 @@ export const PLACEHOLDERS: Readonly<Record<TemplateType, readonly string[]>> = {
   security_notice: [...COMMON, 'change', 'actorName', 'subjectName'],
   sign_in_brake: [...COMMON],
   test_message: ['organisationName', 'serverName'],
+  // Fixed text, the reference and the title only (FR-FORM-15, SA-13): no name and nothing
+  // else the author typed; the conference and the organisation are the office's own words.
+  submission_confirmation: ['organisationName', 'conferenceName', 'reference', 'title'],
 };
 
 /** Conditions: blocks a template may switch on. None in 0.2.0; "a full paper is due" arrives with 0.5.0. */
@@ -44,6 +48,7 @@ export const CONDITIONS: Readonly<Record<TemplateType, readonly string[]>> = {
   security_notice: ['hasActor', 'hasSubject'],
   sign_in_brake: [],
   test_message: [],
+  submission_confirmation: ['hasTitle'],
 };
 
 export function catalogueOf(type: TemplateType): Catalogue {

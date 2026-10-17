@@ -44,6 +44,9 @@ const PROBLEM = {
   dataKeyShape:
     'is required and must be 43 to 128 characters of letters, digits, - and _ (32 random bytes in base64url; see .env.example)',
   smallNumber: 'must be a whole number between 0 and 86400',
+  directory:
+    'must be the path of a folder: letters, digits and . _ - / \\ : only, no space (for example /var/lib/confera/files)',
+  clamavAddress: 'must be host:port of the ClamAV daemon (clamd), for example 127.0.0.1:3310',
 } as const;
 
 export function isOrigin(value: string): boolean {
@@ -124,6 +127,17 @@ export const environmentSchema = z.object({
   LOG_LEVEL: z.enum(LOG_LEVELS, { error: PROBLEM.logLevel }).optional(),
   DATA_KEY: dataKey,
   MAIL_WORKER_INTERVAL_SECONDS: smallNumber(86_400).optional(),
+  JOBS_INTERVAL_SECONDS: smallNumber(86_400).optional(),
+  FILE_STORAGE_DIR: z
+    .string({ error: PROBLEM.directory })
+    .min(1, { error: PROBLEM.directory })
+    .max(1000, { error: PROBLEM.directory })
+    .regex(/^[A-Za-z0-9_.:/\\-]+$/, { error: PROBLEM.directory })
+    .optional(),
+  CLAMAV_ADDRESS: z
+    .string({ error: PROBLEM.clamavAddress })
+    .regex(/^[A-Za-z0-9.-]{1,253}:[1-9][0-9]{0,4}$/, { error: PROBLEM.clamavAddress })
+    .optional(),
   DEV_API_DOCS: flag.optional(),
   DEV_LOG_QUERIES: flag.optional(),
 });
@@ -199,6 +213,24 @@ export const VARIABLES = {
   MAIL_WORKER_INTERVAL_SECONDS: {
     description:
       'How often the mail worker looks at the outbox, in seconds. Default 5; 0 switches the worker off (tests drive it by hand).',
+    secret: false,
+    required: false,
+  },
+  JOBS_INTERVAL_SECONDS: {
+    description:
+      'How often the background jobs run (virus scans of attached files, purge of unattached uploads), in seconds. Default 30; 0 switches them off (tests drive them by hand).',
+    secret: false,
+    required: false,
+  },
+  FILE_STORAGE_DIR: {
+    description:
+      'The private folder of the uploaded files (ADR-10): never served by a web server, never backed up with the unattached ones. Required on prod; default tmp/files of the checkout elsewhere.',
+    secret: false,
+    required: false,
+  },
+  CLAMAV_ADDRESS: {
+    description:
+      'host:port of the ClamAV daemon that scans attached files (ADR-10, B1). Required on prod. Without it a file stays "scan pending" and is never served (fail closed).',
     secret: false,
     required: false,
   },

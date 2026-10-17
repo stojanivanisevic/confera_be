@@ -5,6 +5,7 @@ import { buildDefinition, type FormDefinition, parseDefinition } from '../../for
 import { proofOfWorkHolds, solveProofOfWork } from '../../forms/proof-of-work';
 import { checkAnswers, countWords, hasUrl } from '../../forms/rules';
 import { parseSafeText, safeTextProblem } from '../../forms/safe-text';
+import { repoRoot } from '../../../../test/support/run-node';
 import { serialise } from '../openapi/files';
 import {
   FORM_CONFIGURATION_SCHEMA_FILE,
@@ -183,7 +184,7 @@ describe('the rule interpreter of the forms', () => {
     [FORM_DEFINITION_SCHEMA_FILE, formDefinitionSchemaDocument],
     [FORM_CONFIGURATION_SCHEMA_FILE, formConfigurationSchemaDocument],
   ])('the committed contracts/%s is current', (file, document) => {
-    const committed = readFileSync(join(process.cwd(), CONTRACTS_DIRECTORY, file), 'utf8');
+    const committed = readFileSync(join(repoRoot, CONTRACTS_DIRECTORY, file), 'utf8');
     expect(committed).toBe(serialise(document()));
   });
 });

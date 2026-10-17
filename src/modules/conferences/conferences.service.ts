@@ -28,6 +28,8 @@ interface ConferenceFields {
   languages?: string[];
   timeZone?: string;
   mailServerId?: string | null;
+  publicationTermsUrl?: string | null;
+  privacyNoticeUrl?: string | null;
 }
 
 const AUDITED = [
@@ -42,6 +44,8 @@ const AUDITED = [
   'timeZone',
   'state',
   'mailServerId',
+  'publicationTermsUrl',
+  'privacyNoticeUrl',
 ] as const;
 
 /** The changes of state FR-CONF-04 allows. Archived is final and read-only. */
@@ -74,6 +78,8 @@ export function toConferenceDto(row: ConferenceRow): ConferenceDto {
     timeZone: row.timeZone,
     state: row.state as ConferenceState,
     mailServerId: row.mailServerId,
+    publicationTermsUrl: row.publicationTermsUrl,
+    privacyNoticeUrl: row.privacyNoticeUrl,
     version: row.version,
   };
 }
@@ -186,6 +192,8 @@ export class ConferencesService {
           languages: source.languages,
           timeZone: source.timeZone,
           mailServerId: source.mailServerId,
+          publicationTermsUrl: source.publicationTermsUrl,
+          privacyNoticeUrl: source.privacyNoticeUrl,
         },
       });
       const templates = await tx.mailTemplate.findMany({ where: { conferenceId: source.id } });
@@ -239,6 +247,8 @@ export class ConferencesService {
       languages: input.languages,
       timeZone: input.timeZone,
       mailServerId: input.mailServerId,
+      publicationTermsUrl: input.publicationTermsUrl,
+      privacyNoticeUrl: input.privacyNoticeUrl,
     };
     for (const [key, value] of Object.entries(given) as [keyof ConferenceFields, unknown][]) {
       if (value !== undefined) {

@@ -27,6 +27,11 @@ export interface ResolvedMessage {
   readonly messageId: string;
 }
 
+export interface ResolvedForm {
+  readonly organisationId: string;
+  readonly formId: string;
+}
+
 /**
  * The resolvers: the only code that uses the system role (ADR-05, finding SEC-A-11).
  *
@@ -39,7 +44,8 @@ export interface ResolvedMessage {
  *   - user by email, at sign-in and at a password-reset request   (userByEmail)
  *   - session by hash, secure link by hash          (sessionByTokenHash, linkByTokenHash)
  *   - the organisations a job loops over            (organisationsWithUsers)
- *   - form by public key, a form's site list                      (0.3.0)
+ *   - form by public key, a form's site list    (formByPublicKey; the list is then read
+ *                                                 inside the organisation)
  *   - PayPal order by order id                                    (0.7.0)
  *   - the claim of a job or outbox row                            (outboxDue)
  *
@@ -92,6 +98,22 @@ export class SystemResolvers implements OnModuleDestroy {
       select: { id: true, organisationId: true },
     });
     return link === null ? null : { organisationId: link.organisationId, linkId: link.id };
+  }
+
+  /**
+   * Finds a form by its public key, the address of the public form (ADR-05, ADR-08). The
+   * database grants the system role only the three columns used here; whether the form is
+   * published and open, and its site list, are read afterwards through the tenant client.
+   */
+  async formByPublicKey(publicKey: string): Promise<ResolvedForm | null> {
+    if (!/^[a-z0-9]{16}$/.test(publicKey)) {
+      return null;
+    }
+    const form = await this.#client.form.findUnique({
+      where: { publicKey },
+      select: { id: true, organisationId: true },
+    });
+    return form === null ? null : { organisationId: form.organisationId, formId: form.id };
   }
 
   /**

@@ -82,6 +82,7 @@ describe('data access architecture', () => {
         'linkByTokenHash',
         'organisationsWithUsers',
         'outboxDue',
+        'formByPublicKey',
       ];
       /** Not resolvers: the start-up self-description and Nest's shutdown hook. They return no tenant data. */
       const INFRASTRUCTURE = ['constructor', 'describeRole', 'onModuleDestroy'];

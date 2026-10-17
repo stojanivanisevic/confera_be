@@ -55,6 +55,8 @@ const PROBLEM = {
   devKeyRefused: `is a development convenience and stops the start unless STAGE is one of: ${DEV_TOOL_STAGES.join(', ')}`,
   devKeyUnknown: `is not a known ${DEV_PREFIX} variable (see src/config/config.schema.ts)`,
   logLevel: `must be one of ${PRODUCTION_LOG_LEVELS.join(', ')} on STAGE=prod`,
+  requiredOnProd:
+    'is required on STAGE=prod: a server keeps its uploaded files in a folder of its own and scans them (ADR-10)',
   toolOnly:
     'must not be present in the environment of the API on STAGE=prod: it belongs to the migration or provisioning job only',
 } as const;
@@ -153,6 +155,11 @@ export function stageGuardProblems(env: RawEnvironment): ConfigProblem[] {
     for (const name of TOOL_ONLY_VARIABLES) {
       if (env[name] !== undefined) {
         add(name, PROBLEM.toolOnly);
+      }
+    }
+    for (const name of ['FILE_STORAGE_DIR', 'CLAMAV_ADDRESS']) {
+      if (env[name] === undefined || env[name] === '') {
+        add(name, PROBLEM.requiredOnProd);
       }
     }
   } else {

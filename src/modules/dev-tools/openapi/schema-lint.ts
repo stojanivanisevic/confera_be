@@ -12,7 +12,12 @@
 export const SECRET_LIKE_NAME = /password|passwd|secret|token|hash|key/i;
 
 /** Reviewed exceptions: property names that match the pattern and are not secrets. */
-export const REVIEWED_RESPONSE_PROPERTIES: ReadonlySet<string> = new Set<string>([]);
+export const REVIEWED_RESPONSE_PROPERTIES: ReadonlySet<string> = new Set<string>([
+  // The single-use form token of ADR-08 (M3-BE-03): the page fetches it from the API and
+  // never renders it into its markup; this answer is its one appearance. Only its SHA-256
+  // is stored, the request log holds no body, and it works for one submit of one form.
+  'formToken',
+]);
 
 export interface SchemaLintFinding {
   /** For example `GET /api/v1/users/{id}`. */

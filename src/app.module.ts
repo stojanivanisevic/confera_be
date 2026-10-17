@@ -21,6 +21,11 @@ import { MetaModule } from './modules/meta/meta.module';
 import { OrganisationModule } from './modules/organisation/organisation.module';
 import { TemplatesModule } from './modules/templates/templates.module';
 import { UsersModule } from './modules/users/users.module';
+import { DeadlinesModule } from './modules/deadlines/deadlines';
+import { FilesModule } from './modules/files/files.module';
+import { FormsModule } from './modules/forms/forms.module';
+import { HeldMailModule } from './modules/held-mail/held-mail';
+import { SubmissionsModule } from './modules/submissions/submissions';
 import { PdfModule } from './platform/pdf/pdf.module';
 import { PrismaModule } from './platform/prisma/prisma.module';
 
@@ -66,6 +71,11 @@ export class AppModule {
         ConferencesModule,
         TemplatesModule,
         MailLogModule,
+        FilesModule,
+        FormsModule,
+        DeadlinesModule,
+        SubmissionsModule,
+        HeldMailModule,
         ...extraImports,
       ],
       providers: [

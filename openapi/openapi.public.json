@@ -33,6 +33,261 @@
           "public": true
         }
       }
+    },
+    "/public/v1/forms/{slug}": {
+      "get": {
+        "operationId": "getPublicForm",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicFormDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The published form: its definition, and whether it is open (FR-FORM-06, FR-DL-02).",
+        "tags": [
+          "PublicForms"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/public/v1/forms/{slug}/frame-sites": {
+      "get": {
+        "operationId": "getFrameSites",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameSitesDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The sites that may frame the form, for `frame-ancestors` of /embed/<slug> (ADR-07): the\nconference's checked list while it is open for submissions, otherwise none.",
+        "tags": [
+          "PublicForms"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/public/v1/forms/{slug}/submissions": {
+      "post": {
+        "operationId": "submitForm",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID per form instance.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Form-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmittedDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The submit (ADR-08, FR-FORM-14): processed once per `Idempotency-Key`. Refused answers\nare 400 `validation_failed` with `answers.<path>` and the codes of\ncontracts/form-rule-vectors.json. 403 `form_token_invalid` or `proof_of_work_failed`,\n409 `form_token_used`, `form_closed` or `idempotency_key_reused`, 429 `too_many_requests`.",
+        "tags": [
+          "PublicForms"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/public/v1/forms/{slug}/tokens": {
+      "post": {
+        "operationId": "issueFormToken",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTokenDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A single-use form token (ADR-08). Under load it asks for a proof-of-work. JSON only:\nthe body is `{}`. 409 `form_closed` when the form takes no submissions.",
+        "tags": [
+          "PublicForms"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
+    },
+    "/public/v1/forms/{slug}/uploads": {
+      "post": {
+        "operationId": "uploadFormFile",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Form-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadedFileDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One file for a file field (ADR-10): multipart with the parts `field` and `file`, in\nthat order. 413 `file_too_large`, 415 `file_type_refused`, 422 `docx_macros`, 429\n`too_many_uploads`, 503 `upload_quota_reached`.",
+        "tags": [
+          "PublicForms"
+        ],
+        "x-confera-access": {
+          "public": true
+        }
+      }
     }
   },
   "components": {
@@ -52,6 +307,45 @@
         "required": [
           "path",
           "code"
+        ]
+      },
+      "FormTokenDto": {
+        "type": "object",
+        "properties": {
+          "formToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "proofOfWork": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProofOfWorkDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "formToken",
+          "expiresAt",
+          "proofOfWork"
+        ]
+      },
+      "FrameSitesDto": {
+        "type": "object",
+        "properties": {
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sites"
         ]
       },
       "Problem": {
@@ -84,6 +378,204 @@
         "required": [
           "code",
           "traceId"
+        ]
+      },
+      "ProofOfWorkDto": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "difficulty": {
+            "type": "number",
+            "description": "Leading zero bits of SHA-256(challenge + \":\" + counter)."
+          }
+        },
+        "required": [
+          "challenge",
+          "difficulty"
+        ]
+      },
+      "PublicFormDto": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "closedReason": {
+            "nullable": true,
+            "enum": [
+              "conference_closed",
+              "deadline_passed",
+              "not_published"
+            ],
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "deadline": {
+            "type": "string",
+            "nullable": true,
+            "description": "The last day of submissions, YYYY-MM-DD, in the conference's time zone; null without a deadline."
+          },
+          "closesAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "The instant the form closes (the start of the day after the deadline there); null without one."
+          },
+          "conference": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "languages": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "code",
+              "name",
+              "timeZone",
+              "languages"
+            ]
+          },
+          "consentLinks": {
+            "type": "object",
+            "properties": {
+              "terms": {
+                "type": "string",
+                "nullable": true
+              },
+              "privacy": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "terms",
+              "privacy"
+            ]
+          },
+          "versionNumber": {
+            "type": "number",
+            "description": "The number of the version: a submission keeps it."
+          },
+          "definition": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "contracts/form-definition.schema.json."
+          }
+        },
+        "required": [
+          "state",
+          "closedReason",
+          "slug",
+          "deadline",
+          "closesAt",
+          "conference",
+          "consentLinks",
+          "versionNumber",
+          "definition"
+        ]
+      },
+      "SubmitDto": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "enum": [
+              "en",
+              "sr"
+            ],
+            "type": "string"
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "website": {
+            "type": "string",
+            "description": "The trap: a field no person sees. It must be empty.",
+            "maxLength": 1000
+          },
+          "proofOfWork": {
+            "type": "string",
+            "description": "The counter that answers the token's challenge (a decimal number as text).",
+            "pattern": "^[0-9]{1,12}$"
+          }
+        },
+        "required": [
+          "language",
+          "answers"
+        ]
+      },
+      "SubmittedDto": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "enum": [
+              "en",
+              "sr"
+            ],
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Shown to the author: IT27-0001."
+          },
+          "receivedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "language",
+          "reference",
+          "receivedAt"
+        ]
+      },
+      "UploadedFileDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "pdf",
+              "docx",
+              "doc",
+              "jpeg",
+              "png"
+            ],
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name as it will be shown and downloaded: cleaned, with the extension of its content."
+          },
+          "sizeBytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "fileId",
+          "name",
+          "sizeBytes"
         ]
       }
     }

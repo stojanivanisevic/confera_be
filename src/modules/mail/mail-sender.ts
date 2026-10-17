@@ -14,6 +14,7 @@ import {
   type TemplateType,
 } from '../templates/placeholders';
 import { type Rendered, renderTemplate } from '../templates/render';
+import { hasUrl } from '../forms/rules';
 import { type DeliveryError, MailTransport } from './mail-transport';
 import { SecretBox } from './secret-box';
 
@@ -84,7 +85,50 @@ const CHANGE_TEXT: Readonly<Record<string, Readonly<Record<Language, string>>>> 
   mail_server_created: { en: 'a mail server was added', sr: 'dodat je server za poštu' },
   mail_server_changed: { en: 'a mail server was changed', sr: 'izmenjen je server za poštu' },
   mail_server_deleted: { en: 'a mail server was deleted', sr: 'obrisan je server za poštu' },
+  mail_held: {
+    en: 'the send breaker holds confirmation emails of a form; release them in the list of held emails',
+    sr: 'prekidač slanja zadržava potvrde jednog obrasca; pustite ih u spisku zadržanih poruka',
+  },
+  upload_quota_reached: {
+    en: 'the space for uploaded files that are not yet attached is full; uploads are refused',
+    sr: 'prostor za otpremljene datoteke koje još nisu priložene je pun; otpremanje se odbija',
+  },
+  virus_scan_pending: {
+    en: 'files wait for their virus scan because the antivirus does not answer',
+    sr: 'datoteke čekaju proveru na viruse jer antivirus ne odgovara',
+  },
 };
+
+/** The longest title a confirmation shows (FR-FORM-15: cut to its length). */
+export const CONFIRMATION_TITLE_LENGTH = 200;
+
+/**
+ * The title as a confirmation shows it (FR-FORM-15, SA-13, ST-35): one line, no control or
+ * invisible character, cut to its length; and none at all when it holds an address, which a
+ * mail program would make a link of (the form refuses one; this holds for a row planted past it).
+ */
+export function confirmationTitle(title: string | null): string | null {
+  if (title === null) {
+    return null;
+  }
+  const line = title
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (line === '' || hasUrl(line)) {
+    return null;
+  }
+  let cut = '';
+  let count = 0;
+  for (const character of line) {
+    if (count === CONFIRMATION_TITLE_LENGTH) {
+      return `${cut.trimEnd()}…`;
+    }
+    cut += character;
+    count += 1;
+  }
+  return cut;
+}
 
 function lifetimeText(ms: number, language: Language): string {
   const minutes = Math.round(ms / 60_000);
@@ -415,6 +459,25 @@ export class MailSender {
         if (subject !== null) {
           conditions.add('hasSubject');
         }
+        break;
+      }
+      case 'submission_confirmation': {
+        const submission =
+          typeof parameters.submissionId === 'string'
+            ? await tx.submission.findUnique({
+                where: { id: parameters.submissionId },
+                select: { reference: true, title: true, conference: { select: { name: true } } },
+              })
+            : null;
+        values.reference = submission?.reference ?? '';
+        values.conferenceName = submission?.conference.name ?? '';
+        const title = confirmationTitle(submission?.title ?? null);
+        values.title = title ?? '';
+        if (title !== null) {
+          conditions.add('hasTitle');
+        }
+        // The address is the author's own text: it never becomes a name in the message.
+        values.recipientName = '';
         break;
       }
       case 'test_message': {
