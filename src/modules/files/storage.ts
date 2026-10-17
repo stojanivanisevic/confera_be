@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream, type ReadStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import type { AppConfig } from '../../config/config';
@@ -85,5 +85,49 @@ export class FileStorage {
 
   async removeTemporary(path: string): Promise<void> {
     await rm(path, { force: true });
+  }
+
+  /** The bytes of the uploads still on their way: they count against the quota (Q3-05). */
+  async incomingBytes(): Promise<number> {
+    let total = 0;
+    for (const entry of await this.incoming()) {
+      total += entry.size;
+    }
+    return total;
+  }
+
+  /**
+   * Removes the temporary files of uploads that stopped longer ago than `olderThanMs` (a
+   * process that ended in the middle of one, Q3-05). Returns how many it removed.
+   */
+  async removeStaleIncoming(olderThanMs: number, now = Date.now()): Promise<number> {
+    let removed = 0;
+    for (const entry of await this.incoming()) {
+      if (now - entry.modified > olderThanMs) {
+        await rm(entry.path, { force: true });
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  private async incoming(): Promise<{ path: string; size: number; modified: number }[]> {
+    const folder = join(this.#root, 'incoming');
+    let names: string[];
+    try {
+      names = await readdir(folder);
+    } catch {
+      return [];
+    }
+    const entries: { path: string; size: number; modified: number }[] = [];
+    for (const name of names.filter((candidate) => candidate.endsWith('.part'))) {
+      try {
+        const info = await stat(join(folder, name));
+        entries.push({ path: join(folder, name), size: info.size, modified: info.mtimeMs });
+      } catch {
+        // Gone in the meantime: nothing to count.
+      }
+    }
+    return entries;
   }
 }

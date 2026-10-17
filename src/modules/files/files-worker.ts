@@ -14,6 +14,15 @@ import { MailQueue } from '../mail/mail-queue';
 import { FileStorage } from './storage';
 import { VIRUS_SCANNER, type VirusScanner } from './virus-scanner';
 
+/** A temporary upload file untouched this long belongs to an upload that stopped. */
+export const STALE_UPLOAD_MS = 60 * 60_000;
+
+/** The unattached files of an expired token stay this long, so that a renewal can take them (Q3-01). */
+export const PURGE_GRACE_MS = 60 * 60_000;
+
+/** An expired token is removed this long after it was issued: until then it may be renewed. */
+export const TOKEN_KEPT_MS = 24 * 60 * 60_000;
+
 /** Files a run looks at per organisation, at most. */
 const BATCH = 20;
 
@@ -98,6 +107,8 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
       pending: 0,
       purged: 0,
     };
+    // The temporary files of uploads that stopped an hour ago or more (Q3-05).
+    report.purged += await this.storage.removeStaleIncoming(STALE_UPLOAD_MS, now.getTime());
     for (const organisationId of await this.resolvers.organisationsWithUsers()) {
       await this.context.run(organisationId, async () => {
         await this.purge(now, report);
@@ -112,8 +123,8 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
 
   private async purge(now: Date, report: FilesTickReport): Promise<void> {
     const expired = await this.database.db.formToken.findMany({
-      where: { expiresAt: { lte: now } },
-      select: { id: true },
+      where: { expiresAt: { lte: new Date(now.getTime() - PURGE_GRACE_MS) } },
+      select: { id: true, issuedAt: true },
       take: 500,
     });
     if (expired.length === 0) {
@@ -131,7 +142,12 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
       });
       report.purged += 1;
     }
-    await this.database.db.formToken.deleteMany({ where: { id: { in: tokenIds } } });
+    await this.database.db.formToken.deleteMany({
+      where: {
+        id: { in: tokenIds },
+        issuedAt: { lte: new Date(now.getTime() - TOKEN_KEPT_MS) },
+      },
+    });
   }
 
   private async scan(organisationId: string, now: Date, report: FilesTickReport): Promise<void> {

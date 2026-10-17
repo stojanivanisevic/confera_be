@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises';
+import { inflateRawSync } from 'node:zlib';
 import type { FileType } from '../forms/catalogue';
 
 /**
@@ -35,8 +36,20 @@ async function readAt(handle: Handle, position: number, length: number): Promise
   return buffer.subarray(0, bytesRead);
 }
 
-/** The names of a ZIP's entries, from its central directory; null when it is not a plain ZIP. */
-async function zipNames(handle: Handle, size: number): Promise<string[] | null> {
+/** An entry of a ZIP's central directory: where its data begins and how it is stored. */
+interface ZipEntry {
+  readonly name: string;
+  readonly method: number;
+  readonly compressedSize: number;
+  readonly uncompressedSize: number;
+  readonly localOffset: number;
+}
+
+/** The most of one small part (content types, relationships) that is read and inflated. */
+const MAX_PART_BYTES = 1024 * 1024;
+
+/** The entries of a ZIP, from its central directory; null when it is not a plain ZIP. */
+async function zipEntries(handle: Handle, size: number): Promise<ZipEntry[] | null> {
   const tail = Math.min(size, 65_557);
   const end = await readAt(handle, size - tail, tail);
   let at = -1;
@@ -63,7 +76,7 @@ async function zipNames(handle: Handle, size: number): Promise<string[] | null> 
     return null;
   }
   const directory = await readAt(handle, directoryOffset, directorySize);
-  const names: string[] = [];
+  const names: ZipEntry[] = [];
   let position = 0;
   for (let entry = 0; entry < entries; entry += 1) {
     if (position + 46 > directory.length || directory.readUInt32LE(position) !== 0x02014b50) {
@@ -72,10 +85,77 @@ async function zipNames(handle: Handle, size: number): Promise<string[] | null> 
     const nameLength = directory.readUInt16LE(position + 28);
     const extraLength = directory.readUInt16LE(position + 30);
     const commentLength = directory.readUInt16LE(position + 32);
-    names.push(directory.subarray(position + 46, position + 46 + nameLength).toString('utf8'));
+    names.push({
+      name: directory.subarray(position + 46, position + 46 + nameLength).toString('utf8'),
+      method: directory.readUInt16LE(position + 10),
+      compressedSize: directory.readUInt32LE(position + 20),
+      uncompressedSize: directory.readUInt32LE(position + 24),
+      localOffset: directory.readUInt32LE(position + 42),
+    });
     position += 46 + nameLength + extraLength + commentLength;
   }
   return names;
+}
+
+/**
+ * The text of a small part of a ZIP (stored or deflated), or null when it is larger than a
+ * part of its kind ever is, or cannot be read: bounded in what is read and in what it inflates to.
+ */
+async function zipPartText(handle: Handle, size: number, entry: ZipEntry): Promise<string | null> {
+  if (entry.compressedSize > MAX_PART_BYTES || entry.uncompressedSize > MAX_PART_BYTES) {
+    return null;
+  }
+  const local = await readAt(handle, entry.localOffset, 30);
+  if (local.length < 30 || local.readUInt32LE(0) !== 0x04034b50) {
+    return null;
+  }
+  const start = entry.localOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
+  if (start + entry.compressedSize > size) {
+    return null;
+  }
+  const data = await readAt(handle, start, entry.compressedSize);
+  try {
+    if (entry.method === 0) {
+      return data.toString('utf8');
+    }
+    if (entry.method === 8) {
+      return inflateRawSync(data, { maxOutputLength: MAX_PART_BYTES }).toString('utf8');
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Whether a `.docx` holds a VBA project (G2-22, Q3-11): Word finds it by its content type
+ * and its relationship, whatever the part is called. So a part named like one, a content
+ * type of a VBA project or of a macro-enabled document, or a relationship of the type
+ * vbaProject each count. A part that cannot be read counts as macros (fail closed).
+ */
+async function docxHasMacros(handle: Handle, size: number, entries: ZipEntry[]): Promise<boolean> {
+  for (const entry of entries) {
+    const lower = entry.name.toLowerCase();
+    if (lower.endsWith('vbaproject.bin') || lower.endsWith('vbadata.xml')) {
+      return true;
+    }
+    const contentTypes = lower === '[content_types].xml';
+    const relationships = lower.endsWith('.rels');
+    if (!contentTypes && !relationships) {
+      continue;
+    }
+    const text = await zipPartText(handle, size, entry);
+    if (text === null) {
+      return true;
+    }
+    if (
+      (contentTypes && /vbaProject|macroEnabled|vbaData/i.test(text)) ||
+      (relationships && /relationships\/(?:vbaProject|wordVbaData)/i.test(text))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** The names in a compound file's directory (CFB, the old Office format); null when it is not one. */
@@ -176,23 +256,18 @@ export async function detectFileType(path: string): Promise<DetectedType> {
       return { type: 'jpeg', macros: false };
     }
     if (head.readUInt32LE(0) === 0x04034b50) {
-      const names = await zipNames(handle, size);
-      if (names === null) {
+      const entries = await zipEntries(handle, size);
+      if (entries === null) {
         return UNKNOWN;
       }
-      const lower = names.map((name) => name.toLowerCase());
+      const lower = entries.map((entry) => entry.name.toLowerCase());
       if (
         !lower.includes('[content_types].xml') ||
         !lower.some((name) => name.startsWith('word/'))
       ) {
         return UNKNOWN;
       }
-      return {
-        type: 'docx',
-        macros: lower.some(
-          (name) => name.endsWith('vbaproject.bin') || name.endsWith('vbadata.xml'),
-        ),
-      };
+      return { type: 'docx', macros: await docxHasMacros(handle, size, entries) };
     }
     if (head.length === 8 && head.equals(CFB)) {
       const names = await compoundNames(handle, size);

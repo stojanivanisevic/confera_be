@@ -76,19 +76,19 @@ export class UploadsService {
           where: { id: row.formVersionId },
         });
         const definition = parseDefinition(version.definition);
+        // Only files that were kept count against the token's uploads (Q3-04): a refused or
+        // broken upload uses none of them up.
         const allowance = this.intake.uploadAllowance(definition);
-        const counted = await tx.formToken.updateMany({
-          where: { id: row.id, uploads: { lt: allowance } },
-          data: { uploads: { increment: 1 } },
-        });
-        if (counted.count !== 1) {
+        if (row.uploads >= allowance) {
           throw new ProblemException(429, 'too_many_uploads');
         }
         const unattached = await tx.storedFile.aggregate({
           where: { submissionId: null },
           _sum: { sizeBytes: true },
         });
-        if ((unattached._sum.sizeBytes ?? 0) >= this.quotaBytes) {
+        // Uploads still on their way count too (Q3-05).
+        const incoming = await this.storage.incomingBytes();
+        if ((unattached._sum.sizeBytes ?? 0) + incoming >= this.quotaBytes) {
           await this.mail.noticeToAdmins(
             tx,
             resolved.organisationId,
@@ -98,7 +98,12 @@ export class UploadsService {
           );
           return { quotaReached: true as const };
         }
-        return { quotaReached: false as const, tokenId: row.id, fields: fileFieldsOf(definition) };
+        return {
+          quotaReached: false as const,
+          tokenId: row.id,
+          allowance,
+          fields: fileFieldsOf(definition),
+        };
       });
       if (prepared.quotaReached) {
         throw new ProblemException(503, 'upload_quota_reached');
@@ -125,22 +130,37 @@ export class UploadsService {
         }
         const key = this.storage.newKey(resolved.organisationId);
         const name = safeFileName(received.name, detected.type);
+        const type = detected.type;
         await this.storage.keep(received.path, key);
-        const stored = await this.database.db.storedFile.create({
-          data: {
-            organisationId: resolved.organisationId,
-            kind: 'submission_file',
-            storageKey: key,
-            originalName: name,
-            detectedType: detected.type,
-            sizeBytes: received.size,
-            sha256: received.sha256,
-            scanFlag: detected.type === 'doc' && detected.macros ? 'macros' : null,
-            formTokenId: prepared.tokenId,
-            fieldKey: received.field,
-          },
-        });
-        return { fileId: stored.id, name, sizeBytes: received.size, type: detected.type };
+        try {
+          const stored = await this.database.transaction(async (tx) => {
+            const counted = await tx.formToken.updateMany({
+              where: { id: prepared.tokenId, uploads: { lt: prepared.allowance } },
+              data: { uploads: { increment: 1 } },
+            });
+            if (counted.count !== 1) {
+              throw new ProblemException(429, 'too_many_uploads');
+            }
+            return tx.storedFile.create({
+              data: {
+                organisationId: resolved.organisationId,
+                kind: 'submission_file',
+                storageKey: key,
+                originalName: name,
+                detectedType: type,
+                sizeBytes: received.size,
+                sha256: received.sha256,
+                scanFlag: type === 'doc' && detected.macros ? 'macros' : null,
+                formTokenId: prepared.tokenId,
+                fieldKey: received.field,
+              },
+            });
+          });
+          return { fileId: stored.id, name, sizeBytes: received.size, type };
+        } catch (error) {
+          await this.storage.remove(key);
+          throw error;
+        }
       } finally {
         await this.storage.removeTemporary(received.path);
       }
@@ -179,11 +199,14 @@ export class UploadsService {
       let field: string | null = null;
       let settled = false;
       let pending: Promise<Received> | null = null;
+      // The file being written, so that a broken request leaves nothing behind (Q3-05).
+      const current: { path?: string; stop?: (error: Error) => void } = {};
       const fail = (error: ProblemException): void => {
         if (!settled) {
           settled = true;
           request.unpipe(parser);
           request.resume();
+          current.stop?.(new Error('upload broken'));
           rejectPromise(error);
         }
       };
@@ -211,11 +234,17 @@ export class UploadsService {
           .replace(/%0[AD]/gi, '');
         pending = (async () => {
           const path = await this.storage.temporaryPath();
+          current.path = path;
           const hash = createHash('sha256');
           let size = 0;
           const cut = { tooLarge: false };
           const out = this.storage.writeStream(path);
-          await new Promise<void>((done, broke) => {
+          const written = new Promise<void>((done, broke) => {
+            current.stop = (error) => {
+              stream.destroy();
+              out.destroy();
+              broke(error);
+            };
             stream.on('data', (chunk: Buffer) => {
               size += chunk.length;
               if (size > limit) {
@@ -237,6 +266,22 @@ export class UploadsService {
             stream.on('error', broke);
             out.on('error', broke);
           });
+          try {
+            await written;
+          } catch (error) {
+            // Wait for the file to be closed, then remove what was written of it.
+            await new Promise<void>((closed) => {
+              if (out.closed) {
+                closed();
+              } else {
+                out.once('close', () => {
+                  closed();
+                });
+              }
+            });
+            await this.storage.removeTemporary(path);
+            throw error;
+          }
           if (cut.tooLarge || (stream as { truncated?: boolean }).truncated === true) {
             await this.storage.removeTemporary(path);
             throw new ProblemException(413, 'file_too_large');
@@ -277,6 +322,11 @@ export class UploadsService {
       });
       request.on('aborted', () => {
         fail(new ProblemException(400, 'upload_broken'));
+      });
+      request.on('close', () => {
+        if (!request.complete) {
+          fail(new ProblemException(400, 'upload_broken'));
+        }
       });
       request.pipe(parser);
     });

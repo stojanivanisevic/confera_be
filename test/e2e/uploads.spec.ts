@@ -241,6 +241,10 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     expect((await upload(form.slug, mine.formToken, pdfOf(), 'b.pdf', { address })).status).toBe(
       201,
     );
+    // The upload to the wrong field above was refused and used none up (Q3-04).
+    expect((await upload(form.slug, mine.formToken, pdfOf(), 'c.pdf', { address })).status).toBe(
+      201,
+    );
     const fourth = await upload(form.slug, mine.formToken, pdfOf(), 'd.pdf', { address });
     expect(fourth.status).toBe(429);
     expect(fourth.body).toEqual(expect.objectContaining({ code: 'too_many_uploads' }));
@@ -316,7 +320,8 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     await inOrganisation(
       owner,
       orgA(),
-      "UPDATE form_tokens SET expires_at = now() - interval '1 second'",
+      // Expired more than the grace of an hour ago, and issued more than a day ago.
+      "UPDATE form_tokens SET expires_at = now() - interval '2 hours', issued_at = now() - interval '25 hours'",
     );
     const report = await files.tick();
     expect(report.purged).toBeGreaterThanOrEqual(1);
