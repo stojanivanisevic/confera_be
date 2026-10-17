@@ -39,16 +39,32 @@ function written(content: Buffer): string {
 describe('the type of a file, from its content', () => {
   it.each([
     ['a PDF', pdfOf(), { type: 'pdf', macros: false }],
-    ['a PNG', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]), { type: 'png', macros: false }],
+    [
+      'a PNG',
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]),
+      { type: 'png', macros: false },
+    ],
     ['a JPEG', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]), { type: 'jpeg', macros: false }],
     ['a .docx', docxOf(), { type: 'docx', macros: false }],
     ['a .docx with a VBA project', docxOf({ macros: true }), { type: 'docx', macros: true }],
     ['an old .doc', docOf(), { type: 'doc', macros: false }],
     ['an old .doc with macros', docOf({ macros: true }), { type: 'doc', macros: true }],
-    ['a renamed executable', Buffer.from('MZ\x90\0\x03\0\0\0\x04\0\0\0'), { type: null, macros: false }],
-    ['an HTML page with a script', Buffer.from('<html><script>alert(1)</script></html>'), { type: null, macros: false }],
+    [
+      'a renamed executable',
+      Buffer.from('MZ\x90\0\x03\0\0\0\x04\0\0\0'),
+      { type: null, macros: false },
+    ],
+    [
+      'an HTML page with a script',
+      Buffer.from('<html><script>alert(1)</script></html>'),
+      { type: null, macros: false },
+    ],
     ['a ZIP that is not a document', zipOf({ 'a.txt': 'x' }), { type: null, macros: false }],
-    ['a compound file that is not a Word document', compoundFileOf(['Workbook']), { type: null, macros: false }],
+    [
+      'a compound file that is not a Word document',
+      compoundFileOf(['Workbook']),
+      { type: null, macros: false },
+    ],
     ['an empty file', Buffer.alloc(0), { type: null, macros: false }],
     ['a broken ZIP', Buffer.from('PK\x03\x04 broken'), { type: null, macros: false }],
   ])('%s', async (_name, content, expected) => {
@@ -71,7 +87,12 @@ describe('the type of a file, from its content', () => {
 describe('file names (ST-39, FR-FILE-03)', () => {
   it.each([
     ['Serbian letters are kept', 'Biografije š č ć ž đ.docx', 'docx', 'Biografije š č ć ž đ.docx'],
-    ['a quote and a second parameter', 'a".pdf"; filename="evil.exe', 'pdf', 'a_.pdf__ filename=_evil.exe.pdf'],
+    [
+      'a quote and a second parameter',
+      'a".pdf"; filename="evil.exe',
+      'pdf',
+      'a_.pdf__ filename=_evil.exe.pdf',
+    ],
     ['line breaks', 'red1\r\nContent-Type: text.pdf', 'pdf', 'red1Content-Type_ text.pdf'],
     ['a slash is a path: its last part is the name', 'text/html.pdf', 'pdf', 'html.pdf'],
     ['a right-to-left override', 'invoice\u202Efdp.exe', 'pdf', 'invoicefdp.exe.pdf'],
@@ -110,12 +131,15 @@ describe('the storage (ADR-10)', () => {
     );
   });
 
-  it.each(['org/../../etc/passwd', '../x', 'org/a/b', `org/${randomUUID()}/../${randomUUID()}`, ''])(
-    'refuses the key %j: the path stays inside its root',
-    (key) => {
-      expect(() => storage.pathOf(key)).toThrow(StorageKeyError);
-    },
-  );
+  it.each([
+    'org/../../etc/passwd',
+    '../x',
+    'org/a/b',
+    `org/${randomUUID()}/../${randomUUID()}`,
+    '',
+  ])('refuses the key %j: the path stays inside its root', (key) => {
+    expect(() => storage.pathOf(key)).toThrow(StorageKeyError);
+  });
 });
 
 describe('the antivirus (M3-BE-08, ST-38)', () => {
@@ -135,9 +159,7 @@ describe('the antivirus (M3-BE-08, ST-38)', () => {
       files: {
         storageDirectory: folder,
         clamav:
-          address === null
-            ? null
-            : { host: '127.0.0.1', port: Number(address.split(':')[1]) },
+          address === null ? null : { host: '127.0.0.1', port: Number(address.split(':')[1]) },
       },
     } as AppConfig);
 
@@ -177,6 +199,22 @@ describe('the antivirus (M3-BE-08, ST-38)', () => {
         verdict: 'unavailable',
         reason: 'scanner_error',
       });
+    } finally {
+      await clamd.close();
+    }
+  });
+
+  it('a daemon that never answers (a nested archive bomb) ends in bounded time, not clean (ST-38)', async () => {
+    const clamd = await startFakeClamd('silent');
+    try {
+      const scanner = scannerAt(clamd.address);
+      scanner.timeoutMs = 300;
+      const started = Date.now();
+      await expect(scanner.scan(Readable.from([pdfOf()]))).resolves.toEqual({
+        verdict: 'unavailable',
+        reason: 'timeout',
+      });
+      expect(Date.now() - started).toBeLessThan(5_000);
     } finally {
       await clamd.close();
     }

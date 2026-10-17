@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Client } from 'pg';
@@ -118,6 +118,13 @@ const SAMPLE_BODIES: Readonly<Record<string, () => object>> = {
   updateConference: () => ({ name: 'Matrica (izmišljeno)', version: 99 }),
   changeConferenceState: () => ({ state: 'open', version: 99 }),
   copyConference: () => ({ name: 'Matrica kopija (izmišljeno)', editionYear: 2100 }),
+  createForm: () => ({ type: 'abstract' }),
+  saveFormDraft: () => ({ configuration: {}, version: 99 }),
+  publishForm: () => ({ version: 99 }),
+  setFormBreaker: () => ({ breakerPerHour: 30, breakerPerDay: 200, version: 99 }),
+  setDeadline: () => ({ endsOn: '2099-12-31', version: 99 }),
+  releaseHeldMail: () => ({ ids: ['00000000-0000-4000-8000-000000000000'] }),
+  setOrganisationBreaker: () => ({ perHour: 30, perDay: 200, version: 99 }),
   changePaymentDetails: () => ({
     rsdAccount: null,
     eurIban: null,
@@ -158,6 +165,9 @@ function verdict(response: { status: number; body: unknown }): { status: number;
  * inside the organisation: a mail server, a conference, a template and a mail-log entry.
  * Paths of users take the reviewer of A.
  */
+/** The file of the submission of A (a path's `{fileId}`). */
+let file = '';
+
 async function objectsOfA(owner: Client, organisationId: string): Promise<Record<string, string>> {
   await owner.query('BEGIN');
   try {
@@ -188,12 +198,40 @@ async function objectsOfA(owner: Client, organisationId: string): Promise<Record
        VALUES ($1, $2, 'nobody@a.example.test', 'test_message', 'en', 1, 'sent') RETURNING id`,
       [organisationId, message],
     );
+    const form = await one(
+      `INSERT INTO forms (organisation_id, conference_id, type, public_key, configuration)
+       VALUES ($1, $2, 'abstract', 'matrixformaaaaaa', '{}') RETURNING id`,
+      [organisationId, conference],
+    );
+    const version = await one(
+      `INSERT INTO form_versions (organisation_id, form_id, number, definition)
+       VALUES ($1, $2, 1, '{}') RETURNING id`,
+      [organisationId, form],
+    );
+    await owner.query('UPDATE forms SET current_version_id = $1 WHERE id = $2', [version, form]);
+    const submission = await one(
+      `INSERT INTO submissions (organisation_id, conference_id, form_id, form_version_id, reference,
+         language, answers, first_author_name, corresponding_email, corresponding_domain,
+         author_count, consent_text, consent_version, consented_at, idempotency_key, payload_hash)
+       VALUES ($1, $2, $3, $4, 'MX00-0001', 'en', '{}', 'Matrica Probna', 'a@a.example.test',
+         'a.example.test', 1, 'I agree', 'x', now(), gen_random_uuid(), 'x') RETURNING id`,
+      [organisationId, conference, form, version],
+    );
+    file = await one(
+      `INSERT INTO files (organisation_id, kind, storage_key, original_name, detected_type,
+         size_bytes, sha256, submission_id)
+       VALUES ($1, 'submission_file', $3, 'a.pdf', 'pdf', 1, 'x', $2)
+       RETURNING id`,
+      [organisationId, submission, `org/${organisationId}/${randomUUID()}`],
+    );
     await owner.query('COMMIT');
     return {
       '/api/v1/mail-servers/': server,
       '/api/v1/conferences/': conference,
       '/api/v1/mail-templates/': template,
       '/api/v1/mail-log/': entry,
+      '/api/v1/forms/': form,
+      '/api/v1/submissions/': submission,
     };
   } catch (error) {
     await owner.query('ROLLBACK');
@@ -233,7 +271,10 @@ describe('the authorisation matrix of the admin API', () => {
     return (
       operation.path
         .replace('{id}', prefix === undefined ? actors.a.reviewer.id : (objects[prefix] ?? ''))
-        .replace(/\{token\}/g, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA') +
+        .replace(/\{token\}/g, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+        .replace('{number}', '1')
+        .replace('{kind}', 'abstract_submission')
+        .replace('{fileId}', file) +
       (SAMPLE_QUERIES[operation.id] ?? '')
     );
   }

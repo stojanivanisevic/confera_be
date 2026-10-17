@@ -51,6 +51,9 @@ export function verdictOf(answer: string): ScanVerdict {
 
 @Injectable()
 export class ClamdScanner implements VirusScanner {
+  /** The longest one scan may take; a test shortens it. */
+  timeoutMs = SCAN_TIMEOUT_MS;
+
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
   scan(content: Readable): Promise<ScanVerdict> {
@@ -75,7 +78,7 @@ export class ClamdScanner implements VirusScanner {
       };
       const timer = setTimeout(() => {
         finish({ verdict: 'unavailable', reason: 'timeout' });
-      }, SCAN_TIMEOUT_MS);
+      }, this.timeoutMs);
       timer.unref();
       socket.on('error', () => {
         finish({ verdict: 'unavailable', reason: 'unreachable' });

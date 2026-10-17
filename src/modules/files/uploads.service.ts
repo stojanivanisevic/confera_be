@@ -46,6 +46,9 @@ interface Received {
 
 @Injectable()
 export class UploadsService {
+  /** The quota of unattached bytes of an organisation; a test lowers it. */
+  quotaBytes = UNATTACHED_QUOTA_BYTES;
+
   constructor(
     private readonly intake: IntakeService,
     private readonly database: TenantDatabase,
@@ -85,7 +88,7 @@ export class UploadsService {
           where: { submissionId: null },
           _sum: { sizeBytes: true },
         });
-        if ((unattached._sum.sizeBytes ?? 0) >= UNATTACHED_QUOTA_BYTES) {
+        if ((unattached._sum.sizeBytes ?? 0) >= this.quotaBytes) {
           await this.mail.noticeToAdmins(
             tx,
             resolved.organisationId,
@@ -199,9 +202,13 @@ export class UploadsService {
           return;
         }
         const chosenField = field;
+        // Browsers write a quote and a line break of a file name as %22, %0D and %0A in the
+        // part's header (WHATWG multipart); the name is cleaned afterwards in any case.
         const original = Buffer.from(info.filename, 'utf8')
           .subarray(0, MAX_NAME_BYTES)
-          .toString('utf8');
+          .toString('utf8')
+          .replace(/%22/gi, '"')
+          .replace(/%0[AD]/gi, '');
         pending = (async () => {
           const path = await this.storage.temporaryPath();
           const hash = createHash('sha256');
