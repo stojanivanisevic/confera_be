@@ -48,6 +48,10 @@ export class ConferenceDto {
   languages!: string[];
   /** An IANA time zone, for example Europe/Belgrade. */
   timeZone!: string;
+  /**
+   * `draft`; `open`: the forms take submissions (the action is called "Open for
+   * submissions", D10); `closed`: they take none ("Close submissions"); `archived`: final.
+   */
   // The order of the values is fixed here, not left to the compiler (a stable contract).
   @ApiProperty({ enum: CONFERENCE_STATES })
   state!: ConferenceState;

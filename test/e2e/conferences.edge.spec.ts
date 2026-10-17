@@ -66,4 +66,40 @@ describe('listed sites of a conference, through the API (E2-01)', () => {
     const stored = (changed.body as { listedSites?: string[] }).listedSites ?? [];
     expect(stored.filter((origin) => /[;,'"\s]/.test(origin))).toEqual([]);
   });
+
+  it('refuses https://localhost on the configuration of a server (SEC-M2-12)', async () => {
+    year += 1;
+    const response = await as(e2e, admin, 'post', '/api/v1/conferences').send({
+      name: 'Sajtovi (izmišljeno)',
+      code: 'SJ',
+      editionYear: year,
+      listedSites: ['https://localhost:8443'],
+    });
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual(
+      expect.objectContaining({ errors: [{ path: 'listedSites[0]', code: 'site_loopback' }] }),
+    );
+  });
+
+  it.each([
+    ['a semicolon', '{"https://a.example.test;script-src *"}'],
+    ['a path', '{"https://a.example.test/forms"}'],
+    ['upper case', '{"HTTPS://A.EXAMPLE.TEST"}'],
+    ['an empty entry', '{""}'],
+    ['a NULL entry', '{NULL}'],
+    ['21 entries', `{${Array.from({ length: 21 }, (_, n) => `"https://s${String(n)}.example.test"`).join(',')}}`],
+  ])('the database itself refuses a stored site list with %s (SEC-M2-12)', async (_name, sites) => {
+    await owner.query('BEGIN');
+    try {
+      await owner.query("SELECT set_config('app.org_id', $1, true)", [actors.a.organisation.id]);
+      await expect(
+        owner.query(
+          `INSERT INTO conferences (organisation_id, name, code, listed_sites) VALUES ($1, 'Baza (izmišljeno)', 'DB', $2::text[])`,
+          [actors.a.organisation.id, sites],
+        ),
+      ).rejects.toThrow(/conferences_listed_sites_are_origins/);
+    } finally {
+      await owner.query('ROLLBACK');
+    }
+  });
 });

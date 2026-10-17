@@ -1,4 +1,10 @@
-import { isTimeZone, MAX_LISTED_SITES, normaliseSite, normaliseSites } from './listed-sites';
+import {
+  frameSites,
+  isTimeZone,
+  MAX_LISTED_SITES,
+  normaliseSite,
+  normaliseSites,
+} from './listed-sites';
 
 /** ST-30: the listed sites of a conference (ADR-07, SEC-A-08), refused or normalised. */
 describe('listed sites (ST-30)', () => {
@@ -60,6 +66,42 @@ describe('listed sites (ST-30)', () => {
       problem: 'scheme',
     });
     expect(normaliseSite('http://localhost:3000', 'dev')).toEqual({ ok: false, problem: 'scheme' });
+  });
+
+  it.each([
+    'https://localhost',
+    'https://localhost:8443',
+    'https://forms.localhost',
+    'https://127.0.0.1',
+    'https://127.8.9.10:444',
+    'https://2130706433',
+    'https://0.0.0.0',
+    'https://[::1]',
+    'https://[0:0:0:0:0:0:0:1]',
+    'https://[::ffff:127.0.0.1]',
+  ])('refuses the loopback host %s outside a developer machine (SEC-M2-12)', (entry) => {
+    for (const stage of ['dev', 'test', 'prod'] as const) {
+      expect(normaliseSite(entry, stage)).toEqual({ ok: false, problem: 'loopback' });
+    }
+    expect(normaliseSite(entry, 'local')).toEqual(expect.objectContaining({ ok: true }));
+  });
+
+  it('builds the frame list from stored origins that pass again, dropping the rest (SEC-M2-12)', () => {
+    const stored = [
+      'https://www.itema-conference.com',
+      'https://localhost',
+      'https://a.example.test;script-src *',
+      'HTTPS://UPPER.example.test',
+      'https://www.itema-conference.com',
+      'http://plain.example.test',
+    ];
+    expect(frameSites(stored, 'prod')).toEqual(['https://www.itema-conference.com']);
+    expect(frameSites(stored, 'local')).toEqual([
+      'https://www.itema-conference.com',
+      'https://localhost',
+      'http://plain.example.test',
+    ]);
+    expect(frameSites([], 'prod')).toEqual([]);
   });
 
   it('keeps one of two entries with the same origin', () => {

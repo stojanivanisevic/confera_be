@@ -7,7 +7,9 @@ import type { Stage } from '../../config/config.schema';
  * entry is parsed as a URL and kept as its origin only: scheme, host and port, lower case,
  * the host in punycode. Refused: a wildcard, a path, a query or fragment, a user part, a
  * space, a semicolon, a comma, a quote, `http:` outside a developer's own machine (STAGE
- * local), anything but http(s), and a 21st entry. The same origin twice is kept once.
+ * local), a loopback host (`localhost`, `*.localhost`, 127.0.0.0/8, `[::1]`, `0.0.0.0`)
+ * outside it too (SEC-M2-12), anything but http(s), and a 21st entry. The same origin twice
+ * is kept once. The database checks the canonical form again (`listed_sites_are_origins`).
  */
 export const MAX_LISTED_SITES = 20;
 
@@ -26,7 +28,8 @@ export type SiteProblem =
   | 'scheme'
   | 'user_part'
   | 'path'
-  | 'query';
+  | 'query'
+  | 'loopback';
 
 export type SitesResult =
   | { readonly ok: true; readonly sites: string[] }
@@ -84,7 +87,51 @@ export function normaliseSite(
   if (!CANONICAL_ORIGIN.test(origin)) {
     return { ok: false, problem: 'forbidden_character' };
   }
+  if (stage !== 'local' && isLoopbackHost(host)) {
+    return { ok: false, problem: 'loopback' };
+  }
   return { ok: true, origin };
+}
+
+/**
+ * A host that names the machine itself: `localhost` and its subdomains, 127.0.0.0/8, the
+ * unspecified addresses and `[::1]` (also an IPv4-mapped loopback). A conference site on
+ * a server is never one (SEC-M2-12).
+ */
+export function isLoopbackHost(host: string): boolean {
+  const name = host.toLowerCase().replace(/\.$/, '');
+  if (name === 'localhost' || name.endsWith('.localhost')) {
+    return true;
+  }
+  if (/^127(?:\.\d{1,3}){3}$/.test(name) || name === '0.0.0.0') {
+    return true;
+  }
+  if (name.startsWith('[')) {
+    const inner = name.slice(1, -1);
+    return (
+      inner === '::1' ||
+      inner === '::' ||
+      /^(?:0{1,4}:){7}0{0,3}1$/.test(inner) ||
+      /^::ffff:(?:127\.|7f[0-9a-f]{2}:)/.test(inner)
+    );
+  }
+  return false;
+}
+
+/**
+ * The listed sites as the frame page's `frame-ancestors` may name them (ADR-07, SEC-M2-12):
+ * every stored entry checked again against the canonical origin, and against the rules of
+ * the stage; whatever fails is dropped, never repaired. Built from stored values only.
+ */
+export function frameSites(stored: readonly string[], stage: Stage): string[] {
+  const sites: string[] = [];
+  for (const entry of stored.slice(0, MAX_LISTED_SITES)) {
+    const checked = normaliseSite(entry, stage);
+    if (checked.ok && checked.origin === entry && !sites.includes(entry)) {
+      sites.push(entry);
+    }
+  }
+  return sites;
 }
 
 /** The whole list: each entry normalised, duplicates dropped, at most 20. */
