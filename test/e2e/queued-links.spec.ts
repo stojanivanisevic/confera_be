@@ -157,6 +157,52 @@ describe('a queued message with a link does not outlive a change of the password
     await nothingWorksFor(user.id, newEmail);
   });
 
+  /**
+   * FIN2-02 (M2-ISS-22): an email change confirmed while a second confirmation still waits.
+   * The address change does not touch `passwordChangedAt`, so the sender's own check does
+   * not stop the second message: only `supersedeLinks` in the change's transaction does.
+   * The row is asserted right after the change, before the worker looks at it.
+   */
+  it.each(['queued', 'waiting_for_server'])(
+    'a confirmed email change ends a second confirmation that is %s',
+    async (waiting) => {
+      const { user, session, newEmail } = await queuedEmailChange();
+      const second = `zamena.${Date.now().toString(36)}.${user.id.slice(0, 4)}@a.example.test`;
+      const asked = await as(e2e, session, 'post', '/api/v1/account/email').send({
+        password: INVENTED_PASSWORD,
+        newEmail: second,
+      });
+      expect(asked.status).toBe(202);
+      await inA(`UPDATE mail_outbox SET status = $2 WHERE recipient_address = $1`, [
+        second,
+        waiting,
+      ]);
+      const token = await mintLink(e2e, {
+        organisationId: actors.a.organisation.id,
+        purpose: 'email_change',
+        userId: user.id,
+        recipient: newEmail,
+      });
+      const confirmed = await post(linkPath('email_change', token)).send({});
+      expect(confirmed.status).toBe(204);
+
+      // Ended in the change's own transaction, before any tick of the worker.
+      const rows = await inA<{ status: string; last_error_code: string }>(
+        `SELECT status, last_error_code FROM mail_outbox WHERE kind = 'email_change_confirmation' AND recipient_address = $1`,
+        [second],
+      );
+      expect(rows).toEqual([{ status: 'failed', last_error_code: 'superseded' }]);
+
+      await worker.tick();
+      expect(await mailsTo(second)).toBe(0);
+      const open = await inA(
+        `SELECT id FROM secure_links WHERE user_id = $1 AND purpose = 'email_change' AND used_at IS NULL AND revoked_at IS NULL`,
+        [user.id],
+      );
+      expect(open).toEqual([]);
+    },
+  );
+
   it('a confirmation queued after the change is sent and works', async () => {
     const { user, newEmail } = await queuedEmailChange();
     await worker.tick();
