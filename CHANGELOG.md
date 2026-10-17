@@ -7,6 +7,32 @@ version at every milestone (ADR-19).
 
 ## [Unreleased]
 
+### Added
+
+- Forms and their immutable versions (M3-BE-01, ADR-09; FR-FORM-01, FR-FORM-02): a field catalogue in code that reproduces the current abstract form field by field, the admin's configuration as the draft (fields on and off, labels, help and options in both languages, required, word and character limits, file types and sizes, the texts, the most authors: 10 by default, D7), publish into a version the application role can only read and add; form texts as plain text with one safe link syntax and the conference's consent links (D6: `publicationTermsUrl`, `privacyNoticeUrl`). `seed:production` gives each conference an unpublished abstract form; `seed:e2e` publishes one under the fixed address `e2eprobnaforma01`.
+- The rule interpreter and its shared contracts (M3-BE-02, ST-41): `contracts/form-definition.schema.json`, `contracts/form-configuration.schema.json` and `contracts/form-rule-vectors.json` (codes, order, word count, the URL rule, the address rule, the safe text, the proof-of-work, answers with their errors); key-checked answers, patterns from the catalogue only, stated maxima (64 KB body, 20 000 characters a value, 50 authors, 100 a page); a key named like a prototype member is refused, not dropped.
+- The public form API (M3-BE-03, ADR-08; ST-31, ST-34): the published form and its frame sites, a single-use form token fetched by the page and sent in `X-Form-Token`, the Origin, `Sec-Fetch-Site` and content-type checks, no session cookie and no CORS grant, limits per address, a proof-of-work of our own under load, the trap field and the minimum fill time, one idempotent submit (`Idempotency-Key`) in one transaction with the submission, its authors, files, first status, consent and confirmation. References like `IT27-0001`, unique in the organisation.
+- Files (M3-BE-04, ADR-10; ST-32, ST-33, ST-39): private storage under keys without client names, streamed uploads cut off one byte beyond the field's limit (20 MB by default), the SHA-256, the type from the content (PDF, `.docx`, `.doc`, JPEG, PNG), the macro policy of G2-22 (a `.docx` with macros refused, an old `.doc` with macros flagged), uploads bound to a token and a file field, a quota of unattached bytes with a notice to the admins, the purge at the token's expiry, safe file-name headers, downloads only through the submission. busboy 1.6.0.
+- Deadlines in the conference's time zone (M3-BE-05, FR-DL-01 to 03): a day that ends at the end of that day where the conference is, also when the clocks change; the form closes by itself and opens again on an extension; the history with the old and new day and who changed it.
+- The consent record and the confirmation email (M3-BE-06; FR-FORM-11, FR-FORM-15 as amended by SA-13, FR-MAIL-04; ST-35): the consent text as shown, its links, a hash and the time; a confirmation with fixed text, the reference and the title only, escaped and cut to 200 characters, in the submission's language (template type `submission_confirmation`, English and Serbian).
+- The submissions read API (M3-BE-07; FR-SUB-02, FR-SUB-04): a paged table and the detail (answers, authors, files with their scan state, consent, status history, emails).
+- The antivirus (M3-BE-08, ST-38): ClamAV's daemon over INSTREAM, in the background once a file is attached; fail closed (pending with retries and a notice to the admins, never "download anyway"); limits exceeded are not clean. The development stack has no ClamAV; the tests use a fake daemon of the same protocol.
+- The send breaker (M3-BE-09, ADR-08; ST-34): per form and per organisation (30 an hour, 200 a day) and per recipient domain (100 a day); above it the submission is stored, its confirmation held, the admins told once an hour; the held emails listed and released by an admin.
+- New configuration: `FILE_STORAGE_DIR` and `CLAMAV_ADDRESS` (both required on `prod`), `JOBS_INTERVAL_SECONDS` (default 30). New permissions: `forms.read`, `forms.manage`, `submissions.read`, `held_mail.manage`.
+
+### Changed
+
+- The audit log keeps no bank account number (owner decision D9): `rsdAccount` and `eurIban` are recorded by name only, and entries written before are shown without their values (M2-ISS-16).
+- A listed site is refused with a loopback host (`localhost`, `127.0.0.0/8`, `[::1]`) outside `STAGE=local`; the column itself checks that every entry is a canonical origin, at most 20; the frame list is checked once more when it is read (SEC-M2-12, M2-ISS-21).
+- The link of an invitation, a reset and an email change "works once and expires in 72 hours" (UXUI-M2-37).
+- The descriptions of the conference states name the actions "Open for submissions" and "Close submissions" (D10, M2-ISS-15).
+- Committed contracts write invisible characters as escapes.
+- `.env.example` lists the tool variables `STUBS_PORT` and `PROVISION_DATABASE_URL` (FIN2-08, M2-ISS-23).
+
+### Fixed
+
+- A test holds that a confirmed email change ends a second confirmation that waits, queued or for a server, in the change's own transaction (FIN2-02, M2-ISS-22).
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

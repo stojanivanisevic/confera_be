@@ -388,6 +388,88 @@ the two equal. The OpenAPI document carries the declaration of every operation
   by itself. With no server or no template a message waits and the application stays
   healthy.
 
+### Forms, embed and intake (0.3.0)
+
+- **Forms** (ADR-09, M3-BE-01): one form of a type per conference (`abstract` in 0.3.0),
+  `POST /api/v1/conferences/{id}/forms`. Its fields come from the catalogue in code
+  (`src/modules/forms/catalogue.ts`): the current form of the conference sites, field by
+  field. The admin's **configuration** is the draft (`PUT /api/v1/forms/{id}/draft`): fields
+  on and off, labels, help and options in both languages, required, limits, file types and
+  sizes, the texts, the most authors (D7: 10 by default); a mandatory field cannot be switched
+  off, nothing beyond a cap is taken. `POST /api/v1/forms/{id}/publish` makes an immutable
+  **version** of the definition built from it (the application role may only read and add
+  versions); a submission keeps its version. Form texts are plain text with one link syntax,
+  `[label](https://...)`, and `[label](terms)` / `[label](privacy)` for the consent links of
+  the conference (D6: `publicationTermsUrl`, `privacyNoticeUrl`).
+- **Contracts for the web application** (`contracts/`, written by `openapi:generate`):
+  `form-definition.schema.json` (a version's definition), `form-configuration.schema.json`
+  (the draft), `form-rule-vectors.json` (the rule interpreter of both sides: codes, order,
+  word count, the URL rule, the address rule, the safe text, the proof-of-work, and answers
+  with their errors). Errors are `answers.<path>` and a code: `answers.authors[2].email`.
+- **The public API** (ADR-08, M3-BE-03), under the public host name only:
+
+  | Route                                      |                                                                                                                                        |
+  | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+  | `GET /public/v1/forms/{slug}`              | the published definition, `state` (`open`/`closed`), the deadline, the consent links                                                   |
+  | `GET /public/v1/forms/{slug}/frame-sites`  | the conference's listed sites for `frame-ancestors` of the frame page, each checked again; none unless the conference is open (ADR-07) |
+  | `POST /public/v1/forms/{slug}/tokens`      | a single-use form token (JSON body `{}`), valid 6 hours; under load with a proof-of-work                                               |
+  | `POST /public/v1/forms/{slug}/uploads`     | one file: multipart, parts `field` then `file`; header `X-Form-Token`                                                                  |
+  | `POST /public/v1/forms/{slug}/submissions` | JSON `{ language, answers, website, proofOfWork? }`; headers `X-Form-Token` and `Idempotency-Key` (a UUID per form instance)           |
+
+  Every POST needs `Origin` equal to `PUBLIC_ORIGIN`, `Sec-Fetch-Site: same-origin` where the
+  browser sends it, and exactly its content type (415 otherwise); `/public` never reads the
+  session cookie and no response carries a CORS grant. The token is random, only its SHA-256
+  is stored, it works for one submit (409 `form_token_used`), and its uploads are bound to it
+  (as many as the version has file fields, plus two). A repeat with the same idempotency key
+  returns the first result (409 `idempotency_key_reused` with other answers). `website` is
+  the trap field: filled, or a submit within 3 s of the token, is answered with a fake
+  success and stores nothing. Limits per client address: 30 tokens in 10 minutes, 10 submits
+  an hour, 40 uploads in 10 minutes (429). The **proof-of-work** switches itself on above 20
+  submissions in 10 minutes on a form, or 5 submits or 10 tokens from one address: the token
+  then carries `{ challenge, difficulty }` and the submit `proofOfWork`, a counter such that
+  SHA-256(`challenge:counter`) begins with `difficulty` zero bits (403 `proof_of_work_failed`).
+
+- **One submit, one transaction**: the submission (reference `IT27-0001`, unique in the
+  organisation; the answers under their keys; typed columns for the table), its authors in
+  order, its first status, its files attached, the consent as shown (text, links, a hash, the
+  time), and the **confirmation** in the outbox: fixed text, the reference and the title only,
+  in the submission's language (SA-13; template type `submission_confirmation`). If sending
+  fails the submission is stored and the mail log shows the failure.
+- **The send breaker** (M3-BE-09): per form (`PATCH /api/v1/forms/{id}/breaker`) and per
+  organisation (`PATCH /api/v1/held-mail/breaker`), 30 an hour and 200 a day by default, and
+  100 a day to one recipient domain. Above it the submission is stored and its confirmation
+  is `held` (`heldReason`); every active admin gets one notice an hour per form;
+  `GET /api/v1/held-mail` lists them, `POST /api/v1/held-mail/release` (`{ ids }` or
+  `{ all: true, formId? }`) queues them again.
+- **Deadlines** (FR-DL-01 to 03, M3-BE-05): `PUT /api/v1/conferences/{id}/deadlines/{kind}`
+  (`abstract_submission`, `fee_payment`, `full_paper`), a day that ends at the end of that day
+  in the conference's time zone (`src/modules/deadlines/deadline-time.ts`, also on the days
+  the clocks change). A form is open while its conference is open for submissions ("Open for
+  submissions", D10) and its deadline has not passed; an extension opens it again at once; the
+  history keeps the old and the new day and who changed it.
+- **Files** (ADR-10, M3-BE-04): streamed into `FILE_STORAGE_DIR` under `org/<organisation>/<uuid>`
+  (never a client's name; a key that would leave the folder is refused), cut off one byte
+  beyond the field's limit (413 `file_too_large`; 20 MB by default, at most 50), the SHA-256
+  computed on the way, the type read from the content (PDF, `.docx`, `.doc`, JPEG, PNG; 415
+  `file_type_refused`). A `.docx` with a VBA project is refused (422 `docx_macros`); an old
+  `.doc` with macros is kept and flagged `macros` (G2-22). The name is kept for display and
+  download, cleaned (no control or direction character, no quote, path part or reserved device
+  name, at most 150 characters, the extension of the content). Above 2 GB of unattached bytes
+  in an organisation uploads are refused (503 `upload_quota_reached`) and the admins told;
+  the files of an expired token are purged with the token. A file is served only by
+  `GET /api/v1/submissions/{id}/files/{fileId}`, as an attachment with `filename*`, and only
+  when its scan is clean (409 `scan_pending` or `file_not_clean`).
+- **Antivirus** (M3-BE-08): the files worker (every `JOBS_INTERVAL_SECONDS`) sends every
+  attached file to ClamAV's daemon at `CLAMAV_ADDRESS` (INSTREAM). Fail closed: no answer, an
+  error or a timeout (120 s) leaves the file pending with its attempts counted and tries again
+  after 1, 2, 4 ... minutes, and the admins are told once an hour; limits exceeded count as not
+  clean. **The development stack has no ClamAV** (about 1.2 GB of memory and a signature
+  download): without `CLAMAV_ADDRESS` every file stays "scan pending" and is never served.
+  The tests use a fake daemon that speaks the same protocol (`test/support/fake-clamd.ts`).
+- **Submissions** (M3-BE-07): `GET /api/v1/submissions` (paged, newest first, at most 100 a
+  page) and `GET /api/v1/submissions/{id}` (answers, authors, files with their scan state,
+  consent, status history, emails).
+
 ### The first admin and the production seed
 
 On a fresh installation, after `db:migrate`: `corepack pnpm seed:production`, then
@@ -404,17 +486,19 @@ seeds and signs in its own people. Start from an empty database first:
 
 ### The inventory of secrets (ADR-11)
 
-| Secret                             | Where it lives                         | Who holds it                     | Backup                               | Rotation                                                           |
-| ---------------------------------- | -------------------------------------- | -------------------------------- | ------------------------------------ | ------------------------------------------------------------------ |
-| `DATA_KEY`                         | the API's environment on the server    | the operator; two people offline | a sealed copy off the server         | a new key with a new key id; stored secrets sealed again (runbook) |
-| Form-token key (0.3.0)             | the API's environment                  | the operator                     | none needed (tokens are short-lived) | replace; open forms ask for a new token                            |
-| `confera_owner` password           | the migration job's environment only   | the operator                     | the association's password manager   | `ALTER ROLE` and the job's environment                             |
-| `confera_app` password             | `DATABASE_URL` of the API              | the operator                     | the association's password manager   | `ALTER ROLE`, then restart the API                                 |
-| `confera_system` password          | `SYSTEM_DATABASE_URL` of the API       | the operator                     | the association's password manager   | `ALTER ROLE`, then restart the API                                 |
-| Backup encryption password (1.0.0) | the backup job                         | the operator; two people         | offline                              | new backups with the new password; old ones keep theirs            |
-| Registry credential                | the pipeline's secret store            | the maintainer                   | none needed                          | revoke and issue a new one                                         |
-| Mail server passwords              | `mail_servers.password_sealed`, sealed | the admins who type them         | the database backup (sealed)         | an admin sets a new one; a changed target clears it                |
-| PayPal credentials (0.7.0)         | sealed like the mail passwords         | the admins                       | the database backup (sealed)         | the same rule: a changed target clears them                        |
+The form tokens of 0.3.0 need no key: they are random and only their SHA-256 is stored, like
+sessions and secure links.
+
+| Secret                             | Where it lives                         | Who holds it                     | Backup                             | Rotation                                                           |
+| ---------------------------------- | -------------------------------------- | -------------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| `DATA_KEY`                         | the API's environment on the server    | the operator; two people offline | a sealed copy off the server       | a new key with a new key id; stored secrets sealed again (runbook) |
+| `confera_owner` password           | the migration job's environment only   | the operator                     | the association's password manager | `ALTER ROLE` and the job's environment                             |
+| `confera_app` password             | `DATABASE_URL` of the API              | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
+| `confera_system` password          | `SYSTEM_DATABASE_URL` of the API       | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
+| Backup encryption password (1.0.0) | the backup job                         | the operator; two people         | offline                            | new backups with the new password; old ones keep theirs            |
+| Registry credential                | the pipeline's secret store            | the maintainer                   | none needed                        | revoke and issue a new one                                         |
+| Mail server passwords              | `mail_servers.password_sealed`, sealed | the admins who type them         | the database backup (sealed)       | an admin sets a new one; a changed target clears it                |
+| PayPal credentials (0.7.0)         | sealed like the mail passwords         | the admins                       | the database backup (sealed)       | the same rule: a changed target clears them                        |
 
 ## 6. Errors and logs
 
@@ -605,7 +689,10 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
   else 404. It listens on 127.0.0.1 only and refuses to start unless `STAGE` is `local`,
   `dev` or `test`. Another port: `STUBS_PORT` in `.env`.
 - **`seed:e2e`** writes what `test/e2e/seed/e2e-seed.json` holds: two invented
-  organisations with an admin and a reviewer each, on `example.test`, with fixed ids,
+  organisations with an admin and a reviewer each, on `example.test`, with fixed ids, and in
+  the first one a conference open for submissions whose abstract form is published under the
+  address **`e2eprobnaforma01`** (listed site `http://localhost:4000`, the harness of
+  `confera_fe`; the frame list honours an `http` site on `STAGE=local` only),
   each active with the invented password `invented-Jasen-Kula-Reka-42` (for the sign-in
   tests of the web application), and the default email templates. It is safe to run again. **seed:e2e refuses to
   run unless `STAGE` is exactly `local` or `test`** (exit code 78), before it opens a
@@ -641,9 +728,11 @@ Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 `openapi/openapi.json` (admin API) and `openapi/openapi.public.json` (public API) are
 generated from the code and **committed**; the frontend vendors `openapi.json`. Their
 `info.version` is the version of this repository. The same command writes the other
-contracts of the API, `contracts/password-rules.json` (section 5, "The password rule set")
-and `contracts/template-vectors.json` (section 5, "Mail"), and the check fails while any
-of them is stale.
+contracts of the API, `contracts/password-rules.json` (section 5, "The password rule set"),
+`contracts/template-vectors.json` (section 5, "Mail") and the three contracts of the forms
+(section 5, "Forms, embed and intake"), and the check fails while any of them is stale. The
+committed files write invisible characters (a no-break space, a direction override) as
+their escape.
 
 After changing a controller or a DTO: `corepack pnpm openapi:generate`, look at the diff,
 commit it. `corepack pnpm check` fails while the files are stale. Response types come from
@@ -894,7 +983,12 @@ src/modules/mail-log the mail log, read only
 src/modules/templates the template document format, its serialiser, the catalogue and the read API
 src/modules/conferences  conferences and their listed sites
 src/modules/csp-reports  the route for the web application's content-security-policy reports
-contracts/           the password rule set and the template format with their vectors, generated and committed
+src/modules/forms    the field catalogue, definitions, the rule interpreter, the admin and public form APIs
+src/modules/files    the private storage, type detection, file names, uploads, the antivirus and its worker
+src/modules/deadlines  deadlines in the conference's time zone, with their history
+src/modules/submissions  the submissions table and detail, file downloads
+src/modules/held-mail  the send breaker, the held emails and their release
+contracts/           the password rule set, the template format and the forms (schemas, rule vectors), generated and committed
 test/architecture    rules that hold for the whole code base
 test/tooling         tests of the test tools (seed:e2e, the stub slot)
 test/qa              probes of single units by the test engineer (PDF fields)
