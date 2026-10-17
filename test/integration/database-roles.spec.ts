@@ -109,7 +109,13 @@ describe('database roles', () => {
       expect(tables.map((t) => t.tablename)).toEqual([
         '_prisma_migrations',
         'audit_entries',
+        'conference_deadline_changes',
+        'conference_deadlines',
         'conferences',
+        'files',
+        'form_tokens',
+        'form_versions',
+        'forms',
         'known_devices',
         'mail_log',
         'mail_outbox',
@@ -121,6 +127,9 @@ describe('database roles', () => {
         'secure_links',
         'security_events',
         'sessions',
+        'submission_authors',
+        'submission_status_history',
+        'submissions',
         'user_roles',
         'users',
       ]);
