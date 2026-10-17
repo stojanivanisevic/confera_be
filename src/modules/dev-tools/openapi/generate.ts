@@ -16,6 +16,14 @@ import {
   passwordRulesDocument,
 } from '../contracts/password-rules-file';
 import { TEMPLATE_VECTORS_FILE, templateVectorsDocument } from '../contracts/template-vectors-file';
+import {
+  FORM_CONFIGURATION_SCHEMA_FILE,
+  FORM_DEFINITION_SCHEMA_FILE,
+  FORM_RULE_VECTORS_FILE,
+  formConfigurationSchemaDocument,
+  formDefinitionSchemaDocument,
+  formRuleVectorsDocument,
+} from '../contracts/form-contracts-file';
 import { buildDocuments, type ConferaDocuments } from './document';
 import { compare, findDrift, formatDrift, OPENAPI_FILES, serialise, writeDocuments } from './files';
 import { formatFindings, lintResponseSchemas } from './schema-lint';
@@ -85,6 +93,10 @@ async function main(argv: readonly string[]): Promise<number> {
   const contractFiles = [
     { name: PASSWORD_RULES_FILE, text: serialise(passwordRulesDocument()) },
     { name: TEMPLATE_VECTORS_FILE, text: serialise(templateVectorsDocument()) },
+    // The forms (ADR-09): the definition and configuration schemas, the rule vectors.
+    { name: FORM_DEFINITION_SCHEMA_FILE, text: serialise(formDefinitionSchemaDocument()) },
+    { name: FORM_CONFIGURATION_SCHEMA_FILE, text: serialise(formConfigurationSchemaDocument()) },
+    { name: FORM_RULE_VECTORS_FILE, text: serialise(formRuleVectorsDocument()) },
   ];
 
   if (write) {

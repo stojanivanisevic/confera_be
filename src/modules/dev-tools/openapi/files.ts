@@ -12,8 +12,22 @@ export type DocumentName = keyof typeof OPENAPI_FILES;
 
 /** The exact text of a committed file: two-space JSON, LF line ends, one final line break. */
 export function serialise(document: unknown): string {
-  return `${JSON.stringify(document, null, 2)}\n`;
+  // Invisible and format characters (a no-break space, a direction override) are written as
+  // their escape, so that a reviewer of a committed file sees them; the JSON is the same.
+  return `${JSON.stringify(document, null, 2).replace(INVISIBLE, escapeUnits)}\n`;
 }
+
+/** A character as the \\u escapes of its UTF-16 code units. */
+function escapeUnits(character: string): string {
+  let escaped = '';
+  for (let index = 0; index < character.length; index += 1) {
+    escaped += `\\u${character.charCodeAt(index).toString(16).toUpperCase().padStart(4, '0')}`;
+  }
+  return escaped;
+}
+
+/** White space other than the plain space, and the format characters of Unicode. */
+const INVISIBLE = /[\p{Cf}\p{Zl}\p{Zp}\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/gu;
 
 export interface Drift {
   readonly file: string;

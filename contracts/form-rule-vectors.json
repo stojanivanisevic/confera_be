@@ -1,0 +1,3262 @@
+{
+  "$comment": "Generated from src/modules/forms by `pnpm openapi:generate`; do not edit. The rules of the public forms (ADR-09, M3-BE-02) and the vectors both the server and the browser must pass: for each answers vector, the same errors (path and code, in this order) and, where given, the same kept values. Paths name a field by its key and a block of a repeating section by its index from 0: authors[2].email.",
+  "version": 1,
+  "codes": [
+    "required",
+    "wrongType",
+    "unknownField",
+    "tooLong",
+    "tooManyWords",
+    "pattern",
+    "noUrl",
+    "notAnEmail",
+    "notAnOption",
+    "invalidCharacters",
+    "tooFewItems",
+    "tooManyItems"
+  ],
+  "order": "The errors come in this order: keys the definition does not have, in the order of the answers; then the sections in order, and in each its fields in order (a repeating section: the count of blocks, then each block in order).",
+  "shown": "A field is shown when its section is shown and its visibleWhen holds (the answer of `field`, trimmed, is one of `in`); in a repeating section a field with onlyFirstInRepeat only in the first block. A field that is not shown is not checked and not kept.",
+  "values": "text, longText, email, choice, yesNo and file take a string; consent takes a boolean (true: given). Every string is composed (NFC) and trimmed; empty is the same as left out. An email address keeps its local part and lower-cases its domain.",
+  "characters": "Refused in every text (invalidCharacters): control characters (in a longText the tab, the line break and the carriage return are allowed), U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069 and U+FEFF. For an email field the code is notAnEmail.",
+  "checks": "In this order, the first that fails gives the code: wrong JSON type (wrongType); empty and required (required; a consent that is not true); more characters (code points) than rules.maxLength (tooLong); choice and yesNo: not an option (notAnOption); file: not a UUID (wrongType); email: not one plain address (notAnEmail); characters (invalidCharacters); more words than rules.maxWords (tooManyWords); the pattern (pattern); the URL rule when rules.noUrl (noUrl).",
+  "limits": {
+    "maxLength": 20000,
+    "maxAuthors": 50,
+    "maxWords": 5000,
+    "defaultMaxAuthors": 10,
+    "defaultFileBytes": 20971520,
+    "maxFileBytes": 52428800,
+    "texts": {
+      "title": 200,
+      "intro": 2000,
+      "submit": 40,
+      "thankYou": 2000,
+      "closed": 2000,
+      "consent": 2000
+    },
+    "submitBodyBytes": 65536
+  },
+  "kinds": [
+    "text",
+    "longText",
+    "email",
+    "choice",
+    "yesNo",
+    "file",
+    "consent"
+  ],
+  "fileTypes": [
+    "pdf",
+    "docx",
+    "doc",
+    "jpeg",
+    "png"
+  ],
+  "patterns": {
+    "orcid": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$",
+    "phone": "^\\+?[0-9][0-9 ()./-]{4,28}[0-9]$",
+    "taxNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$",
+    "registrationNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$"
+  },
+  "wordCount": {
+    "rule": "Runs of characters between white space (JavaScript /\\s+/u) of the trimmed text.",
+    "vectors": [
+      {
+        "text": "",
+        "words": 0
+      },
+      {
+        "text": "   ",
+        "words": 0
+      },
+      {
+        "text": "jedan",
+        "words": 1
+      },
+      {
+        "text": "jedan dva",
+        "words": 2
+      },
+      {
+        "text": "  jedan\tdva\ntri  ",
+        "words": 3
+      },
+      {
+        "text": "e-učenje, škole; ASP.NET",
+        "words": 3
+      },
+      {
+        "text": "jedan\u00A0dva",
+        "words": 2
+      },
+      {
+        "text": "š č ć ž đ",
+        "words": 5
+      }
+    ]
+  },
+  "noUrl": {
+    "rule": "Refused: a scheme with // (https://), www., mailto:, a mail address, a host name followed by a path. A dotted word alone is a word.",
+    "vectors": [
+      {
+        "text": "https://example.test",
+        "refused": true
+      },
+      {
+        "text": "HTTP://EXAMPLE.TEST",
+        "refused": true
+      },
+      {
+        "text": "ftp://example.test/x",
+        "refused": true
+      },
+      {
+        "text": "Pogledajte www.example.test",
+        "refused": true
+      },
+      {
+        "text": "mailto:ana",
+        "refused": true
+      },
+      {
+        "text": "ana.zivkovic@example.test",
+        "refused": true
+      },
+      {
+        "text": "example.test/stranica",
+        "refused": true
+      },
+      {
+        "text": "ASP.NET i Node.js",
+        "refused": false
+      },
+      {
+        "text": "Ulaz/izlaz u nastavi",
+        "refused": false
+      },
+      {
+        "text": "Škola 2.0",
+        "refused": false
+      },
+      {
+        "text": "Fakultet tehničkih nauka",
+        "refused": false
+      }
+    ]
+  },
+  "emailAddress": {
+    "rule": "The address rule (ADR-09): one plain address of at most 254 characters, a local part of at most 64 of the dot-atom of RFC 5322, a domain of at least two labels, the last of two letters at least. No display name, comma, angle bracket, space or control character.",
+    "vectors": [
+      {
+        "address": "ana.zivkovic@example.test",
+        "accepted": true
+      },
+      {
+        "address": "ana+konferencija@sub.example.test",
+        "accepted": true
+      },
+      {
+        "address": "ana@",
+        "accepted": false
+      },
+      {
+        "address": "ana@example",
+        "accepted": false
+      },
+      {
+        "address": "Ana <ana@example.test>",
+        "accepted": false
+      },
+      {
+        "address": "ana@example.test, bojan@example.test",
+        "accepted": false
+      },
+      {
+        "address": "ana zivkovic@example.test",
+        "accepted": false
+      },
+      {
+        "address": "ana..zivkovic@example.test",
+        "accepted": false
+      },
+      {
+        "address": "ana@example.t",
+        "accepted": false
+      }
+    ]
+  },
+  "safeText": {
+    "rule": "Form texts are plain text; [label](target) is a link when the target is an https address or one of the named links, otherwise it stays text. The named links are the consent links of the conference (D6); a named link the conference has no address for is shown as its label.",
+    "namedLinks": [
+      "terms",
+      "privacy"
+    ],
+    "vectors": [
+      {
+        "text": "Plain text with <b>markup</b> and {braces}.",
+        "segments": [
+          {
+            "type": "text",
+            "text": "Plain text with <b>markup</b> and {braces}."
+          }
+        ]
+      },
+      {
+        "text": "I accept the [terms of publication](terms) and the [privacy notice](privacy).",
+        "segments": [
+          {
+            "type": "text",
+            "text": "I accept the "
+          },
+          {
+            "type": "link",
+            "text": "terms of publication",
+            "target": "terms"
+          },
+          {
+            "type": "text",
+            "text": " and the "
+          },
+          {
+            "type": "link",
+            "text": "privacy notice",
+            "target": "privacy"
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ]
+      },
+      {
+        "text": "Read [the guide](https://example.test/guide).",
+        "segments": [
+          {
+            "type": "text",
+            "text": "Read "
+          },
+          {
+            "type": "link",
+            "text": "the guide",
+            "target": "https://example.test/guide"
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ]
+      },
+      {
+        "text": "Not a link: [click](javascript:alert(1)) or [x](http://example.test).",
+        "segments": [
+          {
+            "type": "text",
+            "text": "Not a link: [click](javascript:alert(1)) or [x](http://example.test)."
+          }
+        ]
+      }
+    ]
+  },
+  "proofOfWork": {
+    "rule": "SHA-256 of the UTF-8 text challenge + \":\" + counter begins with at least difficulty zero bits; counter is a decimal number of at most 12 digits, without leading zeros.",
+    "difficulty": 16,
+    "vectors": [
+      {
+        "challenge": "confera-vector-1",
+        "difficulty": 10,
+        "counter": "2933",
+        "holds": true
+      },
+      {
+        "challenge": "confera-vector-1",
+        "difficulty": 10,
+        "counter": "2934",
+        "holds": false
+      },
+      {
+        "challenge": "confera-vector-1",
+        "difficulty": 10,
+        "counter": "02933",
+        "holds": false
+      },
+      {
+        "challenge": "confera-vector-2",
+        "difficulty": 10,
+        "counter": "304",
+        "holds": true
+      },
+      {
+        "challenge": "confera-vector-2",
+        "difficulty": 10,
+        "counter": "305",
+        "holds": false
+      },
+      {
+        "challenge": "confera-vector-2",
+        "difficulty": 10,
+        "counter": "0304",
+        "holds": false
+      }
+    ]
+  },
+  "definition": {
+    "schemaVersion": 1,
+    "type": "abstract",
+    "texts": {
+      "title": {
+        "en": "Abstract submission",
+        "sr": "Prijava apstrakta"
+      },
+      "intro": {
+        "en": "Fields marked with * are required.",
+        "sr": "Polja označena zvezdicom (*) su obavezna."
+      },
+      "submit": {
+        "en": "Send",
+        "sr": "Pošalji"
+      },
+      "thankYou": {
+        "en": "Thank you. Your submission has been received, and a confirmation with its reference is on its way to your email address.",
+        "sr": "Hvala. Vaša prijava je primljena, a potvrda sa brojem prijave stiže na Vašu adresu e-pošte."
+      },
+      "closed": {
+        "en": "Submissions for this conference are closed.",
+        "sr": "Prijave za ovu konferenciju su zatvorene."
+      },
+      "consent": {
+        "en": "I agree that the data in this form, mine and that of my co-authors, is processed for this conference as the [privacy notice](privacy) describes, and I accept the [terms of publication](terms).",
+        "sr": "Saglasan/na sam da se podaci iz ovog obrasca, moji i podaci mojih koautora, obrađuju za ovu konferenciju kako to opisuje [obaveštenje o privatnosti](privacy), i prihvatam [uslove objavljivanja](terms)."
+      }
+    },
+    "patterns": {
+      "orcid": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$",
+      "phone": "^\\+?[0-9][0-9 ()./-]{4,28}[0-9]$",
+      "taxNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$",
+      "registrationNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$"
+    },
+    "sections": [
+      {
+        "key": "participation",
+        "label": {
+          "en": "Participation",
+          "sr": "Učešće"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "participationType",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How do you take part?",
+              "sr": "Kako učestvujete?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "with_paper",
+                "label": {
+                  "en": "With an abstract and a paper",
+                  "sr": "Sa apstraktom i radom"
+                }
+              },
+              {
+                "value": "without_paper",
+                "label": {
+                  "en": "Without a paper",
+                  "sr": "Bez rada"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "authors",
+        "label": {
+          "en": "Authors",
+          "sr": "Autori"
+        },
+        "repeat": {
+          "min": 1,
+          "max": 3,
+          "itemLabel": {
+            "en": "Author {n}",
+            "sr": "Autor {n}"
+          },
+          "addLabel": {
+            "en": "Add an author",
+            "sr": "Dodaj autora"
+          },
+          "removeLabel": {
+            "en": "Remove author {n}",
+            "sr": "Ukloni autora {n}"
+          },
+          "noticeFrom": 4,
+          "notice": {
+            "en": "Each author beyond the third adds to the fee.",
+            "sr": "Svaki autor posle trećeg povećava kotizaciju."
+          }
+        },
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "firstName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "First name",
+              "sr": "Ime"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 100,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "given-name"
+          },
+          {
+            "key": "lastName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Last name",
+              "sr": "Prezime"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 100,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "family-name"
+          },
+          {
+            "key": "institution",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Institution",
+              "sr": "Institucija"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "organization"
+          },
+          {
+            "key": "institutionAddress",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Address of the institution",
+              "sr": "Adresa institucije"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "orcid",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "ORCID iD",
+              "sr": "ORCID iD"
+            },
+            "help": {
+              "en": "For example 0000-0002-1825-0097",
+              "sr": "Na primer 0000-0002-1825-0097"
+            },
+            "options": null,
+            "rules": {
+              "maxLength": 19,
+              "maxWords": null,
+              "pattern": "orcid",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "email",
+            "kind": "email",
+            "required": true,
+            "label": {
+              "en": "Email address",
+              "sr": "Adresa e-pošte"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 254,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "email"
+          },
+          {
+            "key": "phone",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Phone",
+              "sr": "Telefon"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "phone",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": true,
+            "autocomplete": "tel"
+          }
+        ]
+      },
+      {
+        "key": "paper",
+        "label": {
+          "en": "Paper",
+          "sr": "Rad"
+        },
+        "repeat": null,
+        "visibleWhen": {
+          "field": "participationType",
+          "in": [
+            "with_paper"
+          ]
+        },
+        "fields": [
+          {
+            "key": "title",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Title",
+              "sr": "Naslov"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "abstract",
+            "kind": "longText",
+            "required": true,
+            "label": {
+              "en": "Abstract",
+              "sr": "Apstrakt"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 10000,
+              "maxWords": 5,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "keywords",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Keywords",
+              "sr": "Ključne reči"
+            },
+            "help": {
+              "en": "Separated by commas",
+              "sr": "Odvojene zarezima"
+            },
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "publication",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "Where should the paper be published?",
+              "sr": "Gde da rad bude objavljen?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "proceedings",
+                "label": {
+                  "en": "Proceedings or selected papers",
+                  "sr": "Zbornik ili izabrani radovi"
+                }
+              },
+              {
+                "value": "partner_monograph",
+                "label": {
+                  "en": "A partner monograph",
+                  "sr": "Monografija partnera"
+                }
+              },
+              {
+                "value": "partner_journals",
+                "label": {
+                  "en": "The partner journals",
+                  "sr": "Časopisi partnera"
+                }
+              },
+              {
+                "value": "abstract_only",
+                "label": {
+                  "en": "The abstract only",
+                  "sr": "Samo apstrakt"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "files",
+        "label": {
+          "en": "Biographies",
+          "sr": "Biografije"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "biographies",
+            "kind": "file",
+            "required": false,
+            "label": {
+              "en": "Biographies with photos of all authors",
+              "sr": "Biografije sa fotografijama svih autora"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": {
+                "accept": [
+                  "pdf",
+                  "docx",
+                  "doc"
+                ],
+                "maxBytes": 20971520
+              }
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "presence",
+        "label": {
+          "en": "Attendance",
+          "sr": "Prisustvo"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "membership",
+            "kind": "yesNo",
+            "required": true,
+            "label": {
+              "en": "Are you a member of UdEkoM Balkans?",
+              "sr": "Da li ste član UdEkoM Balkans?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "yes",
+                "label": {
+                  "en": "Yes",
+                  "sr": "Da"
+                }
+              },
+              {
+                "value": "no",
+                "label": {
+                  "en": "No",
+                  "sr": "Ne"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "attendance",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How will you attend?",
+              "sr": "Kako ćete prisustvovati?"
+            },
+            "help": {
+              "en": "Attendance is not required for publication.",
+              "sr": "Prisustvo nije uslov za objavljivanje."
+            },
+            "options": [
+              {
+                "value": "in_person",
+                "label": {
+                  "en": "In person",
+                  "sr": "Uživo"
+                }
+              },
+              {
+                "value": "live_online",
+                "label": {
+                  "en": "Live online",
+                  "sr": "Onlajn, uživo"
+                }
+              },
+              {
+                "value": "prerecorded_video",
+                "label": {
+                  "en": "A prerecorded video (up to 7 minutes)",
+                  "sr": "Snimljen video (do 7 minuta)"
+                }
+              },
+              {
+                "value": "follow_online",
+                "label": {
+                  "en": "Follow online without presenting",
+                  "sr": "Pratim onlajn, bez izlaganja"
+                }
+              },
+              {
+                "value": "not_attending",
+                "label": {
+                  "en": "Not attending",
+                  "sr": "Ne prisustvujem"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "billing",
+        "label": {
+          "en": "Fee and billing",
+          "sr": "Kotizacija i račun"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "discountClaim",
+            "kind": "yesNo",
+            "required": true,
+            "label": {
+              "en": "Do you claim a discount or a fee waiver?",
+              "sr": "Da li tražite popust ili oslobađanje od kotizacije?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "yes",
+                "label": {
+                  "en": "Yes",
+                  "sr": "Da"
+                }
+              },
+              {
+                "value": "no",
+                "label": {
+                  "en": "No",
+                  "sr": "Ne"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "discountReason",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "On what grounds?",
+              "sr": "Po kom osnovu?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "award",
+                "label": {
+                  "en": "An award",
+                  "sr": "Nagrada"
+                }
+              },
+              {
+                "value": "peer_reviewer",
+                "label": {
+                  "en": "Peer reviewer",
+                  "sr": "Recenzent"
+                }
+              },
+              {
+                "value": "partner_institution",
+                "label": {
+                  "en": "A partner institution",
+                  "sr": "Partnerska institucija"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "discountClaim",
+              "in": [
+                "yes"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "payer",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "Who pays the fee?",
+              "sr": "Ko plaća kotizaciju?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "individual",
+                "label": {
+                  "en": "I do",
+                  "sr": "Ja"
+                }
+              },
+              {
+                "value": "employer",
+                "label": {
+                  "en": "My employer",
+                  "sr": "Moj poslodavac"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "billingAddress",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Your address for the invoice",
+              "sr": "Vaša adresa za račun"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "individual"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Name of the legal entity",
+              "sr": "Naziv pravnog lica"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerAddress",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Address of the legal entity",
+              "sr": "Adresa pravnog lica"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerTaxNumber",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Tax number (PIB)",
+              "sr": "PIB"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "taxNumber",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerRegistrationNumber",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Registration number",
+              "sr": "Matični broj"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "registrationNumber",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "billingEmail",
+            "kind": "email",
+            "required": true,
+            "label": {
+              "en": "Email address for the invoice",
+              "sr": "Adresa e-pošte za račun"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 254,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "paymentMethod",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How will you pay?",
+              "sr": "Kako ćete platiti?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "bank_wire",
+                "label": {
+                  "en": "Bank wire (EUR)",
+                  "sr": "Bankovni transfer (EUR)"
+                }
+              },
+              {
+                "value": "card",
+                "label": {
+                  "en": "Card",
+                  "sr": "Platna kartica"
+                }
+              },
+              {
+                "value": "paypal",
+                "label": {
+                  "en": "PayPal",
+                  "sr": "PayPal"
+                }
+              },
+              {
+                "value": "rsd_domestic",
+                "label": {
+                  "en": "RSD at a bank in Serbia",
+                  "sr": "U dinarima, u banci u Srbiji"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "other",
+        "label": {
+          "en": "Other",
+          "sr": "Ostalo"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "heardFrom",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Where did you hear about the conference?",
+              "sr": "Gde ste čuli za konferenciju?"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "comments",
+            "kind": "longText",
+            "required": false,
+            "label": {
+              "en": "Comments",
+              "sr": "Napomene"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 2000,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "agreement",
+        "label": {
+          "en": "Consent",
+          "sr": "Saglasnost"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "consent",
+            "kind": "consent",
+            "required": true,
+            "label": {
+              "en": "I agree",
+              "sr": "Saglasan/na sam"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      }
+    ]
+  },
+  "answers": [
+    {
+      "name": "a complete submission with a paper passes",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "without a paper, the fields of the paper are not shown, not required and not kept",
+      "answers": {
+        "participationType": "without_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Ostaje u nacrtu",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "without_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "nothing: every required field that is shown is named, in the order of the form",
+      "answers": {},
+      "errors": [
+        {
+          "path": "participationType",
+          "code": "required"
+        },
+        {
+          "path": "authors",
+          "code": "tooFewItems"
+        },
+        {
+          "path": "membership",
+          "code": "required"
+        },
+        {
+          "path": "attendance",
+          "code": "required"
+        },
+        {
+          "path": "discountClaim",
+          "code": "required"
+        },
+        {
+          "path": "payer",
+          "code": "required"
+        },
+        {
+          "path": "paymentMethod",
+          "code": "required"
+        },
+        {
+          "path": "consent",
+          "code": "required"
+        }
+      ]
+    },
+    {
+      "name": "keys outside the definition are refused, the prototype ones too",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true,
+        "__proto__": {
+          "isAdmin": true
+        },
+        "constructor": "x",
+        "isAdmin": true
+      },
+      "errors": [
+        {
+          "path": "__proto__",
+          "code": "unknownField"
+        },
+        {
+          "path": "constructor",
+          "code": "unknownField"
+        },
+        {
+          "path": "isAdmin",
+          "code": "unknownField"
+        }
+      ]
+    },
+    {
+      "name": "a key outside an author block is refused",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "role": "admin"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors[0].role",
+          "code": "unknownField"
+        }
+      ]
+    },
+    {
+      "name": "a title with an address is refused (ADR-08)",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Pogledajte https://example.test/x",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "title",
+          "code": "noUrl"
+        }
+      ]
+    },
+    {
+      "name": "a name with www. and an institution with a mail address are refused",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "www.example.test",
+            "lastName": "Živković",
+            "institution": "pisite@example.test",
+            "email": "ana.zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors[0].firstName",
+          "code": "noUrl"
+        },
+        {
+          "path": "authors[0].institution",
+          "code": "noUrl"
+        }
+      ]
+    },
+    {
+      "name": "a dotted word in a title is a word, not an address",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "ASP.NET i Node.js u nastavi",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "ASP.NET i Node.js u nastavi",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "markup in a title is text and passes the rules (the email escapes it)",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "<b>Podebljano</b> & \"navodnici\"",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "<b>Podebljano</b> & \"navodnici\"",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "six words where five are allowed",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "jedan dva tri četiri pet šest",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "abstract",
+          "code": "tooManyWords"
+        }
+      ]
+    },
+    {
+      "name": "a title one character over its limit",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "ŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽŽ",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "title",
+          "code": "tooLong"
+        }
+      ]
+    },
+    {
+      "name": "an abstract over its character limit, whatever its words",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "abstract",
+          "code": "tooLong"
+        }
+      ]
+    },
+    {
+      "name": "more authors than the form takes",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          },
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          },
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          },
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors",
+          "code": "tooManyItems"
+        }
+      ]
+    },
+    {
+      "name": "three authors pass, in order; the phone of a later author is not kept",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          },
+          {
+            "firstName": "Bojan",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "011 222 333"
+          },
+          {
+            "firstName": "Čedomir",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          },
+          {
+            "firstName": "Bojan",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          },
+          {
+            "firstName": "Čedomir",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "an address that is not one plain address",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana@"
+          },
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "Ana <ana@example.test>"
+          },
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana@example.test, bojan@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors[0].email",
+          "code": "notAnEmail"
+        },
+        {
+          "path": "authors[1].email",
+          "code": "notAnEmail"
+        },
+        {
+          "path": "authors[2].email",
+          "code": "notAnEmail"
+        }
+      ]
+    },
+    {
+      "name": "an ORCID iD and a phone that do not have their pattern",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "orcid": "0000-0002-1825",
+            "phone": "zovite me"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors[0].orcid",
+          "code": "pattern"
+        },
+        {
+          "path": "authors[0].phone",
+          "code": "pattern"
+        }
+      ]
+    },
+    {
+      "name": "the employer pays: its billing data become required (FR-FORM-05)",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "employer",
+        "billingAddress": "ne prikazuje se",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "employerName",
+          "code": "required"
+        },
+        {
+          "path": "employerAddress",
+          "code": "required"
+        },
+        {
+          "path": "employerTaxNumber",
+          "code": "required"
+        },
+        {
+          "path": "employerRegistrationNumber",
+          "code": "required"
+        },
+        {
+          "path": "billingEmail",
+          "code": "required"
+        }
+      ]
+    },
+    {
+      "name": "a claimed discount needs its ground",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "yes",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "discountReason",
+          "code": "required"
+        }
+      ]
+    },
+    {
+      "name": "a value that is not one of the options",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "maybe",
+        "attendance": "by_carrier_pigeon",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "membership",
+          "code": "notAnOption"
+        },
+        {
+          "path": "attendance",
+          "code": "notAnOption"
+        }
+      ]
+    },
+    {
+      "name": "a consent that is not given",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": false
+      },
+      "errors": [
+        {
+          "path": "consent",
+          "code": "required"
+        }
+      ]
+    },
+    {
+      "name": "a consent given as text is the wrong type",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": "true"
+      },
+      "errors": [
+        {
+          "path": "consent",
+          "code": "wrongType"
+        }
+      ]
+    },
+    {
+      "name": "a number where a text belongs, an object where the authors belong",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": {
+          "firstName": "Ana"
+        },
+        "title": 42,
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors",
+          "code": "wrongType"
+        },
+        {
+          "path": "title",
+          "code": "wrongType"
+        }
+      ]
+    },
+    {
+      "name": "a control character and a direction override in a name",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "An\u0007a",
+            "lastName": "Živ\u202Ekov",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [
+        {
+          "path": "authors[0].firstName",
+          "code": "invalidCharacters"
+        },
+        {
+          "path": "authors[0].lastName",
+          "code": "invalidCharacters"
+        }
+      ]
+    },
+    {
+      "name": "line breaks are kept in a long text and refused in a one-line text",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "ana.zivkovic@example.test",
+            "phone": "+381 11 123 4567"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "jedan\ndva",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true,
+        "comments": "Prvi red.\nDrugi red."
+      },
+      "errors": [
+        {
+          "path": "keywords",
+          "code": "invalidCharacters"
+        }
+      ]
+    },
+    {
+      "name": "values are trimmed and composed (NFC); the domain of an address is lower-cased",
+      "answers": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "  Ana  ",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "Ana.Zivkovic@EXAMPLE.TEST"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      },
+      "errors": [],
+      "kept": {
+        "participationType": "with_paper",
+        "authors": [
+          {
+            "firstName": "Ana",
+            "lastName": "Živković",
+            "institution": "Univerzitet u Izmišljenom Gradu",
+            "email": "Ana.Zivkovic@example.test"
+          }
+        ],
+        "title": "Učenje na daljinu u malim školama",
+        "abstract": "Kratak apstrakt od pet.",
+        "keywords": "učenje, škole",
+        "publication": "proceedings",
+        "membership": "no",
+        "attendance": "in_person",
+        "discountClaim": "no",
+        "payer": "individual",
+        "billingAddress": "Izmišljena 1, Beograd",
+        "paymentMethod": "bank_wire",
+        "consent": true
+      }
+    },
+    {
+      "name": "answers that are not an object",
+      "answers": [
+        "participationType",
+        "with_paper"
+      ],
+      "errors": [
+        {
+          "path": "",
+          "code": "wrongType"
+        }
+      ]
+    }
+  ],
+  "seededAbstractDefinition": {
+    "schemaVersion": 1,
+    "type": "abstract",
+    "texts": {
+      "title": {
+        "en": "Abstract submission",
+        "sr": "Prijava apstrakta"
+      },
+      "intro": {
+        "en": "Fields marked with * are required.",
+        "sr": "Polja označena zvezdicom (*) su obavezna."
+      },
+      "submit": {
+        "en": "Send",
+        "sr": "Pošalji"
+      },
+      "thankYou": {
+        "en": "Thank you. Your submission has been received, and a confirmation with its reference is on its way to your email address.",
+        "sr": "Hvala. Vaša prijava je primljena, a potvrda sa brojem prijave stiže na Vašu adresu e-pošte."
+      },
+      "closed": {
+        "en": "Submissions for this conference are closed.",
+        "sr": "Prijave za ovu konferenciju su zatvorene."
+      },
+      "consent": {
+        "en": "I agree that the data in this form, mine and that of my co-authors, is processed for this conference as the [privacy notice](privacy) describes, and I accept the [terms of publication](terms).",
+        "sr": "Saglasan/na sam da se podaci iz ovog obrasca, moji i podaci mojih koautora, obrađuju za ovu konferenciju kako to opisuje [obaveštenje o privatnosti](privacy), i prihvatam [uslove objavljivanja](terms)."
+      }
+    },
+    "patterns": {
+      "orcid": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$",
+      "phone": "^\\+?[0-9][0-9 ()./-]{4,28}[0-9]$",
+      "taxNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$",
+      "registrationNumber": "^[A-Za-z0-9][A-Za-z0-9 ./-]{2,28}[A-Za-z0-9]$"
+    },
+    "sections": [
+      {
+        "key": "participation",
+        "label": {
+          "en": "Participation",
+          "sr": "Učešće"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "participationType",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How do you take part?",
+              "sr": "Kako učestvujete?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "with_paper",
+                "label": {
+                  "en": "With an abstract and a paper",
+                  "sr": "Sa apstraktom i radom"
+                }
+              },
+              {
+                "value": "without_paper",
+                "label": {
+                  "en": "Without a paper",
+                  "sr": "Bez rada"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "authors",
+        "label": {
+          "en": "Authors",
+          "sr": "Autori"
+        },
+        "repeat": {
+          "min": 1,
+          "max": 10,
+          "itemLabel": {
+            "en": "Author {n}",
+            "sr": "Autor {n}"
+          },
+          "addLabel": {
+            "en": "Add an author",
+            "sr": "Dodaj autora"
+          },
+          "removeLabel": {
+            "en": "Remove author {n}",
+            "sr": "Ukloni autora {n}"
+          },
+          "noticeFrom": 4,
+          "notice": {
+            "en": "Each author beyond the third adds to the fee.",
+            "sr": "Svaki autor posle trećeg povećava kotizaciju."
+          }
+        },
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "firstName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "First name",
+              "sr": "Ime"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 100,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "given-name"
+          },
+          {
+            "key": "lastName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Last name",
+              "sr": "Prezime"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 100,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "family-name"
+          },
+          {
+            "key": "institution",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Institution",
+              "sr": "Institucija"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "organization"
+          },
+          {
+            "key": "institutionAddress",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Address of the institution",
+              "sr": "Adresa institucije"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "orcid",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "ORCID iD",
+              "sr": "ORCID iD"
+            },
+            "help": {
+              "en": "For example 0000-0002-1825-0097",
+              "sr": "Na primer 0000-0002-1825-0097"
+            },
+            "options": null,
+            "rules": {
+              "maxLength": 19,
+              "maxWords": null,
+              "pattern": "orcid",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "email",
+            "kind": "email",
+            "required": true,
+            "label": {
+              "en": "Email address",
+              "sr": "Adresa e-pošte"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 254,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": "email"
+          },
+          {
+            "key": "phone",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Phone",
+              "sr": "Telefon"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "phone",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": true,
+            "autocomplete": "tel"
+          }
+        ]
+      },
+      {
+        "key": "paper",
+        "label": {
+          "en": "Paper",
+          "sr": "Rad"
+        },
+        "repeat": null,
+        "visibleWhen": {
+          "field": "participationType",
+          "in": [
+            "with_paper"
+          ]
+        },
+        "fields": [
+          {
+            "key": "title",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Title",
+              "sr": "Naslov"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "abstract",
+            "kind": "longText",
+            "required": true,
+            "label": {
+              "en": "Abstract",
+              "sr": "Apstrakt"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 10000,
+              "maxWords": 500,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "keywords",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Keywords",
+              "sr": "Ključne reči"
+            },
+            "help": {
+              "en": "Separated by commas",
+              "sr": "Odvojene zarezima"
+            },
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "publication",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "Where should the paper be published?",
+              "sr": "Gde da rad bude objavljen?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "proceedings",
+                "label": {
+                  "en": "Proceedings or selected papers",
+                  "sr": "Zbornik ili izabrani radovi"
+                }
+              },
+              {
+                "value": "partner_monograph",
+                "label": {
+                  "en": "A partner monograph",
+                  "sr": "Monografija partnera"
+                }
+              },
+              {
+                "value": "partner_journals",
+                "label": {
+                  "en": "The partner journals",
+                  "sr": "Časopisi partnera"
+                }
+              },
+              {
+                "value": "abstract_only",
+                "label": {
+                  "en": "The abstract only",
+                  "sr": "Samo apstrakt"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "files",
+        "label": {
+          "en": "Biographies",
+          "sr": "Biografije"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "biographies",
+            "kind": "file",
+            "required": false,
+            "label": {
+              "en": "Biographies with photos of all authors",
+              "sr": "Biografije sa fotografijama svih autora"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": {
+                "accept": [
+                  "pdf",
+                  "docx",
+                  "doc"
+                ],
+                "maxBytes": 20971520
+              }
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "presence",
+        "label": {
+          "en": "Attendance",
+          "sr": "Prisustvo"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "membership",
+            "kind": "yesNo",
+            "required": true,
+            "label": {
+              "en": "Are you a member of UdEkoM Balkans?",
+              "sr": "Da li ste član UdEkoM Balkans?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "yes",
+                "label": {
+                  "en": "Yes",
+                  "sr": "Da"
+                }
+              },
+              {
+                "value": "no",
+                "label": {
+                  "en": "No",
+                  "sr": "Ne"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "attendance",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How will you attend?",
+              "sr": "Kako ćete prisustvovati?"
+            },
+            "help": {
+              "en": "Attendance is not required for publication.",
+              "sr": "Prisustvo nije uslov za objavljivanje."
+            },
+            "options": [
+              {
+                "value": "in_person",
+                "label": {
+                  "en": "In person",
+                  "sr": "Uživo"
+                }
+              },
+              {
+                "value": "live_online",
+                "label": {
+                  "en": "Live online",
+                  "sr": "Onlajn, uživo"
+                }
+              },
+              {
+                "value": "prerecorded_video",
+                "label": {
+                  "en": "A prerecorded video (up to 7 minutes)",
+                  "sr": "Snimljen video (do 7 minuta)"
+                }
+              },
+              {
+                "value": "follow_online",
+                "label": {
+                  "en": "Follow online without presenting",
+                  "sr": "Pratim onlajn, bez izlaganja"
+                }
+              },
+              {
+                "value": "not_attending",
+                "label": {
+                  "en": "Not attending",
+                  "sr": "Ne prisustvujem"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "billing",
+        "label": {
+          "en": "Fee and billing",
+          "sr": "Kotizacija i račun"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "discountClaim",
+            "kind": "yesNo",
+            "required": true,
+            "label": {
+              "en": "Do you claim a discount or a fee waiver?",
+              "sr": "Da li tražite popust ili oslobađanje od kotizacije?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "yes",
+                "label": {
+                  "en": "Yes",
+                  "sr": "Da"
+                }
+              },
+              {
+                "value": "no",
+                "label": {
+                  "en": "No",
+                  "sr": "Ne"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "discountReason",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "On what grounds?",
+              "sr": "Po kom osnovu?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "award",
+                "label": {
+                  "en": "An award",
+                  "sr": "Nagrada"
+                }
+              },
+              {
+                "value": "peer_reviewer",
+                "label": {
+                  "en": "Peer reviewer",
+                  "sr": "Recenzent"
+                }
+              },
+              {
+                "value": "partner_institution",
+                "label": {
+                  "en": "A partner institution",
+                  "sr": "Partnerska institucija"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "discountClaim",
+              "in": [
+                "yes"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "payer",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "Who pays the fee?",
+              "sr": "Ko plaća kotizaciju?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "individual",
+                "label": {
+                  "en": "I do",
+                  "sr": "Ja"
+                }
+              },
+              {
+                "value": "employer",
+                "label": {
+                  "en": "My employer",
+                  "sr": "Moj poslodavac"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "billingAddress",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Your address for the invoice",
+              "sr": "Vaša adresa za račun"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "individual"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerName",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Name of the legal entity",
+              "sr": "Naziv pravnog lica"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": true,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerAddress",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Address of the legal entity",
+              "sr": "Adresa pravnog lica"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerTaxNumber",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Tax number (PIB)",
+              "sr": "PIB"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "taxNumber",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "employerRegistrationNumber",
+            "kind": "text",
+            "required": true,
+            "label": {
+              "en": "Registration number",
+              "sr": "Matični broj"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 30,
+              "maxWords": null,
+              "pattern": "registrationNumber",
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "billingEmail",
+            "kind": "email",
+            "required": true,
+            "label": {
+              "en": "Email address for the invoice",
+              "sr": "Adresa e-pošte za račun"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 254,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": {
+              "field": "payer",
+              "in": [
+                "employer"
+              ]
+            },
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "paymentMethod",
+            "kind": "choice",
+            "required": true,
+            "label": {
+              "en": "How will you pay?",
+              "sr": "Kako ćete platiti?"
+            },
+            "help": null,
+            "options": [
+              {
+                "value": "bank_wire",
+                "label": {
+                  "en": "Bank wire (EUR)",
+                  "sr": "Bankovni transfer (EUR)"
+                }
+              },
+              {
+                "value": "card",
+                "label": {
+                  "en": "Card",
+                  "sr": "Platna kartica"
+                }
+              },
+              {
+                "value": "paypal",
+                "label": {
+                  "en": "PayPal",
+                  "sr": "PayPal"
+                }
+              },
+              {
+                "value": "rsd_domestic",
+                "label": {
+                  "en": "RSD at a bank in Serbia",
+                  "sr": "U dinarima, u banci u Srbiji"
+                }
+              }
+            ],
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "other",
+        "label": {
+          "en": "Other",
+          "sr": "Ostalo"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "heardFrom",
+            "kind": "text",
+            "required": false,
+            "label": {
+              "en": "Where did you hear about the conference?",
+              "sr": "Gde ste čuli za konferenciju?"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 300,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          },
+          {
+            "key": "comments",
+            "kind": "longText",
+            "required": false,
+            "label": {
+              "en": "Comments",
+              "sr": "Napomene"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": 2000,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      },
+      {
+        "key": "agreement",
+        "label": {
+          "en": "Consent",
+          "sr": "Saglasnost"
+        },
+        "repeat": null,
+        "visibleWhen": null,
+        "fields": [
+          {
+            "key": "consent",
+            "kind": "consent",
+            "required": true,
+            "label": {
+              "en": "I agree",
+              "sr": "Saglasan/na sam"
+            },
+            "help": null,
+            "options": null,
+            "rules": {
+              "maxLength": null,
+              "maxWords": null,
+              "pattern": null,
+              "noUrl": false,
+              "file": null
+            },
+            "visibleWhen": null,
+            "onlyFirstInRepeat": false,
+            "autocomplete": null
+          }
+        ]
+      }
+    ]
+  }
+}

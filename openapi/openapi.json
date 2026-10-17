@@ -2404,6 +2404,7 @@
         "type": "object",
         "properties": {
           "state": {
+            "description": "`draft`; `open`: the forms take submissions (the action is called \"Open for\nsubmissions\", D10); `closed`: they take none (\"Close submissions\"); `archived`: final.",
             "enum": [
               "draft",
               "open",

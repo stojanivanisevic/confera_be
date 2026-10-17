@@ -1,0 +1,280 @@
+{
+  "$comment": "Generated from src/modules/forms by `pnpm openapi:generate`; do not edit. The configuration of an abstract form (FR-FORM-02): what an admin may set over the catalogue. Left out: the catalogue's default. The server refuses besides: a mandatory field switched off or made optional (mandatoryField), a limit over the catalogue's cap (aboveCap), an option the field does not have (unknownOption), a word limit or file rule on a field without one (notApplicable), a file type the field may not take (typeNotAllowed), and a text that is not plain text with the safe link syntax (tooLong, invalidCharacters, badLink, required).",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "texts": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "title",
+          "intro",
+          "submit",
+          "thankYou",
+          "closed",
+          "consent"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "sr": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "en",
+          "sr"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "maxAuthors": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "authorNoticeFrom": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 50
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "authorNotice": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "en": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "sr": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "en",
+            "sr"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sections": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "participation",
+          "authors",
+          "paper",
+          "files",
+          "presence",
+          "billing",
+          "other",
+          "agreement"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "sr": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "en",
+              "sr"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "fields": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "participationType",
+          "firstName",
+          "lastName",
+          "institution",
+          "institutionAddress",
+          "orcid",
+          "email",
+          "phone",
+          "title",
+          "abstract",
+          "keywords",
+          "publication",
+          "biographies",
+          "membership",
+          "attendance",
+          "discountClaim",
+          "discountReason",
+          "payer",
+          "billingAddress",
+          "employerName",
+          "employerAddress",
+          "employerTaxNumber",
+          "employerRegistrationNumber",
+          "billingEmail",
+          "paymentMethod",
+          "heardFrom",
+          "comments",
+          "consent"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "sr": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "en",
+              "sr"
+            ],
+            "additionalProperties": false
+          },
+          "help": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "sr": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "en",
+                  "sr"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "en": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "sr": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "en",
+                "sr"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "maxLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "maxWords": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "accept": {
+                "minItems": 1,
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "pdf",
+                    "docx",
+                    "doc",
+                    "jpeg",
+                    "png"
+                  ]
+                }
+              },
+              "maxBytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 52428800
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
