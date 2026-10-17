@@ -190,7 +190,8 @@ describe('conferences and templates', () => {
     expect(copied.items.map(({ type, language }) => `${type}/${language}`)).toEqual(
       original.items.map(({ type, language }) => `${type}/${language}`),
     );
-    expect(copied.items.length).toBe(14);
+    // Eight types in two languages (the confirmation of a submission came with 0.3.0).
+    expect(copied.items.length).toBe(16);
     await as(e2e, adminA, 'patch', `/api/v1/conferences/${copyId}`).send({
       venue: 'Kragujevac',
       version: 1,
