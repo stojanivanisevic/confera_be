@@ -45,3 +45,46 @@ export class OwnPageGuard implements CanActivate {
     return true;
   }
 }
+
+const PROTOTYPE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+/** The paths of keys named like a prototype member, at any depth of a parsed body. */
+export function prototypeKeyPaths(value: unknown, prefix: string): string[] {
+  if (value === null || typeof value !== 'object') {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => prototypeKeyPaths(item, `${prefix}[${String(index)}]`));
+  }
+  const paths: string[] = [];
+  for (const key of Object.keys(value)) {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
+    if (PROTOTYPE_KEYS.has(key)) {
+      paths.push(path);
+    } else {
+      paths.push(...prototypeKeyPaths((value as Record<string, unknown>)[key], path));
+    }
+  }
+  return paths;
+}
+
+/**
+ * The answers of a submit, as the JSON parser gave them, before the validation pipe drops
+ * keys named like a prototype member: such a key is refused (ST-41, ADR-09: "keys outside
+ * the catalogue are refused"), as the browser's interpreter refuses it, never dropped.
+ */
+@Injectable()
+export class NoPrototypeKeysGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const body = context.switchToHttp().getRequest<Request>().body as unknown;
+    const paths = prototypeKeyPaths(body, '');
+    if (paths.length > 0) {
+      throw new ProblemException(
+        400,
+        'validation_failed',
+        paths.map((path) => ({ path, code: 'unknownField' })),
+      );
+    }
+    return true;
+  }
+}

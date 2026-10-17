@@ -1,4 +1,5 @@
 import type { AddressInfo } from 'node:net';
+import { join } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { createApp } from '../../../src/bootstrap';
@@ -8,6 +9,7 @@ import {
   validProductionEnvironment,
 } from '../../../src/config/testing/valid-environment';
 import { e2eDatabase } from './e2e-database';
+import { repoRoot } from '../../support/run-node';
 import { traceLog } from './trace';
 
 /**
@@ -47,6 +49,19 @@ export interface E2eApp {
   close(): Promise<void>;
 }
 
+/**
+ * Files of the end-to-end tests: a folder of this run under tmp/, and an antivirus address
+ * where nothing listens (ClamAV is down: files stay pending, fail closed). A test that needs
+ * a scanner starts the fake one (test/support/fake-clamd.ts) and passes its address. The
+ * background jobs run when a test calls their tick.
+ */
+export const TEST_FILE_DIRECTORY = join(repoRoot, 'tmp', 'e2e-files');
+const TEST_FILES = {
+  FILE_STORAGE_DIR: TEST_FILE_DIRECTORY,
+  CLAMAV_ADDRESS: '127.0.0.1:9',
+  JOBS_INTERVAL_SECONDS: '0',
+};
+
 /** The environment of a server whose two database roles are the ones of the test database. */
 export function e2eEnvironment(overrides: RawEnvironment = {}): Record<string, string | undefined> {
   return {
@@ -55,6 +70,7 @@ export function e2eEnvironment(overrides: RawEnvironment = {}): Record<string, s
     SYSTEM_DATABASE_URL: e2eDatabase.systemUrl,
     // The outbox worker runs when a test calls its tick, not on a timer of its own.
     MAIL_WORKER_INTERVAL_SECONDS: '0',
+    ...TEST_FILES,
     ...overrides,
   };
 }
@@ -68,6 +84,7 @@ export function e2eLocalEnvironment(
     DATABASE_URL: e2eDatabase.applicationUrl,
     SYSTEM_DATABASE_URL: e2eDatabase.systemUrl,
     MAIL_WORKER_INTERVAL_SECONDS: '0',
+    ...TEST_FILES,
     ...overrides,
   };
 }

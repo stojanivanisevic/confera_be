@@ -1,4 +1,4 @@
-import { Body, Get, HttpCode, Param, Post, Req } from '@nestjs/common';
+import { Body, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiHeader } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { clientAddress } from '../../common/http/client-address';
@@ -15,7 +15,7 @@ import {
   UploadedFileDto,
 } from './forms.dto';
 import { IntakeService } from './intake.service';
-import { OwnPage } from './own-page.guard';
+import { NoPrototypeKeysGuard, OwnPage } from './own-page.guard';
 
 /** The header that carries the form token (ADR-08): a custom header, so a preflight is forced and refused. */
 export const FORM_TOKEN_HEADER = 'x-form-token';
@@ -96,6 +96,7 @@ export class PublicFormsController {
   @Post(':slug/submissions')
   @Public()
   @OwnPage('application/json')
+  @UseGuards(NoPrototypeKeysGuard)
   @HttpCode(201)
   @ApiHeader({ name: 'X-Form-Token', required: true })
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'A UUID per form instance.' })
@@ -108,7 +109,7 @@ export class PublicFormsController {
     if (key === undefined || !UUID.test(key)) {
       throw new ProblemException(400, 'idempotency_key_missing');
     }
-    // The answers as the JSON parser gave them: keys like `__proto__` are seen and refused.
+    // The answers as the JSON parser gave them (a key like `__proto__` was refused before).
     const raw = (request.body as { answers?: unknown } | undefined)?.answers;
     return this.intake.submit({
       slug,

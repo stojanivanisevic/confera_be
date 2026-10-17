@@ -5,7 +5,7 @@ import { SendBreaker } from '../held-mail/send-breaker';
 import { ConferenceFormsController, FormsController } from './forms.controller';
 import { FormsService } from './forms.service';
 import { IntakeService } from './intake.service';
-import { OwnPageGuard } from './own-page.guard';
+import { NoPrototypeKeysGuard, OwnPageGuard } from './own-page.guard';
 import { PublicFormsController } from './public-forms.controller';
 import { PublicLimits } from './public-limits';
 
@@ -16,6 +16,14 @@ import { PublicLimits } from './public-limits';
 @Module({
   imports: [FilesModule],
   controllers: [FormsController, ConferenceFormsController, PublicFormsController],
-  providers: [FormsService, IntakeService, PublicLimits, SendBreaker, UploadsService, OwnPageGuard],
+  providers: [
+    FormsService,
+    IntakeService,
+    PublicLimits,
+    SendBreaker,
+    UploadsService,
+    OwnPageGuard,
+    NoPrototypeKeysGuard,
+  ],
 })
 export class FormsModule {}
