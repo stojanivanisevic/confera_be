@@ -16,12 +16,7 @@ import type { Access } from '../access/access';
 import { CurrentAccess, Permission } from '../access/access.decorators';
 import { AuditRecorder } from '../audit/audit-recorder';
 import { deadlineEnd, deadlinePassed } from './deadline-time';
-import {
-  DEADLINE_KINDS,
-  type DeadlineKind,
-  DeadlinesDto,
-  SetDeadlineDto,
-} from './deadlines.dto';
+import { DEADLINE_KINDS, type DeadlineKind, DeadlinesDto, SetDeadlineDto } from './deadlines.dto';
 
 /**
  * The deadlines of a conference (M3-BE-05; FR-DL-01 to 03): abstract submission, fee
