@@ -113,6 +113,19 @@ export class OrganisationBreakerDto {
   version!: number;
 }
 
+/** The fields whose number changed, with old and new value as text (the audit log's form). */
+export function changedOf(
+  pairs: Readonly<Record<string, readonly [number, number]>>,
+): Record<string, { old: string; new: string }> {
+  const changes: Record<string, { old: string; new: string }> = {};
+  for (const [field, [old, next]] of Object.entries(pairs)) {
+    if (old !== next) {
+      changes[field] = { old: String(old), new: String(next) };
+    }
+  }
+  return changes;
+}
+
 @Injectable()
 export class HeldMailService {
   constructor(
@@ -218,10 +231,10 @@ export class HeldMailService {
         action: 'organisation.breaker_changed',
         subjectType: 'organisation_breaker',
         subjectId: before.id,
-        changes: {
-          breakerPerHour: { old: String(before.breakerPerHour), new: String(input.perHour) },
-          breakerPerDay: { old: String(before.breakerPerDay), new: String(input.perDay) },
-        },
+        changes: changedOf({
+          breakerPerHour: [before.breakerPerHour, input.perHour],
+          breakerPerDay: [before.breakerPerDay, input.perDay],
+        }),
       });
     });
     return this.list({});

@@ -54,6 +54,34 @@ export async function seedTemplates(client, organisationId) {
   return written;
 }
 
+/**
+ * The definition of the seeded abstract form (M3-BE-01): the catalogue's defaults, as the
+ * API builds them, taken from its contract (contracts/form-rule-vectors.json, written by
+ * `pnpm openapi:generate` and held current by `pnpm openapi:check`).
+ */
+export function seededAbstractDefinition() {
+  return JSON.parse(
+    readFileSync(path.join(repoRoot, 'contracts', 'form-rule-vectors.json'), 'utf8'),
+  ).seededAbstractDefinition;
+}
+
+/**
+ * The abstract form of every conference of the organisation that has none: a draft with
+ * the catalogue's defaults, not published (an admin looks at it and publishes it). Its
+ * public key is 16 random hexadecimal digits. Never changes a form an admin edited.
+ */
+export async function seedAbstractForms(client, organisationId) {
+  const result = await client.query(
+    `INSERT INTO forms (organisation_id, conference_id, type, public_key, configuration)
+     SELECT c.organisation_id, c.id, 'abstract', substr(md5(gen_random_uuid()::text), 1, 16), '{}'
+     FROM conferences c
+     WHERE c.organisation_id = $1
+       AND NOT EXISTS (SELECT 1 FROM forms f WHERE f.conference_id = c.id AND f.type = 'abstract')`,
+    [organisationId],
+  );
+  return result.rowCount ?? 0;
+}
+
 /** Runs `work` in one transaction inside an organisation, so that its policies apply. */
 export async function inOrganisation(client, organisationId, work) {
   await client.query('BEGIN');

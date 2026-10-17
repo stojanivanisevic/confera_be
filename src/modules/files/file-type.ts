@@ -196,7 +196,7 @@ export async function detectFileType(path: string): Promise<DetectedType> {
     }
     if (head.length === 8 && head.equals(CFB)) {
       const names = await compoundNames(handle, size);
-      if (names === null || !names.includes('WordDocument')) {
+      if (!names?.includes('WordDocument')) {
         return UNKNOWN;
       }
       return {

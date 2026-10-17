@@ -18,6 +18,21 @@
           "role": "reviewer",
           "password": "invented-Jasen-Kula-Reka-42"
         }
+      ],
+      "conferences": [
+        {
+          "id": "0e2e0000-0000-4000-8000-0000000000c1",
+          "name": "Probna konferencija (izmišljeno)",
+          "code": "PK",
+          "editionYear": 2027,
+          "state": "open",
+          "listedSites": ["http://localhost:4000"],
+          "abstractDeadline": "2099-12-31",
+          "form": {
+            "id": "0e2e0000-0000-4000-8000-0000000000f1",
+            "slug": "e2eprobnaforma01"
+          }
+        }
       ]
     },
     {

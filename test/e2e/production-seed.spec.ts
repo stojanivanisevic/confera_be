@@ -109,19 +109,30 @@ describe('the production seed and the first admin (ST-27)', () => {
     const templates = await inOrganisation<{ type: string; language: string }>(
       'SELECT type, language FROM mail_templates WHERE conference_id IS NULL ORDER BY type, language',
     );
-    expect(templates).toHaveLength(14);
+    // Eight types in English and Serbian: the confirmation of a submission came with 0.3.0.
+    expect(templates).toHaveLength(16);
     expect(
       templates.filter(({ type }) => type === 'invitation' || type === 'password_reset'),
     ).toHaveLength(4);
     expect(await inOrganisation('SELECT id FROM users')).toEqual([]);
     expect(await inOrganisation('SELECT id FROM mail_servers')).toEqual([]);
+    // Each conference has its abstract form, a draft with the catalogue's defaults (M3-BE-01).
+    const forms = await inOrganisation<{ type: string; current_version_id: string | null }>(
+      'SELECT type, current_version_id FROM forms',
+    );
+    expect(forms).toEqual(
+      Array.from({ length: 5 }, () => ({ type: 'abstract', current_version_id: null })),
+    );
   });
 
   it('is the same after a second run: never a second copy, an edit kept', async () => {
     await inOrganisation("UPDATE conferences SET venue = 'Beograd' WHERE code = 'IT'");
     const result = await seed();
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('0 new templates and 0 new conference drafts');
+    expect(result.stdout).toContain(
+      '0 new templates, 0 new conference drafts and 0 new abstract forms',
+    );
+    expect(await inOrganisation('SELECT id FROM forms')).toHaveLength(5);
     expect(await inOrganisation('SELECT id FROM conferences')).toHaveLength(5);
     expect(await inOrganisation("SELECT venue FROM conferences WHERE code = 'IT'")).toEqual([
       { venue: 'Beograd' },

@@ -747,6 +747,55 @@ describe('forms and intake (M3)', () => {
       expect(withIt.status).toBe(201);
     });
 
+    it('the breaker of the organisation holds the confirmations of all its forms (ADR-08)', async () => {
+      const form = await openForm(e2e, admin);
+      const before = await as(e2e, admin, 'get', '/api/v1/held-mail');
+      const { breaker } = before.body as { breaker: { version: number } };
+      const set = await as(e2e, admin, 'patch', '/api/v1/held-mail/breaker').send({
+        perHour: 1,
+        perDay: 200,
+        version: breaker.version,
+      });
+      expect(set.status).toBe(200);
+      expect((set.body as { breaker: { perHour: number } }).breaker.perHour).toBe(1);
+      try {
+        const address = freshAddress();
+        const { formToken } = await tokenFor(e2e, form.slug, address);
+        await ageTokens(owner, orgA());
+        const response = await submit(
+          e2e,
+          form.slug,
+          formToken,
+          { language: 'en', answers: abstractAnswers() },
+          { address },
+        );
+        expect(response.status).toBe(201);
+        const [row] = await inOrganisation<{ status: string; held_reason: string }>(
+          owner,
+          orgA(),
+          "SELECT status, held_reason FROM mail_outbox WHERE kind = 'submission_confirmation' AND form_id = $1",
+          [form.formId],
+        );
+        expect(row).toEqual({ status: 'held', held_reason: 'send_breaker_organisation' });
+        const audit = await as(
+          e2e,
+          admin,
+          'get',
+          '/api/v1/audit?action=organisation.breaker_changed',
+        );
+        expect((audit.body as { items: { changes: unknown }[] }).items[0]?.changes).toEqual({
+          breakerPerHour: { old: '30', new: '1' },
+        });
+      } finally {
+        const now = await as(e2e, admin, 'get', '/api/v1/held-mail');
+        await as(e2e, admin, 'patch', '/api/v1/held-mail/breaker').send({
+          perHour: 30,
+          perDay: 200,
+          version: (now.body as { breaker: { version: number } }).breaker.version,
+        });
+      }
+    });
+
     it('limits the token fetches of one address (NFR-SEC-02)', async () => {
       const form = await openForm(e2e, admin);
       const address = freshAddress();

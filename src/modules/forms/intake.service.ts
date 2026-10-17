@@ -17,7 +17,7 @@ import { DEADLINE_OF_FORM, formState, type FormStateResult } from './form-state'
 import type { FormTokenDto, PublicFormDto, SubmittedDto } from './forms.dto';
 import { newChallenge, PROOF_OF_WORK_DIFFICULTY, proofOfWorkHolds } from './proof-of-work';
 import { LIMITS, PublicLimits } from './public-limits';
-import { type AnswerValue, type Answers, checkAnswers } from './rules';
+import { type AnswerValue, checkAnswers } from './rules';
 
 /**
  * The public intake of a form (ADR-08, M3-BE-03; FR-FORM-07, 12, 13, 14, FR-SUB-01): read
@@ -220,7 +220,7 @@ export class IntakeService {
       throw new ProblemException(403, 'form_token_invalid');
     }
     const row = await tx.formToken.findFirst({ where: { tokenHash: tokenHash(token) } });
-    if (row === null || row.formId !== formId || row.expiresAt.getTime() <= now.getTime()) {
+    if (row?.formId !== formId || row.expiresAt.getTime() <= now.getTime()) {
       throw new ProblemException(403, 'form_token_invalid');
     }
     if (row.usedAt !== null) {
@@ -403,7 +403,7 @@ export class IntakeService {
         formVersionId: version.id,
         reference,
         language,
-        answers: answers as Prisma.InputJsonValue,
+        answers: answers,
         title: asText(answers.title),
         participationType: asText(answers.participationType),
         firstAuthorName:

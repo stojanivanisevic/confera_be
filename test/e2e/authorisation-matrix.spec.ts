@@ -274,8 +274,7 @@ describe('the authorisation matrix of the admin API', () => {
         .replace(/\{token\}/g, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
         .replace('{number}', '1')
         .replace('{kind}', 'abstract_submission')
-        .replace('{fileId}', file) +
-      (SAMPLE_QUERIES[operation.id] ?? '')
+        .replace('{fileId}', file) + (SAMPLE_QUERIES[operation.id] ?? '')
     );
   }
 

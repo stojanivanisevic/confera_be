@@ -198,7 +198,7 @@ describe('seed:e2e', () => {
               argon2id: password !== undefined,
             })),
         );
-        expect(await context.run(organisation.id, () => database.db.mailTemplate.count())).toBe(14);
+        expect(await context.run(organisation.id, () => database.db.mailTemplate.count())).toBe(16);
       },
     );
 
@@ -219,6 +219,15 @@ describe('seed:e2e', () => {
       );
       expect(stored?.displayName).toBe(person.displayName);
     });
+  });
+
+  it('publishes the abstract form of the seeded conference under its fixed address (M3)', async () => {
+    expect((await run('test')).exitCode).toBe(0);
+    const response = await e2e.public('/public/v1/forms/e2eprobnaforma01');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({ slug: 'e2eprobnaforma01', state: 'open', versionNumber: 1 }),
+    );
   });
 
   it('signs a seeded person in with the password of the seed file', async () => {

@@ -21,7 +21,7 @@ import path from 'node:path';
 import { hash } from '@node-rs/argon2';
 import pg from 'pg';
 import { repoRoot } from './lib/process.mjs';
-import { seedTemplates } from './lib/seed-data.mjs';
+import { seedAbstractForms, seededAbstractDefinition, seedTemplates } from './lib/seed-data.mjs';
 import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
 import { requireStage } from './lib/stage.mjs';
 
@@ -54,6 +54,52 @@ function readSeed() {
     }
   }
   return seed;
+}
+
+/**
+ * A conference of the end-to-end tests of the web application (M3): open for submissions,
+ * with its deadline and its abstract form published under a fixed address, so that the
+ * hosted form, the frame page and the snippet can be tried against the real API.
+ */
+async function seedConference(client, organisationId, conference) {
+  await client.query(
+    `INSERT INTO conferences (id, organisation_id, name, code, edition_year, listed_sites, languages, state)
+     VALUES ($1, $2, $3, $4, $5, $6::text[], ARRAY['en', 'sr']::text[], $7)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, listed_sites = EXCLUDED.listed_sites,
+       state = EXCLUDED.state`,
+    [
+      conference.id,
+      organisationId,
+      conference.name,
+      conference.code,
+      conference.editionYear,
+      conference.listedSites,
+      conference.state,
+    ],
+  );
+  await client.query(
+    `INSERT INTO conference_deadlines (organisation_id, conference_id, kind, ends_on)
+     VALUES ($1, $2, 'abstract_submission', $3)
+     ON CONFLICT (organisation_id, conference_id, kind) DO UPDATE SET ends_on = EXCLUDED.ends_on`,
+    [organisationId, conference.id, conference.abstractDeadline],
+  );
+  const form = conference.form;
+  await client.query(
+    `INSERT INTO forms (id, organisation_id, conference_id, type, public_key, configuration)
+     VALUES ($1, $2, $3, 'abstract', $4, '{}') ON CONFLICT (id) DO NOTHING`,
+    [form.id, organisationId, conference.id, form.slug],
+  );
+  const version = await client.query(
+    `INSERT INTO form_versions (organisation_id, form_id, number, definition)
+     VALUES ($1, $2, 1, $3)
+     ON CONFLICT (organisation_id, form_id, number) DO UPDATE SET number = EXCLUDED.number
+     RETURNING id`,
+    [organisationId, form.id, JSON.stringify(seededAbstractDefinition())],
+  );
+  await client.query('UPDATE forms SET current_version_id = $1 WHERE id = $2', [
+    version.rows[0].id,
+    form.id,
+  ]);
 }
 
 async function seedOrganisation(client, organisation) {
@@ -92,6 +138,10 @@ async function seedOrganisation(client, organisation) {
       );
     }
     await seedTemplates(client, organisation.id);
+    for (const conference of organisation.conferences ?? []) {
+      await seedConference(client, organisation.id, conference);
+    }
+    await seedAbstractForms(client, organisation.id);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

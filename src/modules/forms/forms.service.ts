@@ -6,6 +6,7 @@ import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import type { Access } from '../access/access';
 import { AuditRecorder } from '../audit/audit-recorder';
+import { changedOf } from '../held-mail/held-mail';
 import { type FormType, isFormType } from './catalogue';
 import { checkConfiguration, type FormConfiguration } from './configuration';
 import { buildDefinition } from './definition';
@@ -238,13 +239,10 @@ export class FormsService {
         action: 'form.breaker_changed',
         subjectType: 'form',
         subjectId: id,
-        changes: {
-          breakerPerHour: {
-            old: String(before.breakerPerHour),
-            new: String(input.breakerPerHour),
-          },
-          breakerPerDay: { old: String(before.breakerPerDay), new: String(input.breakerPerDay) },
-        },
+        changes: changedOf({
+          breakerPerHour: [before.breakerPerHour, input.breakerPerHour],
+          breakerPerDay: [before.breakerPerDay, input.breakerPerDay],
+        }),
       });
       return this.dto(tx, id);
     });

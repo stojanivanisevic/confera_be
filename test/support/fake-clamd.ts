@@ -47,7 +47,7 @@ export async function startFakeClamd(mode: FakeClamdMode = 'clean'): Promise<Fak
         for (const socket of sockets) {
           socket.destroy();
         }
-        server.close(() => resolve());
+        server.close(() => { resolve(); });
       }),
   };
   const server: Server = createServer((socket) => {

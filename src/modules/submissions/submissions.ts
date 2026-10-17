@@ -35,7 +35,10 @@ type SummaryRow = Prisma.SubmissionGetPayload<{
   include: { conference: { select: { id: true; code: true; name: true; editionYear: true } } };
 }>;
 
-function summary(row: SummaryRow): SubmissionSummaryDto {
+/** The fields of a row of the table, as a plain object (a detail spreads it). */
+type Summary = { [Field in keyof SubmissionSummaryDto]: SubmissionSummaryDto[Field] };
+
+function summary(row: SummaryRow): Summary {
   return {
     id: row.id,
     reference: row.reference,

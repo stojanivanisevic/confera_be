@@ -213,13 +213,13 @@ export class UploadsService {
           const path = await this.storage.temporaryPath();
           const hash = createHash('sha256');
           let size = 0;
-          let tooLarge = false;
+          const cut = { tooLarge: false };
           const out = this.storage.writeStream(path);
           await new Promise<void>((done, broke) => {
             stream.on('data', (chunk: Buffer) => {
               size += chunk.length;
               if (size > limit) {
-                tooLarge = true;
+                cut.tooLarge = true;
                 stream.resume();
                 return;
               }
@@ -229,11 +229,11 @@ export class UploadsService {
                 out.once('drain', () => stream.resume());
               }
             });
-            stream.on('end', () => out.end(() => done()));
+            stream.on('end', () => out.end(() => { done(); }));
             stream.on('error', broke);
             out.on('error', broke);
           });
-          if (tooLarge || (stream as { truncated?: boolean }).truncated === true) {
+          if (cut.tooLarge || (stream as { truncated?: boolean }).truncated === true) {
             await this.storage.removeTemporary(path);
             throw new ProblemException(413, 'file_too_large');
           }

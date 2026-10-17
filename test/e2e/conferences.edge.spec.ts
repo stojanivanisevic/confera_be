@@ -87,7 +87,10 @@ describe('listed sites of a conference, through the API (E2-01)', () => {
     ['upper case', '{"HTTPS://A.EXAMPLE.TEST"}'],
     ['an empty entry', '{""}'],
     ['a NULL entry', '{NULL}'],
-    ['21 entries', `{${Array.from({ length: 21 }, (_, n) => `"https://s${String(n)}.example.test"`).join(',')}}`],
+    [
+      '21 entries',
+      `{${Array.from({ length: 21 }, (_, n) => `"https://s${String(n)}.example.test"`).join(',')}}`,
+    ],
   ])('the database itself refuses a stored site list with %s (SEC-M2-12)', async (_name, sites) => {
     await owner.query('BEGIN');
     try {

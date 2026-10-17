@@ -39,7 +39,7 @@ export function verdictOf(answer: string): ScanVerdict {
   }
   const found = /^stream: (.+) FOUND$/.exec(text);
   if (found?.[1] !== undefined) {
-    return /^Heuristics\.Limits\.Exceeded/.test(found[1])
+    return found[1].startsWith("Heuristics.Limits.Exceeded")
       ? { verdict: 'limits_exceeded' }
       : { verdict: 'infected', signature: found[1].slice(0, 200) };
   }

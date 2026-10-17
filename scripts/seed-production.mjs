@@ -15,7 +15,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
 import { repoRoot } from './lib/process.mjs';
-import { inOrganisation, requireAnyStage, seedTemplates } from './lib/seed-data.mjs';
+import {
+  inOrganisation,
+  requireAnyStage,
+  seedAbstractForms,
+  seedTemplates,
+} from './lib/seed-data.mjs';
 import { refuseUnlessOwnDatabase } from './lib/stack.mjs';
 
 const TOOL = 'seed:production';
@@ -64,7 +69,8 @@ async function main() {
         );
         drafts += result.rowCount ?? 0;
       }
-      return { templates, drafts };
+      const forms = await seedAbstractForms(client, organisation.id);
+      return { templates, drafts, forms };
     });
   } catch (error) {
     fail(
@@ -74,7 +80,7 @@ async function main() {
     await client.end();
   }
   process.stdout.write(
-    `${TOOL}: "${organisation.name}" is in place with ${String(summary.templates)} new templates and ${String(summary.drafts)} new conference drafts (STAGE=${stage}). No user was created; invite the first admin with "corepack pnpm first-admin".\n`,
+    `${TOOL}: "${organisation.name}" is in place with ${String(summary.templates)} new templates, ${String(summary.drafts)} new conference drafts and ${String(summary.forms)} new abstract forms, unpublished (STAGE=${stage}). No user was created; invite the first admin with "corepack pnpm first-admin".\n`,
   );
 }
 
