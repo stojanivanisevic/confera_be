@@ -39,6 +39,9 @@ importers:
       '@prisma/client':
         specifier: 7.10.0
         version: 7.10.0(prisma@7.10.0(@types/node@22.20.5)(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(typescript@6.0.3)
+      busboy:
+        specifier: 1.6.0
+        version: 1.6.0
       class-transformer:
         specifier: 0.5.1
         version: 0.5.1
@@ -82,6 +85,9 @@ importers:
       '@secretlint/secretlint-rule-preset-recommend':
         specifier: 13.0.7
         version: 13.0.7
+      '@types/busboy':
+        specifier: 1.5.4
+        version: 1.5.4
       '@types/express':
         specifier: 5.0.6
         version: 5.0.6
@@ -1133,6 +1139,9 @@ packages:
 
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
+
+  '@types/busboy@1.5.4':
+    resolution: {integrity: sha512-kG7WrUuAKK0NoyxfQHsVE6j1m01s6kMma64E+OZenQABMQyTJop1DumUWcLwAQ2JzpefU7PDYoRDKl8uZosFjw==}
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
@@ -4625,6 +4634,10 @@ snapshots:
     dependencies:
       '@types/connect': 3.4.38
       '@types/node': 26.6.5
+
+  '@types/busboy@1.5.4':
+    dependencies:
+      '@types/node': 22.20.5
 
   '@types/connect@3.4.38':
     dependencies:

@@ -54,6 +54,7 @@ const OWNER_ONLY_TABLES = ['_prisma_migrations'];
 
 /** What the system role may read (ADR-05: "grants limited to what the resolvers read"). */
 export const SYSTEM_ROLE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  forms: ['id', 'organisation_id', 'public_key'],
   mail_outbox: ['claimed_at', 'id', 'next_attempt_at', 'organisation_id', 'status'],
   secure_links: ['id', 'organisation_id', 'token_hash'],
   sessions: ['id', 'organisation_id', 'token_hash'],

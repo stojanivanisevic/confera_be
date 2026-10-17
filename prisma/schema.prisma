@@ -58,18 +58,31 @@ model Organisation {
   updatedAt               DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
   /// Whether the mail log keeps the subject and body of what was sent (FR-SMTP-04).
   mailLogContent          Boolean   @default(true) @map("mail_log_content")
+  /// The send breaker of the organisation (ADR-08): confirmation emails of all its forms
+  /// above these counts are held for an admin.
+  breakerPerHour          Int       @default(30) @map("breaker_per_hour")
+  breakerPerDay           Int       @default(200) @map("breaker_per_day")
 
-  users        User[]
-  userRoles    UserRole[]
-  sessions     Session[]
-  knownDevices KnownDevice[]
-  secureLinks  SecureLink[]
-  mailMessages MailMessage[]
-  auditEntries AuditEntry[]
-  mailServers  MailServer[]
-  conferences  Conference[]
-  templates    MailTemplate[]
-  mailLog      MailLogEntry[]
+  users              User[]
+  userRoles          UserRole[]
+  sessions           Session[]
+  knownDevices       KnownDevice[]
+  secureLinks        SecureLink[]
+  mailMessages       MailMessage[]
+  auditEntries       AuditEntry[]
+  mailServers        MailServer[]
+  conferences        Conference[]
+  templates          MailTemplate[]
+  mailLog            MailLogEntry[]
+  forms              Form[]
+  formVersions       FormVersion[]
+  formTokens         FormToken[]
+  deadlines          ConferenceDeadline[]
+  deadlineChanges    ConferenceDeadlineChange[]
+  submissions        Submission[]
+  submissionAuthors  SubmissionAuthor[]
+  submissionStatuses SubmissionStatusChange[]
+  files              StoredFile[]
 
   @@map("organisations")
 }
@@ -112,32 +125,41 @@ model MailServer {
 /// A conference, one edition (ADR-06, FR-CONF-01 to 05). The forms, fee list, deadlines and
 /// numbering arrive with their modules; the listed sites are what may frame its forms.
 model Conference {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId String    @map("organisation_id") @db.Uuid
-  name           String
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  name                String
   /// Two capital letters: the code of the series (IT, ER, EM, LI, AI).
-  code           String
-  editionYear    Int?      @map("edition_year")
-  startsOn       DateTime? @map("starts_on") @db.Date
-  endsOn         DateTime? @map("ends_on") @db.Date
-  venue          String?
+  code                String
+  editionYear         Int?      @map("edition_year")
+  startsOn            DateTime? @map("starts_on") @db.Date
+  endsOn              DateTime? @map("ends_on") @db.Date
+  venue               String?
   /// The origins of the sites that may embed the conference's forms (https; validated).
-  listedSites    String[]  @default([]) @map("listed_sites")
+  listedSites         String[]  @default([]) @map("listed_sites")
   /// The languages offered: en, sr.
-  languages      String[]  @default(["en"])
-  timeZone       String    @default("Europe/Belgrade") @map("time_zone")
-  /// draft, open, closed, archived.
-  state          String    @default("draft")
-  mailServerId   String?   @map("mail_server_id") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
-  version        Int       @default(1)
+  languages           String[]  @default(["en"])
+  timeZone            String    @default("Europe/Belgrade") @map("time_zone")
+  /// draft, open (the forms take submissions: "Open for submissions"), closed, archived.
+  state               String    @default("draft")
+  mailServerId        String?   @map("mail_server_id") @db.Uuid
+  /// The links of the consent on its forms (D6): terms of publication and privacy notice, https.
+  publicationTermsUrl String?   @map("publication_terms_url")
+  privacyNoticeUrl    String?   @map("privacy_notice_url")
+  /// The last number given to a submission reference of this conference.
+  submissionCounter   Int       @default(0) @map("submission_counter")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version             Int       @default(1)
 
-  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  organisation    Organisation               @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   /// A mail server in use by a conference is not deleted (409 mail_server_in_use).
-  mailServer   MailServer?    @relation(fields: [organisationId, mailServerId], references: [organisationId, id], onDelete: Restrict)
-  messages     MailMessage[]
-  templates    MailTemplate[]
+  mailServer      MailServer?                @relation(fields: [organisationId, mailServerId], references: [organisationId, id], onDelete: Restrict)
+  messages        MailMessage[]
+  templates       MailTemplate[]
+  forms           Form[]
+  deadlines       ConferenceDeadline[]
+  deadlineChanges ConferenceDeadlineChange[]
+  submissions     Submission[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, code, editionYear])
@@ -218,12 +240,15 @@ model User {
   version                Int       @default(1)
   updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation  @relation(fields: [organisationId], references: [id], onDelete: Restrict)
-  roles        UserRole[]
-  sessions     Session[]
-  knownDevices KnownDevice[]
-  secureLinks  SecureLink[]
-  auditEntries AuditEntry[]
+  organisation          Organisation               @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  roles                 UserRole[]
+  sessions              Session[]
+  knownDevices          KnownDevice[]
+  secureLinks           SecureLink[]
+  auditEntries          AuditEntry[]
+  publishedFormVersions FormVersion[]
+  deadlineChanges       ConferenceDeadlineChange[]
+  releasedMessages      MailMessage[]              @relation("ReleasedMessages")
 
   @@unique([organisationId, id])
   @@map("users")
@@ -367,15 +392,27 @@ model MailMessage {
   sentAt           DateTime? @map("sent_at") @db.Timestamptz(3)
   lastErrorCode    String?   @map("last_error_code")
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// The form and the submission a message is about (a confirmation): for the send breaker.
+  formId           String?   @map("form_id") @db.Uuid
+  submissionId     String?   @map("submission_id") @db.Uuid
+  /// Why a `held` message waits for an admin: send_breaker_form, send_breaker_organisation, recipient_domain.
+  heldReason       String?   @map("held_reason")
+  releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
+  releasedBy       String?   @map("released_by") @db.Uuid
 
   organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   log          MailLogEntry[]
   conference   Conference?    @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Restrict)
+  form         Form?          @relation(fields: [organisationId, formId], references: [organisationId, id], onDelete: Restrict)
+  submission   Submission?    @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Restrict)
+  releaser     User?          @relation("ReleasedMessages", fields: [organisationId, releasedBy], references: [organisationId, id], onDelete: Restrict)
 
   @@unique([organisationId, id])
   @@unique([organisationId, uniqueKey])
   @@index([status, nextAttemptAt])
   @@index([organisationId, recipientUserId, kind, createdAt])
+  @@index([organisationId, formId, createdAt])
+  @@index([organisationId, submissionId])
   @@map("mail_outbox")
 }
 
@@ -428,4 +465,270 @@ model SecurityEvent {
   @@index([userId, occurredAt])
   @@index([clientAddress, occurredAt])
   @@map("security_events")
+}
+
+/// A form of a conference (ADR-06, ADR-09; FR-FORM-01, FR-FORM-02): one per type. Its
+/// configuration is the admin's draft over the field catalogue in code; publishing makes an
+/// immutable version of the definition built from it. The public key is its address.
+model Form {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  conferenceId     String   @map("conference_id") @db.Uuid
+  /// abstract (0.3.0); full_paper and membership arrive with their milestones.
+  type             String
+  /// The form's address in /f/<key> and /embed/<key>: 16 random letters and digits.
+  publicKey        String   @unique @map("public_key")
+  /// The draft: what the admin set over the catalogue (src/modules/forms/configuration.ts).
+  configuration    Json
+  /// The version the public form shows; null until the first publish.
+  currentVersionId String?  @map("current_version_id") @db.Uuid
+  /// The send breaker of this form (ADR-08): confirmations above these counts are held.
+  breakerPerHour   Int      @default(30) @map("breaker_per_hour")
+  breakerPerDay    Int      @default(200) @map("breaker_per_day")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version          Int      @default(1)
+
+  organisation   Organisation  @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conference     Conference    @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Restrict)
+  currentVersion FormVersion?  @relation("CurrentVersion", fields: [organisationId, currentVersionId], references: [organisationId, id], onDelete: Restrict)
+  versions       FormVersion[] @relation("Versions")
+  tokens         FormToken[]
+  submissions    Submission[]
+  messages       MailMessage[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, conferenceId, type])
+  @@map("forms")
+}
+
+/// A published version of a form (ADR-06): never changed (the application role may only
+/// read and add rows). A submission keeps the version it was made with.
+model FormVersion {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  formId         String   @map("form_id") @db.Uuid
+  number         Int
+  /// The definition the public form renders and the server checks (contracts/form-definition.schema.json).
+  definition     Json
+  publishedAt    DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
+  publishedBy    String?  @map("published_by") @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  form         Form         @relation("Versions", fields: [organisationId, formId], references: [organisationId, id], onDelete: Restrict)
+  publisher    User?        @relation(fields: [organisationId, publishedBy], references: [organisationId, id], onDelete: Restrict)
+  currentOf    Form[]       @relation("CurrentVersion")
+  tokens       FormToken[]
+  submissions  Submission[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, formId, number])
+  @@map("form_versions")
+}
+
+/// A single-use form token (ADR-08): fetched by the form page, sent in a header with every
+/// upload and the submit. Only its SHA-256 is here. Its uploads are bound to it; unattached
+/// files are purged when it expires.
+model FormToken {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  formId         String    @map("form_id") @db.Uuid
+  formVersionId  String    @map("form_version_id") @db.Uuid
+  tokenHash      String    @map("token_hash")
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(3)
+  /// Uploads made with it so far (at most the file fields of the version, plus a margin).
+  uploads        Int       @default(0)
+  /// The proof-of-work it asks for, when it was issued under load (ADR-08).
+  powChallenge   String?   @map("pow_challenge")
+  powDifficulty  Int?      @map("pow_difficulty")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  form         Form         @relation(fields: [organisationId, formId], references: [organisationId, id], onDelete: Cascade)
+  formVersion  FormVersion  @relation(fields: [organisationId, formVersionId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, tokenHash])
+  @@index([organisationId, expiresAt])
+  @@map("form_tokens")
+}
+
+/// A deadline of a conference (FR-DL-01 to 03): the last day, in the conference's time zone.
+model ConferenceDeadline {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  conferenceId   String   @map("conference_id") @db.Uuid
+  /// abstract_submission, fee_payment or full_paper.
+  kind           String
+  /// The last day it is open: it ends at the end of that day in the conference's time zone.
+  endsOn         DateTime @map("ends_on") @db.Date
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  version        Int      @default(1)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conference   Conference   @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, conferenceId, kind])
+  @@map("conference_deadlines")
+}
+
+/// The history of a deadline (FR-DL-03): every setting and extension, with the old and the
+/// new day and who changed it. Insert-only for the application role.
+model ConferenceDeadlineChange {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  conferenceId   String    @map("conference_id") @db.Uuid
+  kind           String
+  oldEndsOn      DateTime? @map("old_ends_on") @db.Date
+  newEndsOn      DateTime  @map("new_ends_on") @db.Date
+  changedAt      DateTime  @default(now()) @map("changed_at") @db.Timestamptz(3)
+  changedBy      String?   @map("changed_by") @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conference   Conference   @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Cascade)
+  changer      User?        @relation(fields: [organisationId, changedBy], references: [organisationId, id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, conferenceId, changedAt])
+  @@map("conference_deadline_changes")
+}
+
+/// A submission (ADR-06, FR-SUB-01): everything the author typed under stable keys, the
+/// language, the form version, the consent, and typed columns for what is listed and
+/// filtered. Written once, in the transaction of the submit (ADR-08).
+model Submission {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId         String   @map("organisation_id") @db.Uuid
+  conferenceId           String   @map("conference_id") @db.Uuid
+  formId                 String   @map("form_id") @db.Uuid
+  formVersionId          String   @map("form_version_id") @db.Uuid
+  /// Shown to the author and the admin, unique in the organisation: IT27-0001.
+  reference              String
+  /// en or sr: the language of every later email to the author (FR-FORM-09).
+  language               String
+  /// received (0.3.0); the statuses of FR-SUB-05 arrive with 0.4.0.
+  status                 String   @default("received")
+  /// The answers by field key, as checked by the rule interpreter.
+  answers                Json
+  title                  String?
+  participationType      String?  @map("participation_type")
+  firstAuthorName        String   @map("first_author_name")
+  firstAuthorInstitution String?  @map("first_author_institution")
+  correspondingEmail     String   @map("corresponding_email") @db.Citext
+  /// The domain of that address, for the limit per recipient domain (ADR-08).
+  correspondingDomain    String   @map("corresponding_domain") @db.Citext
+  authorCount            Int      @map("author_count")
+  /// The consent as it was shown (FR-FORM-11, NFR-PRIV-02): its text, its links, a hash of both, and when.
+  consentText            String   @map("consent_text")
+  consentLinks           Json     @default("{}") @map("consent_links")
+  consentVersion         String   @map("consent_version")
+  consentedAt            DateTime @map("consented_at") @db.Timestamptz(3)
+  idempotencyKey         String   @map("idempotency_key") @db.Uuid
+  /// SHA-256 of the request, so that a repeated key with another body is told apart.
+  payloadHash            String   @map("payload_hash")
+  receivedAt             DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  organisation Organisation             @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  conference   Conference               @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Restrict)
+  form         Form                     @relation(fields: [organisationId, formId], references: [organisationId, id], onDelete: Restrict)
+  formVersion  FormVersion              @relation(fields: [organisationId, formVersionId], references: [organisationId, id], onDelete: Restrict)
+  authors      SubmissionAuthor[]
+  statuses     SubmissionStatusChange[]
+  files        StoredFile[]
+  messages     MailMessage[]
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, reference])
+  @@unique([organisationId, formId, idempotencyKey])
+  @@index([organisationId, receivedAt])
+  @@index([organisationId, conferenceId, receivedAt])
+  @@index([organisationId, correspondingDomain, receivedAt])
+  @@map("submissions")
+}
+
+/// An author of a submission, in the order typed (FR-FORM-03). The first is the corresponding author.
+model SubmissionAuthor {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId     String  @map("organisation_id") @db.Uuid
+  submissionId       String  @map("submission_id") @db.Uuid
+  /// 1, 2, 3 ...
+  position           Int
+  firstName          String  @map("first_name")
+  lastName           String  @map("last_name")
+  institution        String?
+  institutionAddress String? @map("institution_address")
+  orcid              String?
+  email              String  @db.Citext
+  phone              String?
+  isCorresponding    Boolean @default(false) @map("is_corresponding")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  submission   Submission   @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, submissionId, position])
+  @@map("submission_authors")
+}
+
+/// The status history of a submission (ADR-08): its first row is written with it. Insert-only.
+model SubmissionStatusChange {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  submissionId   String   @map("submission_id") @db.Uuid
+  status         String
+  changedAt      DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  /// Who changed it; null for the author's own submit.
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  submission   Submission   @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Cascade)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, submissionId, changedAt])
+  @@map("submission_status_history")
+}
+
+/// A stored file (ADR-10): on the private volume under a key that never holds the client's
+/// name; the type detected from the content; the SHA-256; the scan state. Served only by
+/// the endpoint that decides by its owner and kind.
+model StoredFile {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  /// submission_file (0.3.0).
+  kind           String
+  /// org/<organisation>/<uuid>: never the client's file name.
+  storageKey     String    @unique @map("storage_key")
+  /// The name the person's computer gave it, NFC, for display and download (FR-FILE-03).
+  originalName   String    @map("original_name")
+  /// pdf, docx, doc, jpeg or png: what the content is.
+  detectedType   String    @map("detected_type")
+  sizeBytes      Int       @map("size_bytes")
+  sha256         String
+  /// pending, clean, infected or not_clean (a limit of the scanner was exceeded).
+  scanState      String    @default("pending") @map("scan_state")
+  /// macros: an old .doc that holds macros, accepted and flagged for the office (G2-22).
+  scanFlag       String?   @map("scan_flag")
+  /// What the scanner said, as a code.
+  scanDetail     String?   @map("scan_detail")
+  scanAttempts   Int       @default(0) @map("scan_attempts")
+  nextScanAt     DateTime  @default(now()) @map("next_scan_at") @db.Timestamptz(3)
+  scannedAt      DateTime? @map("scanned_at") @db.Timestamptz(3)
+  /// The form token it was uploaded with (ADR-10).
+  formTokenId    String?   @map("form_token_id") @db.Uuid
+  /// The file field of the form version it was uploaded for.
+  fieldKey       String?   @map("field_key")
+  submissionId   String?   @map("submission_id") @db.Uuid
+  attachedAt     DateTime? @map("attached_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  submission   Submission?  @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, submissionId])
+  @@index([organisationId, formTokenId])
+  @@index([organisationId, scanState, nextScanAt])
+  @@map("files")
 }

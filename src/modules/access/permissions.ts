@@ -33,6 +33,14 @@ export const PERMISSIONS = [
   'templates.read',
   /** Read the mail log, the content of what was sent included. */
   'mail_log.read',
+  /** Read the forms of the conferences, their drafts and published versions. */
+  'forms.read',
+  /** Create forms, change their draft, publish them, set their send breaker. */
+  'forms.manage',
+  /** Read the submissions, their files included (FR-SUB-02, FR-SUB-04, FR-FILE-02). */
+  'submissions.read',
+  /** See the emails the send breaker holds, and release them (ADR-08, M3-FE-08). */
+  'held_mail.manage',
 ] as const;
 
 export type PermissionName = (typeof PERMISSIONS)[number];
