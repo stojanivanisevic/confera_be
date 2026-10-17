@@ -165,6 +165,37 @@ describe('forms and intake (M3)', () => {
       expect((list.body as { items: unknown[] }).items).toEqual([]);
     });
 
+    it('a copy of a conference takes its forms as unpublished drafts, each at an address of its own (FR-CONF-03)', async () => {
+      const source = await openForm(e2e, admin, { configuration: { maxAuthors: 4 } });
+      const copied = await as(
+        e2e,
+        admin,
+        'post',
+        `/api/v1/conferences/${source.conferenceId}/copy`,
+      ).send({
+        name: 'Kopija (izmišljeno)',
+        editionYear: 2100,
+      });
+      expect(copied.status).toBe(201);
+      const list = await as(
+        e2e,
+        admin,
+        'get',
+        `/api/v1/forms?conferenceId=${(copied.body as { id: string }).id}`,
+      );
+      const items = (
+        list.body as { items: { id: string; slug: string; currentVersionNumber: number | null }[] }
+      ).items;
+      expect(items).toHaveLength(1);
+      expect(items[0]?.slug).not.toBe(source.slug);
+      expect(items[0]?.currentVersionNumber).toBeNull();
+      const form = await as(e2e, admin, 'get', `/api/v1/forms/${items[0]?.id ?? ''}`);
+      expect((form.body as { configuration: unknown }).configuration).toEqual({ maxAuthors: 4 });
+      expect(
+        (await as(e2e, admin, 'get', `/api/v1/forms/${source.formId}/versions/99999999999`)).status,
+      ).toBe(404);
+    });
+
     it('a published version cannot be changed, not even by a statement of the application role', async () => {
       const app = await connect(e2eDatabase.applicationUrl);
       try {

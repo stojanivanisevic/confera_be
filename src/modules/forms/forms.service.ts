@@ -249,6 +249,9 @@ export class FormsService {
   }
 
   async version(id: string, number: number): Promise<FormVersionDto> {
+    if (number < 1 || number > 1_000_000) {
+      throw new ProblemException(404, 'not_found');
+    }
     return this.database.transaction(async (tx) => {
       await this.load(tx, id);
       const row = await tx.formVersion.findFirst({

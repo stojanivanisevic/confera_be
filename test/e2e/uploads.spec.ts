@@ -134,7 +134,9 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
       .parse((response, done) => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
-        response.on('end', () => { done(null, Buffer.concat(chunks)); });
+        response.on('end', () => {
+          done(null, Buffer.concat(chunks));
+        });
       });
     expect(download.status).toBe(200);
     expect(Buffer.compare(download.body as Buffer, content)).toBe(0);

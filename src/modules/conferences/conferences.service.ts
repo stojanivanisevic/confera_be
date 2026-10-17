@@ -14,6 +14,7 @@ import type {
   CreateConferenceDto,
   UpdateConferenceDto,
 } from './conferences.dto';
+import { newPublicKey } from '../forms/forms.service';
 import { normaliseSites } from './listed-sites';
 
 type ConferenceRow = Prisma.ConferenceGetPayload<object>;
@@ -177,7 +178,7 @@ export class ConferencesService {
     });
   }
 
-  /** A copy (FR-CONF-03): settings, listed sites, mail server and templates; no dates. A draft. */
+  /** A copy (FR-CONF-03): settings, listed sites, mail server, templates and forms (as drafts); no dates. A draft. */
   async copy(actor: Access, id: string, input: CopyConferenceDto): Promise<ConferenceDto> {
     return this.write(async (tx) => {
       const source = await this.load(tx, id);
@@ -196,6 +197,22 @@ export class ConferencesService {
           privacyNoticeUrl: source.privacyNoticeUrl,
         },
       });
+      // Its forms come along as drafts with the same configuration, unpublished, each with
+      // an address of its own (FR-CONF-03, M3-BE-01).
+      const forms = await tx.form.findMany({ where: { conferenceId: source.id } });
+      for (const form of forms) {
+        await tx.form.create({
+          data: {
+            organisationId: actor.organisationId,
+            conferenceId: row.id,
+            type: form.type,
+            publicKey: newPublicKey(),
+            configuration: form.configuration as Prisma.InputJsonValue,
+            breakerPerHour: form.breakerPerHour,
+            breakerPerDay: form.breakerPerDay,
+          },
+        });
+      }
       const templates = await tx.mailTemplate.findMany({ where: { conferenceId: source.id } });
       for (const template of templates) {
         await tx.mailTemplate.create({

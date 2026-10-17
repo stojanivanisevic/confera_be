@@ -229,7 +229,11 @@ export class UploadsService {
                 out.once('drain', () => stream.resume());
               }
             });
-            stream.on('end', () => out.end(() => { done(); }));
+            stream.on('end', () =>
+              out.end(() => {
+                done();
+              }),
+            );
             stream.on('error', broke);
             out.on('error', broke);
           });
