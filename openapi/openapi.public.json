@@ -206,6 +206,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormTokenRequestDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -228,7 +238,7 @@
             }
           }
         },
-        "summary": "A single-use form token (ADR-08). Under load it asks for a proof-of-work. JSON only:\nthe body is `{}`. 409 `form_closed` when the form takes no submissions.",
+        "summary": "A single-use form token (ADR-08). Under load it asks for a proof-of-work. JSON only:\n`{}`, or `{ \"previousFormToken\": \"...\" }` to renew a refused token (Q3-01). 409\n`form_closed` when the form takes no submissions.",
         "tags": [
           "PublicForms"
         ],
@@ -333,6 +343,16 @@
           "expiresAt",
           "proofOfWork"
         ]
+      },
+      "FormTokenRequestDto": {
+        "type": "object",
+        "properties": {
+          "previousFormToken": {
+            "type": "string",
+            "description": "The refused token of this form, issued within the last 24 hours.",
+            "maxLength": 100
+          }
+        }
       },
       "FrameSitesDto": {
         "type": "object",
@@ -471,6 +491,11 @@
               "privacy"
             ]
           },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true,
+            "description": "Whom an author writes to (D8): the contact email of the organisation profile, or null."
+          },
           "versionNumber": {
             "type": "number",
             "description": "The number of the version: a submission keeps it."
@@ -489,6 +514,7 @@
           "closesAt",
           "conference",
           "consentLinks",
+          "contactEmail",
           "versionNumber",
           "definition"
         ]

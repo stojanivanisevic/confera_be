@@ -6,12 +6,18 @@ import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import type { Access } from '../access/access';
 import { AuditRecorder } from '../audit/audit-recorder';
-import { changedOf } from '../held-mail/held-mail';
-import { type FormType, isFormType } from './catalogue';
+import { changedOf } from '../held-mail/held-mail.controller';
+import { CATALOGUE, type FormType, isFormType } from './catalogue';
 import { checkConfiguration, type FormConfiguration } from './configuration';
 import { buildDefinition } from './definition';
 import { DEADLINE_OF_FORM, formState } from './form-state';
-import type { FormDto, FormSummaryDto, FormVersionDto, FormVersionSummaryDto } from './forms.dto';
+import type {
+  CatalogueFieldDto,
+  FormDto,
+  FormSummaryDto,
+  FormVersionDto,
+  FormVersionSummaryDto,
+} from './forms.dto';
 
 type FormRow = Prisma.FormGetPayload<object>;
 
@@ -29,6 +35,24 @@ export function newPublicKey(): string {
     }
   }
   return key;
+}
+
+/** The catalogue of a type as the configuration screen needs it (M3-ISS-05). */
+export function catalogueOfType(type: FormType): CatalogueFieldDto[] {
+  return CATALOGUE[type].flatMap((section) =>
+    section.fields.map((field) => ({
+      field: field.key,
+      section: section.key,
+      kind: field.kind,
+      mandatory: field.mandatory,
+      requiredByDefault: field.required,
+      enabledByDefault: field.enabled,
+      options: field.options?.map((option) => option.value) ?? null,
+      maxLengthCap: field.maxLength?.cap ?? null,
+      maxWordsCap: field.maxWords?.cap ?? null,
+      fileTypes: field.file === undefined ? null : [...field.file.allowed],
+    })),
+  );
 }
 
 /** The stored configuration of a form, checked again when it is read. */
@@ -324,6 +348,7 @@ export class FormsService {
       closedReason: state.closedReason,
       breakerPerHour: row.breakerPerHour,
       breakerPerDay: row.breakerPerDay,
+      catalogue: catalogueOfType(type),
       updatedAt: row.updatedAt.toISOString(),
       version: row.version,
     };

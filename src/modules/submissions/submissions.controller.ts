@@ -23,7 +23,7 @@ import { mayServe } from '../files/serving';
 import type { FileType } from '../forms/catalogue';
 import {
   MAX_PAGE_SIZE,
-  type SubmissionDetailDto,
+  SubmissionDetailDto,
   SubmissionPageDto,
   SubmissionQueryDto,
   type SubmissionSummaryDto,

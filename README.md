@@ -423,11 +423,20 @@ the two equal. The OpenAPI document carries the declaration of every operation
   (as many as the version has file fields, plus two). A repeat with the same idempotency key
   returns the first result (409 `idempotency_key_reused` with other answers). `website` is
   the trap field: filled, or a submit within 3 s of the token, is answered with a fake
-  success and stores nothing. Limits per client address: 30 tokens in 10 minutes, 10 submits
-  an hour, 40 uploads in 10 minutes (429). The **proof-of-work** switches itself on above 20
-  submissions in 10 minutes on a form, or 5 submits or 10 tokens from one address: the token
-  then carries `{ challenge, difficulty }` and the submit `proofOfWork`, a counter such that
-  SHA-256(`challenge:counter`) begins with `difficulty` zero bits (403 `proof_of_work_failed`).
+  success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
+  (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
+  with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form,
+  issued within 24 hours, takes over its files and its count of uploads, uses it up, and is
+  never taken for a script (the minimum fill time counts from the first token of the chain).
+  Limits per client (an IPv4 address, or the /64 of an IPv6 address): 30 tokens in 10
+  minutes, 10 submits an hour, 40 uploads in 10 minutes (429). The **proof-of-work** (13
+  zero bits) is asked for above 20 submissions in 10 minutes on a form, or from a client that
+  did three things a script does in 10 minutes (the trap, a submit faster than a person, a
+  failed proof, a token not valid); volume alone from one address does not. It is decided
+  when a token is issued and again at the submit: the token then carries
+  `{ challenge, difficulty }` and the submit `proofOfWork`, a counter such that
+  SHA-256(`challenge:counter`) begins with `difficulty` zero bits (403 `proof_of_work_failed`;
+  a token without a challenge is renewed first).
 
 - **One submit, one transaction**: the submission (reference `IT27-0001`, unique in the
   organisation; the answers under their keys; typed columns for the table), its authors in
@@ -454,9 +463,13 @@ the two equal. The OpenAPI document carries the declaration of every operation
   `file_type_refused`). A `.docx` with a VBA project is refused (422 `docx_macros`); an old
   `.doc` with macros is kept and flagged `macros` (G2-22). The name is kept for display and
   download, cleaned (no control or direction character, no quote, path part or reserved device
-  name, at most 150 characters, the extension of the content). Above 2 GB of unattached bytes
-  in an organisation uploads are refused (503 `upload_quota_reached`) and the admins told;
-  the files of an expired token are purged with the token. A file is served only by
+  name, at most 150 characters, the extension of the content). A refused or broken upload
+  uses none of the token's uploads up, and leaves no temporary file. Above 2 GB of
+  unattached bytes in an organisation, uploads on their way included, uploads are refused (503
+  `upload_quota_reached`) and the admins told; the files of a token are purged an hour after
+  it expired (time for a renewal), the token a day after its issue, and a temporary file
+  untouched for an hour. A `.docx` counts as holding macros by the name, the content type
+  or the relationship of its VBA project. A file is served only by
   `GET /api/v1/submissions/{id}/files/{fileId}`, as an attachment with `filename*`, and only
   when its scan is clean (409 `scan_pending` or `file_not_clean`).
 - **Antivirus** (M3-BE-08): the files worker (every `JOBS_INTERVAL_SECONDS`) sends every

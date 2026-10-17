@@ -8,8 +8,6 @@ import {
   ParseUUIDPipe,
   Put,
 } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsISO8601, IsOptional, Matches, Min } from 'class-validator';
 import { ProblemException } from '../../common/http/problem';
 import { AdminController } from '../../common/http/surface';
 import type { Prisma } from '../../generated/prisma/client';
@@ -18,6 +16,12 @@ import type { Access } from '../access/access';
 import { CurrentAccess, Permission } from '../access/access.decorators';
 import { AuditRecorder } from '../audit/audit-recorder';
 import { deadlineEnd, deadlinePassed } from './deadline-time';
+import {
+  DEADLINE_KINDS,
+  type DeadlineKind,
+  DeadlinesDto,
+  SetDeadlineDto,
+} from './deadlines.dto';
 
 /**
  * The deadlines of a conference (M3-BE-05; FR-DL-01 to 03): abstract submission, fee
@@ -25,52 +29,6 @@ import { deadlineEnd, deadlinePassed } from './deadline-time';
  * conference's time zone. An admin sets and extends it; the form opens again at once; the
  * history keeps every old and new day and who changed it, and the audit log the change.
  */
-export const DEADLINE_KINDS = ['abstract_submission', 'fee_payment', 'full_paper'] as const;
-export type DeadlineKind = (typeof DEADLINE_KINDS)[number];
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-export class DeadlineDto {
-  // The order of the values is fixed here, not left to the compiler (a stable contract).
-  @ApiProperty({ enum: DEADLINE_KINDS })
-  kind!: DeadlineKind;
-  /** The last day, YYYY-MM-DD, in the conference's time zone. */
-  endsOn!: string;
-  /** The instant it ends: the start of the next day in the conference's time zone. */
-  endsAt!: string;
-  /** Whether it has passed now. */
-  passed!: boolean;
-  version!: number;
-}
-
-export class DeadlineChangeDto {
-  @ApiProperty({ enum: DEADLINE_KINDS })
-  kind!: DeadlineKind;
-  oldEndsOn!: string | null;
-  newEndsOn!: string;
-  changedAt!: string;
-  changedBy!: { id: string; displayName: string } | null;
-}
-
-export class DeadlinesDto {
-  timeZone!: string;
-  items!: DeadlineDto[];
-  /** Newest first. */
-  history!: DeadlineChangeDto[];
-}
-
-/** A new last day. `version` is required to change an existing deadline (two admins at once). */
-export class SetDeadlineDto {
-  @Matches(DAY)
-  @IsISO8601({ strict: true })
-  endsOn!: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  version?: number;
-}
-
 const day = (value: Date): string => value.toISOString().slice(0, 10);
 
 @Injectable()

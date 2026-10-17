@@ -474,7 +474,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadlinesDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -528,7 +535,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadlinesDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -541,6 +555,7 @@
             }
           }
         },
+        "summary": "Sets or extends a deadline (FR-DL-03): the form opens again at once; the history keeps both days.",
         "tags": [
           "Deadlines"
         ],
@@ -1038,10 +1053,47 @@
     "/api/v1/held-mail": {
       "get": {
         "operationId": "listHeldMail",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "formId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100000,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldMailPageDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -1054,6 +1106,7 @@
             }
           }
         },
+        "summary": "The held emails, oldest first, with why each waits, and the breaker of the organisation.",
         "tags": [
           "HeldMail"
         ],
@@ -1078,7 +1131,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldMailPageDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -1091,6 +1151,7 @@
             }
           }
         },
+        "summary": "The send breaker of the organisation (ADR-08; P: 30 an hour, 200 a day).",
         "tags": [
           "HeldMail"
         ],
@@ -1115,7 +1176,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleasedDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -1128,6 +1196,7 @@
             }
           }
         },
+        "summary": "Releases held emails: they are queued and go out at the send rate of their server.",
         "tags": [
           "HeldMail"
         ],
@@ -2294,7 +2363,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionPageDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -2307,6 +2383,7 @@
             }
           }
         },
+        "summary": "The submissions of the organisation, newest first, a page at a time (FR-SUB-02).",
         "tags": [
           "Submissions"
         ],
@@ -2330,7 +2407,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetailDto"
+                }
+              }
+            }
           },
           "default": {
             "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
@@ -2343,6 +2427,7 @@
             }
           }
         },
+        "summary": "One submission with its data, files, status history and emails (FR-SUB-04).",
         "tags": [
           "Submissions"
         ],
@@ -2387,6 +2472,7 @@
             }
           }
         },
+        "summary": "A file of the submission, as an attachment with a safe name (ADR-10, ST-39). 409\n`scan_pending` until the virus scan is clean, `file_not_clean` when it is not.",
         "tags": [
           "Submissions"
         ],
@@ -3030,6 +3116,78 @@
           "pageSize"
         ]
       },
+      "CatalogueFieldDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "text",
+              "longText",
+              "email",
+              "choice",
+              "yesNo",
+              "file",
+              "consent"
+            ],
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "description": "The field's key, as in the configuration's `fields`."
+          },
+          "section": {
+            "type": "string"
+          },
+          "mandatory": {
+            "type": "boolean"
+          },
+          "requiredByDefault": {
+            "type": "boolean",
+            "description": "Required unless the admin says otherwise (a mandatory field: always as here)."
+          },
+          "enabledByDefault": {
+            "type": "boolean"
+          },
+          "options": {
+            "nullable": true,
+            "description": "The values of its options, whose labels an admin may change; null without options.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxLengthCap": {
+            "type": "number",
+            "nullable": true,
+            "description": "The most characters an admin may allow; null when the field has no such limit."
+          },
+          "maxWordsCap": {
+            "type": "number",
+            "nullable": true,
+            "description": "The most words an admin may allow; null when the field counts no words."
+          },
+          "fileTypes": {
+            "nullable": true,
+            "description": "The file types an admin may let a file field take; null for another field.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "field",
+          "section",
+          "mandatory",
+          "requiredByDefault",
+          "enabledByDefault",
+          "options",
+          "maxLengthCap",
+          "maxWordsCap",
+          "fileTypes"
+        ]
+      },
       "ChangeEmailDto": {
         "type": "object",
         "properties": {
@@ -3411,6 +3569,112 @@
           "fromName"
         ]
       },
+      "DeadlineChangeDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "abstract_submission",
+              "fee_payment",
+              "full_paper"
+            ],
+            "type": "string"
+          },
+          "oldEndsOn": {
+            "type": "string",
+            "nullable": true
+          },
+          "newEndsOn": {
+            "type": "string"
+          },
+          "changedAt": {
+            "type": "string"
+          },
+          "changedBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "displayName"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "oldEndsOn",
+          "newEndsOn",
+          "changedAt",
+          "changedBy"
+        ]
+      },
+      "DeadlineDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "abstract_submission",
+              "fee_payment",
+              "full_paper"
+            ],
+            "type": "string"
+          },
+          "endsOn": {
+            "type": "string",
+            "description": "The last day, YYYY-MM-DD, in the conference's time zone."
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "The instant it ends: the start of the next day in the conference's time zone."
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Whether it has passed now."
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "endsOn",
+          "endsAt",
+          "passed",
+          "version"
+        ]
+      },
+      "DeadlinesDto": {
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeadlineDto"
+            }
+          },
+          "history": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeadlineChangeDto"
+            }
+          }
+        },
+        "required": [
+          "timeZone",
+          "items",
+          "history"
+        ]
+      },
       "EmailChangeLinkDto": {
         "type": "object",
         "properties": {
@@ -3555,6 +3819,13 @@
           "breakerPerDay": {
             "type": "number"
           },
+          "catalogue": {
+            "description": "The catalogue of its type: what the configuration may change (M3-ISS-05).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogueFieldDto"
+            }
+          },
           "updatedAt": {
             "type": "string"
           },
@@ -3575,6 +3846,7 @@
           "versions",
           "breakerPerHour",
           "breakerPerDay",
+          "catalogue",
           "updatedAt",
           "version"
         ]
@@ -3724,6 +3996,125 @@
           "number",
           "publishedAt",
           "publishedBy"
+        ]
+      },
+      "HeldMailDto": {
+        "type": "object",
+        "properties": {
+          "heldReason": {
+            "enum": [
+              "send_breaker_form",
+              "send_breaker_organisation",
+              "recipient_domain"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "conference": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "code",
+              "name"
+            ]
+          },
+          "formId": {
+            "type": "string",
+            "nullable": true
+          },
+          "submission": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "reference"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "heldReason",
+          "id",
+          "kind",
+          "recipient",
+          "conference",
+          "formId",
+          "submission",
+          "createdAt"
+        ]
+      },
+      "HeldMailPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeldMailDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "breaker": {
+            "type": "object",
+            "properties": {
+              "perHour": {
+                "type": "number"
+              },
+              "perDay": {
+                "type": "number"
+              },
+              "version": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "perHour",
+              "perDay",
+              "version"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "breaker"
         ]
       },
       "InviteUserDto": {
@@ -4125,7 +4516,28 @@
       },
       "OrganisationBreakerDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "perHour": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "perDay": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "version": {
+            "type": "number",
+            "description": "The version of the organisation profile.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "perHour",
+          "perDay",
+          "version"
+        ]
       },
       "OrganisationDto": {
         "type": "object",
@@ -4321,7 +4733,35 @@
       },
       "ReleaseHeldMailDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "ids": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "all": {
+            "type": "boolean"
+          },
+          "formId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ReleasedDto": {
+        "type": "object",
+        "properties": {
+          "released": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "released"
+        ]
       },
       "ResetRequestDto": {
         "type": "object",
@@ -4430,7 +4870,18 @@
       },
       "SetDeadlineDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "endsOn": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "endsOn"
+        ]
       },
       "SetPasswordDto": {
         "type": "object",
@@ -4467,6 +4918,473 @@
         "required": [
           "email",
           "password"
+        ]
+      },
+      "SubmissionAuthorDto": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "number"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "institution": {
+            "type": "string",
+            "nullable": true
+          },
+          "institutionAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "orcid": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCorresponding": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "position",
+          "firstName",
+          "lastName",
+          "institution",
+          "institutionAddress",
+          "orcid",
+          "email",
+          "phone",
+          "isCorresponding"
+        ]
+      },
+      "SubmissionDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "conference": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "editionYear": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "code",
+              "name",
+              "editionYear"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "firstAuthor": {
+            "type": "string"
+          },
+          "institution": {
+            "type": "string",
+            "nullable": true
+          },
+          "participationType": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "memberMatch": {
+            "type": "string",
+            "nullable": true,
+            "description": "Not matched yet (0.8.0)."
+          },
+          "billingStatus": {
+            "type": "string",
+            "nullable": true,
+            "description": "No proforma yet (0.6.0)."
+          },
+          "language": {
+            "type": "string"
+          },
+          "authorCount": {
+            "type": "number"
+          },
+          "receivedAt": {
+            "type": "string"
+          },
+          "form": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "versionNumber": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "versionNumber"
+            ]
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The answers by field key, as checked (contracts/form-rule-vectors.json)."
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAuthorDto"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionFileDto"
+            }
+          },
+          "consent": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "links": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "version": {
+                "type": "string"
+              },
+              "consentedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text",
+              "links",
+              "version",
+              "consentedAt"
+            ]
+          },
+          "statusHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionStatusDto"
+            }
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionEmailDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "conference",
+          "title",
+          "firstAuthor",
+          "institution",
+          "participationType",
+          "status",
+          "memberMatch",
+          "billingStatus",
+          "language",
+          "authorCount",
+          "receivedAt",
+          "form",
+          "answers",
+          "authors",
+          "files",
+          "consent",
+          "statusHistory",
+          "emails"
+        ]
+      },
+      "SubmissionEmailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "queued, sending, sent, failed, held, stuck or waiting_for_server."
+          },
+          "heldReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "sentAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "recipient",
+          "status",
+          "heldReason",
+          "lastErrorCode",
+          "createdAt",
+          "sentAt"
+        ]
+      },
+      "SubmissionFileDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "docx",
+              "doc",
+              "jpeg",
+              "png"
+            ]
+          },
+          "scanState": {
+            "enum": [
+              "pending",
+              "clean",
+              "infected",
+              "not_clean"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "nullable": true,
+            "description": "The file field of the form it was uploaded for."
+          },
+          "name": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number"
+          },
+          "scanFlag": {
+            "type": "string",
+            "nullable": true,
+            "description": "`macros`: an old .doc with macros, accepted and flagged for the office (G2-22)."
+          },
+          "scannedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the scan ended, or since when it waits."
+          },
+          "pendingSince": {
+            "type": "string",
+            "nullable": true
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "scanState",
+          "id",
+          "field",
+          "name",
+          "sizeBytes",
+          "scanFlag",
+          "scannedAt",
+          "pendingSince",
+          "sha256"
+        ]
+      },
+      "SubmissionPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionSummaryDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "SubmissionStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "changedAt": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "displayName"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "changedAt",
+          "actor"
+        ]
+      },
+      "SubmissionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "conference": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "editionYear": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "code",
+              "name",
+              "editionYear"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "firstAuthor": {
+            "type": "string"
+          },
+          "institution": {
+            "type": "string",
+            "nullable": true
+          },
+          "participationType": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "memberMatch": {
+            "type": "string",
+            "nullable": true,
+            "description": "Not matched yet (0.8.0)."
+          },
+          "billingStatus": {
+            "type": "string",
+            "nullable": true,
+            "description": "No proforma yet (0.6.0)."
+          },
+          "language": {
+            "type": "string"
+          },
+          "authorCount": {
+            "type": "number"
+          },
+          "receivedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "conference",
+          "title",
+          "firstAuthor",
+          "institution",
+          "participationType",
+          "status",
+          "memberMatch",
+          "billingStatus",
+          "language",
+          "authorCount",
+          "receivedAt"
         ]
       },
       "TemplateCatalogueDto": {
