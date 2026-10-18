@@ -80,4 +80,25 @@ describe('the confirmation of a submission (ST-35)', () => {
   ])('the title %j is shown as %j', (title, shown) => {
     expect(confirmationTitle(title)).toBe(shown);
   });
+
+  // SEC-M3-03 (M3-ISS-03): a bare domain, which mail programs make a link of, leaves the title out.
+  it.each([
+    ['evil.com', null],
+    ['Posetite paypal-verify.com danas', null],
+    ['Prijava na x.com:8080/a', null],
+    ['x.com?a', null],
+    ['EVIL.COM', null],
+    ['Primer: пример.срб', null],
+    ['Primena ASP.NET u nastavi', null],
+    ['Šđčćž: učenje na daljinu u Srbiji', 'Šđčćž: učenje na daljinu u Srbiji'],
+    ['Industrija 4.0, npr. u Vojvodini', 'Industrija 4.0, npr. u Vojvodini'],
+    ['Đorđe i Ćirić: š.č. analiza', 'Đorđe i Ćirić: š.č. analiza'],
+  ])('the title %j is shown as %j', (title, shown) => {
+    expect(confirmationTitle(title)).toBe(shown);
+  });
+
+  it('a domain in the part of a long title that the mail shows leaves it out; the rest is not judged', () => {
+    expect(confirmationTitle(`${'a '.repeat(50)}evil.com ${'ž'.repeat(300)}`)).toBeNull();
+    expect(confirmationTitle(`${'ž'.repeat(300)} evil.com`)).toBe(`${'ž'.repeat(200)}…`);
+  });
 });

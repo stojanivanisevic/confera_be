@@ -103,9 +103,17 @@ const CHANGE_TEXT: Readonly<Record<string, Readonly<Record<Language, string>>>> 
 export const CONFIRMATION_TITLE_LENGTH = 200;
 
 /**
+ * A `label.tld` token (SEC-M3-03, M3-ISS-03): mail programs make a link of a bare domain
+ * (`evil.com`, `x.com:8080/a`), which the form accepts because `ASP.NET` is a word. The
+ * confirmation is stricter than the form: a false positive costs only the line of the title.
+ */
+const DOMAIN = /(^|[^\p{L}\p{N}@.-])[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)*\.\p{L}{2,}(?![\p{L}\p{N}])/u;
+
+/**
  * The title as a confirmation shows it (FR-FORM-15, SA-13, ST-35): one line, no control or
- * invisible character, cut to its length; and none at all when it holds an address, which a
- * mail program would make a link of (the form refuses one; this holds for a row planted past it).
+ * invisible character, cut to its length; and none at all when it holds an address or a bare
+ * domain, which a mail program would make a link of (the form refuses an address; this holds
+ * for a row planted past it).
  */
 export function confirmationTitle(title: string | null): string | null {
   if (title === null) {
@@ -122,12 +130,14 @@ export function confirmationTitle(title: string | null): string | null {
   let count = 0;
   for (const character of line) {
     if (count === CONFIRMATION_TITLE_LENGTH) {
-      return `${cut.trimEnd()}…`;
+      cut = `${cut.trimEnd()}…`;
+      break;
     }
     cut += character;
     count += 1;
   }
-  return cut;
+  // Judged on what the mail would show: at most 201 characters, so the match stays cheap.
+  return DOMAIN.test(cut) ? null : cut;
 }
 
 function lifetimeText(ms: number, language: Language): string {

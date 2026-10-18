@@ -446,8 +446,10 @@ the two equal. The OpenAPI document carries the declaration of every operation
   organisation; the answers under their keys; typed columns for the table), its authors in
   order, its first status, its files attached, the consent as shown (text, links, a hash, the
   time), and the **confirmation** in the outbox: fixed text, the reference and the title only,
-  in the submission's language (SA-13; template type `submission_confirmation`). If sending
-  fails the submission is stored and the mail log shows the failure.
+  in the submission's language (SA-13; template type `submission_confirmation`). A title that
+  holds an address or a bare domain (`evil.com`, which mail programs make a link of; also
+  `ASP.NET`) is left out of the mail, which then names the reference only (SEC-M3-03). If
+  sending fails the submission is stored and the mail log shows the failure.
 - **The send breaker** (M3-BE-09): per form (`PATCH /api/v1/forms/{id}/breaker`) and per
   organisation (`PATCH /api/v1/held-mail/breaker`), 30 an hour and 200 a day by default, and
   100 a day to one recipient domain. Above it the submission is stored and its confirmation
