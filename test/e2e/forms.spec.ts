@@ -520,6 +520,50 @@ describe('forms and intake (M3)', () => {
       ).toHaveLength(1);
     });
 
+    it('SEC-M3-04: a token used by a submission or by a fake success renews nothing: the next chain is its own', async () => {
+      const form = await openForm(e2e, admin);
+      const storedOf = async () =>
+        (
+          await inOrganisation(owner, orgA(), 'SELECT id FROM submissions WHERE form_id = $1', [
+            form.formId,
+          ])
+        ).length;
+      const renew = async (previous: string, address: string) => {
+        const response = await page(e2e, 'post', `/public/v1/forms/${form.slug}/tokens`, address)
+          .set('Content-Type', 'application/json')
+          .send(JSON.stringify({ previousFormToken: previous }));
+        expect(response.status).toBe(201);
+        return (response.body as { formToken: string }).formToken;
+      };
+      const sendAtOnce = (token: string, address: string) =>
+        submit(e2e, form.slug, token, { language: 'en', answers: abstractAnswers() }, { address });
+
+      // Used by a stored submission, then expired: a renewal is not a person any sooner.
+      const author = freshAddress();
+      const first = await tokenFor(e2e, form.slug, author);
+      await ageTokens(owner, orgA());
+      expect((await sendAtOnce(first.formToken, author)).status).toBe(201);
+      expect(await storedOf()).toBe(1);
+      await inOrganisation(
+        owner,
+        orgA(),
+        "UPDATE form_tokens SET expires_at = now() - interval '1 second' WHERE form_id = $1",
+        [form.formId],
+      );
+      const afterStored = await renew(first.formToken, author);
+      expect((await sendAtOnce(afterStored, author)).status).toBe(201);
+      expect(await storedOf()).toBe(1);
+
+      // Used by a fake success: the same.
+      const script = freshAddress();
+      const quick = await tokenFor(e2e, form.slug, script);
+      expect((await sendAtOnce(quick.formToken, script)).status).toBe(201);
+      await ageTokens(owner, orgA());
+      const afterDecoy = await renew(quick.formToken, script);
+      expect((await sendAtOnce(afterDecoy, script)).status).toBe(201);
+      expect(await storedOf()).toBe(1);
+    });
+
     it('refuses answers that break the rules, with the field path and code (FR-FORM-13, ST-41)', async () => {
       const form = await openForm(e2e, admin, {
         configuration: { maxAuthors: 3, fields: { abstract: { maxWords: 5 } } },

@@ -185,11 +185,12 @@ export class IntakeService {
   }
 
   /**
-   * The token a renewal names (Q3-01): of this form, refused (expired, used, or refused by
-   * the proof-of-work), never a live one, in a chain that began within 24 hours (SEC-M3-02:
-   * a chain ends, and its files with it), and not renewed before (Q3-14: one chain, not two);
-   * otherwise none, and the new token starts a chain of its own. Its row is locked and read
-   * again, so that two renewals of one token at once cannot both take it over.
+   * The token a renewal names (Q3-01): of this form, refused (expired, or refused by the
+   * proof-of-work), never a live one, in a chain that began within 24 hours (SEC-M3-02: a
+   * chain ends, and its files with it), and never used (SEC-M3-04: not by a submission, a
+   * fake success or a renewal, Q3-14: one chain, not two); otherwise none, and the new token
+   * starts a chain of its own. Its row is locked and read again, so that two renewals of one
+   * token at once cannot both take it over.
    */
   private async renewable(
     tx: Prisma.TransactionClient,
@@ -212,17 +213,12 @@ export class IntakeService {
     if (row === null) {
       return null;
     }
-    const live =
-      row.expiresAt.getTime() > now.getTime() && row.usedAt === null && row.refusedAt === null;
+    const refused = row.expiresAt.getTime() <= now.getTime() || row.refusedAt !== null;
     const started = row.fillStartedAt ?? row.issuedAt;
-    if (live || now.getTime() - started.getTime() > RENEWAL_WINDOW_MS) {
+    if (row.usedAt !== null || !refused || now.getTime() - started.getTime() > RENEWAL_WINDOW_MS) {
       return null;
     }
-    const successor = await tx.formToken.findFirst({
-      where: { renewedFrom: row.id },
-      select: { id: true },
-    });
-    return successor === null ? row : null;
+    return row;
   }
 
   /**
@@ -269,6 +265,7 @@ export class IntakeService {
           },
         });
         if (renewed !== null) {
+          // Used up by the renewal: it renews nothing again (Q3-14).
           await tx.formToken.updateMany({
             where: { id: renewed.id, usedAt: null },
             data: { usedAt: now },

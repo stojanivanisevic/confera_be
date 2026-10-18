@@ -426,10 +426,11 @@ the two equal. The OpenAPI document carries the declaration of every operation
   success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
   (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
   with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form
-  that is no longer live (expired, used, or refused by the proof-of-work), in a chain that
-  began within 24 hours and not renewed before, takes over its files and its count of
-  uploads and uses it up (SEC-M3-02: a live token is never renewed, and a chain ends 24 hours
-  after its first token); otherwise the new token starts a chain of its own. The minimum fill
+  that is no longer live (expired, or refused by the proof-of-work) and was never used, in a
+  chain that began within 24 hours, takes over its files and its count of uploads and uses it
+  up (SEC-M3-02: a live token is never renewed, and a chain ends 24 hours after its first
+  token; SEC-M3-04: a token used by a submission, a fake success or a renewal renews
+  nothing); otherwise the new token starts a chain of its own. The minimum fill
   time counts from the first token of the chain, so a submit at once after a renewal is
   stored when the chain began 3 s ago or more. Limits per client (an IPv4 address, or the
   /64 of an IPv6 address): 30 tokens in 10 minutes, 10 submits an hour, 40 uploads in 10
