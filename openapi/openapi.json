@@ -3,7 +3,7 @@
   "info": {
     "title": "Confera admin API",
     "description": "The API of the admin surface. It answers only under the admin host name.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/api/v1/account/email": {

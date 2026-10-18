@@ -3,7 +3,7 @@
   "info": {
     "title": "Confera public API",
     "description": "The API of the public surface (forms, secure links). It answers only under the public host name and only ever gains things.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "paths": {
     "/public/v1/csp-reports": {

@@ -7,37 +7,79 @@ version at every milestone (ADR-19).
 
 ## [Unreleased]
 
+## 0.3.0 – 2026-10-18
+
+Forms, embed and intake: the public abstract form, its files and its confirmation, and the admin API of forms, deadlines, submissions and held mail.
+
 ### Added
 
-- A refused form token is renewed with `previousFormToken` in the body of `POST /public/v1/forms/{slug}/tokens`: the renewal keeps the files and the start of filling in, and the submit that follows at once is stored, never answered with a fake success (Q3-01). `PublicFormDto.contactEmail` (D8) and `FormDto.catalogue` with the mandatory flags; response schemas of the deadlines, submissions and held mail in the OpenAPI document (M3-ISS-05).
-
-- Forms and their immutable versions (M3-BE-01, ADR-09; FR-FORM-01, FR-FORM-02): a field catalogue in code that reproduces the current abstract form field by field, the admin's configuration as the draft (fields on and off, labels, help and options in both languages, required, word and character limits, file types and sizes, the texts, the most authors: 10 by default, D7), publish into a version the application role can only read and add; form texts as plain text with one safe link syntax and the conference's consent links (D6: `publicationTermsUrl`, `privacyNoticeUrl`). `seed:production` gives each conference an unpublished abstract form; `seed:e2e` publishes one under the fixed address `e2eprobnaforma01`.
-- The rule interpreter and its shared contracts (M3-BE-02, ST-41): `contracts/form-definition.schema.json`, `contracts/form-configuration.schema.json` and `contracts/form-rule-vectors.json` (codes, order, word count, the URL rule, the address rule, the safe text, the proof-of-work, answers with their errors); key-checked answers, patterns from the catalogue only, stated maxima (64 KB body, 20 000 characters a value, 50 authors, 100 a page); a key named like a prototype member is refused, not dropped.
-- The public form API (M3-BE-03, ADR-08; ST-31, ST-34): the published form and its frame sites, a single-use form token fetched by the page and sent in `X-Form-Token`, the Origin, `Sec-Fetch-Site` and content-type checks, no session cookie and no CORS grant, limits per address, a proof-of-work of our own under load, the trap field and the minimum fill time, one idempotent submit (`Idempotency-Key`) in one transaction with the submission, its authors, files, first status, consent and confirmation. References like `IT27-0001`, unique in the organisation.
-- Files (M3-BE-04, ADR-10; ST-32, ST-33, ST-39): private storage under keys without client names, streamed uploads cut off one byte beyond the field's limit (20 MB by default), the SHA-256, the type from the content (PDF, `.docx`, `.doc`, JPEG, PNG), the macro policy of G2-22 (a `.docx` with macros refused, an old `.doc` with macros flagged), uploads bound to a token and a file field, a quota of unattached bytes with a notice to the admins, the purge at the token's expiry, safe file-name headers, downloads only through the submission. busboy 1.6.0.
+- Forms and their immutable versions (M3-BE-01, ADR-09; FR-FORM-01, FR-FORM-02): a field catalogue in code that reproduces the current abstract form field by field, the admin's configuration as the draft (fields on and off, labels, help and options in both languages, required, word and character limits, file types and sizes, the texts, the most authors: 10 by default, D7), publish into a version the application role can only read and add; form texts as plain text with one safe link syntax and the conference's consent links (D6: `publicationTermsUrl`, `privacyNoticeUrl`). `seed:production` gives each conference that has none an unpublished abstract form; `seed:e2e` publishes one under the fixed address `e2eprobnaforma01`.
+- The rule interpreter and its shared contracts (M3-BE-02, ST-41): `contracts/form-definition.schema.json`, `contracts/form-configuration.schema.json` and `contracts/form-rule-vectors.json` (codes, order, word count, the URL rule, the address rule, the safe text, the proof-of-work, answers with their errors); key-checked answers, patterns from the catalogue only, stated maxima (a 64 KB body, 20 000 characters a value, 5 000 words a long text, 50 authors); a key named like a prototype member is refused, not dropped.
+- The public form API (M3-BE-03, ADR-08; ST-31, ST-34): the published form and its frame sites, a single-use form token (6 hours) fetched by the page and sent in `X-Form-Token`, the Origin, `Sec-Fetch-Site` and content-type checks, no session cookie and no CORS grant, limits per client, a proof-of-work of our own, the trap field and the minimum fill time (3 s), one idempotent submit (`Idempotency-Key`) in one transaction with the submission, its authors, files, first status, consent and confirmation. References like `IT27-0001`, unique in the organisation.
+- A refused form token is renewed with `previousFormToken` in the body of `POST /public/v1/forms/{slug}/tokens`: the renewal keeps the files and the start of filling in, and the submit that follows at once is stored, never answered with a fake success (Q3-01).
+- Files (M3-BE-04, ADR-10; ST-32, ST-33, ST-39): private storage under keys without client names (`FILE_STORAGE_DIR`), streamed uploads cut off one byte beyond the field's limit (20 MB by default, at most 50 MB), the SHA-256, the type from the content (PDF, `.docx`, `.doc`, JPEG, PNG), the macro policy of G2-22 (a `.docx` with macros refused with 422 `docx_macros`, an old `.doc` with macros kept and flagged), uploads bound to a token and a file field, a quota of 2 GB of unattached bytes per organisation with a notice to the admins, a purge of unattached files, safe file-name headers, downloads only through the submission and only when clean. busboy 1.6.0.
 - Deadlines in the conference's time zone (M3-BE-05, FR-DL-01 to 03): a day that ends at the end of that day where the conference is, also when the clocks change; the form closes by itself and opens again on an extension; the history with the old and new day and who changed it.
-- The consent record and the confirmation email (M3-BE-06; FR-FORM-11, FR-FORM-15 as amended by SA-13, FR-MAIL-04; ST-35): the consent text as shown, its links, a hash and the time; a confirmation with fixed text, the reference and the title only, escaped and cut to 200 characters, in the submission's language (template type `submission_confirmation`, English and Serbian).
-- The submissions read API (M3-BE-07; FR-SUB-02, FR-SUB-04): a paged table and the detail (answers, authors, files with their scan state, consent, status history, emails).
-- The antivirus (M3-BE-08, ST-38): ClamAV's daemon over INSTREAM, in the background once a file is attached; fail closed (pending with retries and a notice to the admins, never "download anyway"); limits exceeded are not clean. The development stack has no ClamAV; the tests use a fake daemon of the same protocol.
-- The send breaker (M3-BE-09, ADR-08; ST-34): per form and per organisation (30 an hour, 200 a day) and per recipient domain (100 a day); above it the submission is stored, its confirmation held, the admins told once an hour; the held emails listed and released by an admin.
+- The consent record and the confirmation email (M3-BE-06; FR-FORM-11, FR-FORM-15 as amended by SA-13, FR-MAIL-04; ST-35): the consent text as shown, its links, a hash and the time; a confirmation with fixed text, the reference and the title only, cut to 200 characters, in the submission's language (template type `submission_confirmation`, English and Serbian; eight template types in all).
+- The submissions read API (M3-BE-07; FR-SUB-02, FR-SUB-04): a paged table (at most 100 a page) and the detail (answers, authors, files with their scan state, consent, status history, emails).
+- The antivirus (M3-BE-08, ST-38): ClamAV's daemon over INSTREAM (`CLAMAV_ADDRESS`), in the background once a file is attached; fail closed (pending with retries and a notice to the admins, never "download anyway"); limits exceeded are not clean. The development stack has no ClamAV; the tests use a fake daemon of the same protocol.
+- The send breaker (M3-BE-09, ADR-08; ST-34): per form and per organisation (30 an hour, 200 a day by default) and per recipient domain (100 a day); above it the submission is stored, its confirmation held, the admins told once an hour per form; the held emails listed and released by an admin.
+- A copy of a conference takes its forms as unpublished drafts with their configuration (FR-CONF-03); a version number beyond any form answers 404.
+- The OpenAPI document describes the responses of deadlines, submissions and held mail; `PublicFormDto.contactEmail` (D8) and `FormDto.catalogue` with the mandatory flags (M3-ISS-05).
+- From the UX review (UX3-06, UX3-07): `HeldMailDto.heldBy` and `SubmissionEmailDto.heldBy` say by which numbers an email was held (`count`, `limit`, `windowHours`); `SubmissionSummaryDto.fileSigns` gives the flags of a submission's files and whether a scan is pending; `SubmissionFileDto.downloadBlocked` (`scan_pending`, `scan_retrying`, `file_not_clean`) and `nextScanAt` say why a file cannot be downloaded yet.
 - New configuration: `FILE_STORAGE_DIR` and `CLAMAV_ADDRESS` (both required on `prod`), `JOBS_INTERVAL_SECONDS` (default 30). New permissions: `forms.read`, `forms.manage`, `submissions.read`, `held_mail.manage`.
+- New migrations, in order: `20261017080000_listed_sites_check`, `20261017090000_forms_and_intake`, `20261018090000_form_token_renewal`, `20261018120000_form_token_refused`, `20261018130000_files_external_links`, `20261018140000_form_versions_publisher`, `20261018150000_held_mail_numbers`.
+- Tests: intake end to end (ST-31, ST-34, ST-35, ST-41); uploads, scans and downloads, and the authorisation matrix over the routes of 0.3.0 (ST-32, ST-33, ST-38, ST-39, ST-65); the edge probes, the abstract-form checklist and files that lie (M3-QA-02, M3-QA-03).
 
 ### Changed
 
-- The fixes of the 0.3.0 UX review: a held email says by which numbers it was held, `heldBy` with `count`, `limit` and `windowHours` (UX3-06); the table of submissions shows `fileSigns` (the flags of its files and whether a scan is pending), and a file of the detail says why it cannot be downloaded yet, `downloadBlocked` with `nextScanAt` (UX3-07); the descriptions of `closedReason` (UX3-03) and of a deadline's inclusive `endsOn` and exclusive `endsAt` (UX3-08). A repeat of a fake success's key counts as an act of a script, so a page that sends the trap three times under one key is asked for a proof-of-work.
-- Every form version names its publisher: `form_versions.published_by` is `NOT NULL` (the contract already said `publishedBy` is never null), and `seed:e2e` publishes its form as the seeded admin. A development database seeded before this fix is refused by `db:migrate` with a hint: `stack:wipe` and seed again (blank-slate run 2).
-- The fixes of the 0.3.0 verification: the proof-of-work is decided at the submit as well (Q3-02), asked for by acts of a script and not by the volume of one address, at 13 bits instead of 16 (Q3-08); an IPv6 client is its /64 (Q3-03); a refused upload uses none of the token's uploads (Q3-04); a broken upload leaves no temporary file, and temporary files count against the quota (Q3-05); the 100th confirmation to a domain goes out (Q3-06); a fake success carries the edition and answers a repeat of its key alike (Q3-07); a `.docx` is found to hold macros by the content type and relationship of its VBA project (Q3-11).
-
 - The audit log keeps no bank account number (owner decision D9): `rsdAccount` and `eurIban` are recorded by name only, and entries written before are shown without their values (M2-ISS-16).
-- A listed site is refused with a loopback host (`localhost`, `127.0.0.0/8`, `[::1]`) outside `STAGE=local`; the column itself checks that every entry is a canonical origin, at most 20; the frame list is checked once more when it is read (SEC-M2-12, M2-ISS-21).
-- The link of an invitation, a reset and an email change "works once and expires in 72 hours" (UXUI-M2-37).
+- The descriptions of `PublicFormDto.closedReason` (UX3-03) and of a deadline's inclusive `endsOn` and exclusive `endsAt` (UX3-08).
+- The link of an invitation, a reset and an email change "works once and expires in" its lifetime, in English and Serbian (UXUI-M2-37).
 - The descriptions of the conference states name the actions "Open for submissions" and "Close submissions" (D10, M2-ISS-15).
 - Committed contracts write invisible characters as escapes.
 - `.env.example` lists the tool variables `STUBS_PORT` and `PROVISION_DATABASE_URL` (FIN2-08, M2-ISS-23).
+- The unit tier guards PDF renders against a hang only (30 s); the 5 s of NFR-PERF-03 is held by the timing tier. The README gives the measured durations of `test:int` and `test:e2e` on a quiet and on a loaded machine.
 
 ### Fixed
 
+- The findings of the 0.3.0 verification: the proof-of-work is decided at the submit as well (Q3-02), asked for by acts of a script and not by the volume of one address, at 13 bits instead of 16 (Q3-08); an IPv6 client is its /64 (Q3-03); a refused upload uses none of the token's uploads (Q3-04); a broken upload leaves no temporary file, and temporary files count against the quota (Q3-05); the 100th confirmation to a domain goes out, the 101st is held (Q3-06); a fake success carries the edition and answers a repeat of its key alike (Q3-07); a `.docx` is found to hold macros by the content type and relationship of its VBA project (Q3-11).
+- A renewal counts the minimum fill time from the start of its chain, and a token renewed once renews nothing again (row lock), so two renewals cannot skip the 3 s (Q3-14).
+- A repeat of a fake success's key counts as an act of a script, so a page that sends the trap three times under one key is asked for a proof-of-work (UX review of 0.3.0).
+- Every form version names its publisher: `form_versions.published_by` is `NOT NULL` (the contract already said `publishedBy` is never null), and `seed:e2e` publishes its form as the seeded admin. A development database seeded before this fix is refused by `db:migrate` with a hint: `stack:wipe` and seed again (blank-slate run 2).
 - A test holds that a confirmed email change ends a second confirmation that waits, queued or for a server, in the change's own transaction (FIN2-02, M2-ISS-22).
+
+### Security
+
+- **SEC-M3-01** (high): the inspection of a `.docx` is bounded: per file at most 64 parts read, 2 MB inflated in all and 1 s; a ZIP whose entries repeat a name (in any casing) or overlap is refused (415); more than the budget counts as macros (422); either refusal counts as an act of a script.
+- **SEC-M3-02**: a chain of token renewals ends 24 hours after it began; a live token is never renewed (new column `form_tokens.refused_at`); the files of an expired token are purged once its chain has ended, any unattached file 30 hours after its upload; one client keeps at most 1 GB of uploads in 30 hours, half the quota of an organisation (429).
+- **SEC-M3-03** (the answer to M3-ISS-03): a title whose shown text holds a bare domain (`evil.com`, `x.com:8080/a`, Cyrillic domains) is left out of the confirmation, which then names the reference only; the form keeps accepting such titles.
+- **SEC-M3-04**: a token used by a submission, a fake success or a renewal renews nothing.
+- **SEC-M3-05**: the purge deletes the row first, on its conditions checked again on the locked row, and the bytes only when exactly that row went.
+- **SEC-M3-06**: the macro check reads parts as Word does (UTF-8 or UTF-16, character references and named entities decoded; a part that is neither counts as macros), compares the storage names of an old `.doc` in any casing, and keeps a `.docx` whose relationships reach outside it (remote template, frame or object; a UNC or `file:` target) flagged `external_links`.
+- **SEC-M3-07**: the trap field is `confera_hp`, a name no autofill fills; the 0.3.0 name `website` is still read as a deprecated alias.
+- **SEC-M3-09**: the comment of `clientKey` says what it does with an embedded IPv4 tail; the code is unchanged.
+- **SEC-M3-11** (high): relationship parts are read by a linear scan by character codes, with no regular expression over a part; at most 10 000 elements of at most 16 KB each, the time budget looked at between elements; the 100 ms gate on 1 MB adversarial parts is in the timing tier.
+- A listed site is refused with a loopback host (`localhost`, `127.0.0.0/8`, `[::1]`) outside `STAGE=local`; the column itself checks that every entry is a canonical origin, at most 20; the frame list is checked once more when it is read (SEC-M2-12, M2-ISS-21).
+- M3-ISS-07 (the snippet's inline lines at up to 800 characters) was accepted by the Security reviewer of 0.3.0; no change here.
+
+### Known gaps
+
+Open rows of "Issues logged during 0.1.0" in the milestone plan:
+
+- M3-ISS-01 (info): the development stack has no ClamAV; the client is real, the tests use a fake daemon of the same protocol. To 0.4.0, real ClamAV on staging.
+- M3-ISS-02 (low): SEC-M2-05, no cap on the test messages of a mail server. To 0.4.0.
+- M3-ISS-04 (decision): the defaults built in 0.3.0 (breaker 30 an hour and 200 a day per form and per organisation, 100 a day per recipient domain; form tokens 6 hours; minimum fill time 3 s; the unattached-files quota per organisation) are confirmed at Gate 3.
+- M3-ISS-06 (info): production keeps Next's 10 MB proxy body limit, so the reverse proxy must send `/public/v1` straight to the API. To 0.4.0, staging topology.
+- M3-ISS-08 (low): the frame page has no loading state inside the frame; M2-ISS-17 items 31, 32, 34, 36, 39 and M2-ISS-18 are still open. To 0.4.0.
+- M3-ISS-09 (low, Q3-12 rest): in WebKit on a site with CSS `zoom` the frame leaves blank room below the form and cuts its right fifth. To 0.4.0, real Safari on staging.
+- M3-ISS-10 (info, Q3-13 and Q3-08): form load (NFR-PERF-01) and the proof-of-work cost are measured only, not judged; staging measurement and real Safari.
+- M3-ISS-11 (low, Q3-08 rest): the form-wide proof-of-work trigger stays at more than 20 submissions in 10 minutes. To 0.4.0 or staging data.
+- M3-ISS-12 (info, SEC-M3-11 rest): an unterminated `<!--` in a 1 MB part scans in 147 ms; add that shape to the 100 ms gate of `test:timing`. To 0.4.0.
+- M3-ISS-13 (low, UX3 rest): backend texts: "Vi" capitalisation in the seeded thank-you, the conference name not declined in the Serbian confirmation. To 0.4.0.
+- M3-ISS-14 (medium, UX3-06 rest): held mail can only be released, not discarded. To 0.4.0, with the status model.
+- M3-ISS-15 (low, D7): there is no conference contact, so without an organisation contact email the closed form names nobody to write to. To 0.4.0 or Gate 3.
+- M3-ISS-16 (low): a freshly seeded form already shows "draft has unpublished changes" in the admin. To 0.4.0.
+- Not fixed, from the reviews: SEC-M3-08 (info: a bot can tell a fake success from a real one) and SEC-M3-10 (info: the scanner gaps of SEC-M2-09, carried to 0.4.0).
 
 ## [0.2.0] - 2026-10-16
 

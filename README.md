@@ -460,9 +460,11 @@ the two equal. The OpenAPI document carries the declaration of every operation
 - **The send breaker** (M3-BE-09): per form (`PATCH /api/v1/forms/{id}/breaker`) and per
   organisation (`PATCH /api/v1/held-mail/breaker`), 30 an hour and 200 a day by default, and
   100 a day to one recipient domain. Above it the submission is stored and its confirmation
-  is `held` (`heldReason`); every active admin gets one notice an hour per form;
+  is `held` (`heldReason`, and `heldBy`: the `count`, `limit` and `windowHours` that held it);
+  every active admin gets one notice an hour per form;
   `GET /api/v1/held-mail` lists them, `POST /api/v1/held-mail/release` (`{ ids }` or
-  `{ all: true, formId? }`) queues them again.
+  `{ all: true, formId? }`) queues them again. A held email can be released, not discarded
+  (M3-ISS-14, 0.4.0).
 - **Deadlines** (FR-DL-01 to 03, M3-BE-05): `PUT /api/v1/conferences/{id}/deadlines/{kind}`
   (`abstract_submission`, `fee_payment`, `full_paper`), a day that ends at the end of that day
   in the conference's time zone (`src/modules/deadlines/deadline-time.ts`, also on the days
@@ -504,8 +506,11 @@ the two equal. The OpenAPI document carries the declaration of every operation
   download): without `CLAMAV_ADDRESS` every file stays "scan pending" and is never served.
   The tests use a fake daemon that speaks the same protocol (`test/support/fake-clamd.ts`).
 - **Submissions** (M3-BE-07): `GET /api/v1/submissions` (paged, newest first, at most 100 a
-  page) and `GET /api/v1/submissions/{id}` (answers, authors, files with their scan state,
-  consent, status history, emails).
+  page; `fileSigns`: the flags of its files and whether a scan is pending) and
+  `GET /api/v1/submissions/{id}` (answers, authors, files with their scan state and, while one
+  cannot be downloaded, `downloadBlocked` and `nextScanAt`; consent, status history, emails).
+- **A copy of a conference** (FR-CONF-03) takes its forms as unpublished drafts with their
+  configuration.
 
 ### The first admin and the production seed
 
