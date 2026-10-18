@@ -47,7 +47,9 @@ export function clientKey(address: string): string {
   const [head = '', tail = ''] = plain.toLowerCase().split('::');
   const left = head === '' ? [] : head.split(':');
   const right = plain.includes('::') ? (tail === '' ? [] : tail.split(':')) : [];
-  // An embedded IPv4 in the last groups counts as two groups.
+  // An embedded IPv4 tail other than `::ffff:` (unwrapped above) counts here as one group,
+  // not the two it stands for, so such a spelling may be keyed one group off. Node gives the
+  // client address in its canonical form, which never ends so (SEC-M3-09).
   const groups = [
     ...left,
     ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'),
