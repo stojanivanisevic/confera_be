@@ -529,13 +529,19 @@
             ],
             "type": "string"
           },
+          "website": {
+            "type": "string",
+            "description": "The trap under its 0.3.0 name, read until the page sends `confera_hp`; then removed.",
+            "maxLength": 1000,
+            "deprecated": true
+          },
           "answers": {
             "type": "object",
             "additionalProperties": true
           },
-          "website": {
+          "confera_hp": {
             "type": "string",
-            "description": "The trap: a field no person sees. It must be empty.",
+            "description": "The trap: a field no person sees, with a name no autofill fills (SEC-M3-07; the page\nrenders it `autocomplete=\"off\"` in an inert container). It must be empty.",
             "maxLength": 1000
           },
           "proofOfWork": {

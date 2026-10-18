@@ -674,7 +674,7 @@ describe('forms and intake (M3)', () => {
         e2e,
         form.slug,
         trapped.formToken,
-        { language: 'en', answers: abstractAnswers(), website: 'https://spam.example.test' },
+        { language: 'en', answers: abstractAnswers(), confera_hp: 'https://spam.example.test' },
         { address },
       );
       expect(trap.status).toBe(201);
@@ -868,7 +868,7 @@ describe('forms and intake (M3)', () => {
           e2e,
           form.slug,
           trapped.formToken,
-          { language: 'en', answers: abstractAnswers(), website: 'x' },
+          { language: 'en', answers: abstractAnswers(), confera_hp: 'x' },
           { address },
         );
       }

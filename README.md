@@ -414,16 +414,17 @@ the two equal. The OpenAPI document carries the declaration of every operation
   | `GET /public/v1/forms/{slug}/frame-sites`  | the conference's listed sites for `frame-ancestors` of the frame page, each checked again; none unless the conference is open (ADR-07) |
   | `POST /public/v1/forms/{slug}/tokens`      | a single-use form token (JSON body `{}`), valid 6 hours; under load with a proof-of-work                                               |
   | `POST /public/v1/forms/{slug}/uploads`     | one file: multipart, parts `field` then `file`; header `X-Form-Token`                                                                  |
-  | `POST /public/v1/forms/{slug}/submissions` | JSON `{ language, answers, website, proofOfWork? }`; headers `X-Form-Token` and `Idempotency-Key` (a UUID per form instance)           |
+  | `POST /public/v1/forms/{slug}/submissions` | JSON `{ language, answers, confera_hp, proofOfWork? }`; headers `X-Form-Token` and `Idempotency-Key` (a UUID per form instance)        |
 
   Every POST needs `Origin` equal to `PUBLIC_ORIGIN`, `Sec-Fetch-Site: same-origin` where the
   browser sends it, and exactly its content type (415 otherwise); `/public` never reads the
   session cookie and no response carries a CORS grant. The token is random, only its SHA-256
   is stored, it works for one submit (409 `form_token_used`), and its uploads are bound to it
   (as many as the version has file fields, plus two). A repeat with the same idempotency key
-  returns the first result (409 `idempotency_key_reused` with other answers). `website` is
-  the trap field: filled, or a submit within 3 s of the token, is answered with a fake
-  success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
+  returns the first result (409 `idempotency_key_reused` with other answers). `confera_hp` is
+  the trap field, a name no autofill fills (SEC-M3-07; its 0.3.0 name `website` is still read
+  until the page sends the new one): filled, or a submit within 3 s of the token, is answered
+  with a fake success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
   (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
   with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form
   that is no longer live (expired, or refused by the proof-of-work) and was never used, in a

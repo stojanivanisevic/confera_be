@@ -124,7 +124,8 @@ export class PublicFormsController {
       idempotencyKey: key.toLowerCase(),
       language: body.language,
       answers: raw,
-      trap: body.website,
+      // Filled under either name: the trap (SEC-M3-07).
+      trap: `${body.confera_hp ?? ''}${body.website ?? ''}`,
       proofOfWork: body.proofOfWork,
     });
   }
