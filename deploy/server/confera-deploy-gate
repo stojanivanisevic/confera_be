@@ -1,0 +1,38 @@
+#!/bin/bash
+# The forced command of the deploy keys (M4-BE-08; ADR-27, staging rule 4). ST-63.
+#
+# Installed as /usr/local/sbin/confera-deploy-gate (root:root, 0755). sshd runs it for every
+# connection of a deploy user, whatever the client asked for (deploy/server/sshd-confera-deploy.conf):
+#
+#   ForceCommand /usr/local/sbin/confera-deploy-gate be     (user confera-deploy-be, key of confera_be)
+#   ForceCommand /usr/local/sbin/confera-deploy-gate web    (user confera-deploy-web, key of confera_fe)
+#
+# The client's request arrives in SSH_ORIGINAL_COMMAND. It must be one image digest,
+# `sha256:` and 64 lower-case hex digits, and nothing else: no tag, no repository, no option,
+# no second word, no newline. Anything else is refused before anything runs. The digest is
+# then handed, as one argument, to the root-owned deploy script through sudo, which checks it
+# again; the deploy user itself can run nothing else (deploy/server/sudoers-confera-deploy).
+#
+# Exit codes: 64 refused (the request is not a digest), otherwise the deploy script's own.
+set -euo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+refuse() {
+  echo "confera-deploy-gate: refused: $1" >&2
+  exit 64
+}
+
+[ "$#" -eq 1 ] || refuse "the gate is installed with exactly one target"
+target=$1
+case "$target" in
+  be | web) ;;
+  *) refuse "unknown target" ;;
+esac
+
+request=${SSH_ORIGINAL_COMMAND-}
+if [[ ! "$request" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  refuse "send exactly one image digest (sha256: and 64 lower-case hex digits) and nothing else"
+fi
+
+exec sudo --non-interactive -- /usr/local/sbin/confera-deploy "$target" "$request"

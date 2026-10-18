@@ -1,0 +1,9 @@
+# /etc/sudoers.d/confera-deploy (root:root, 0440; check with `visudo -cf`). M4-BE-08.
+#
+# The deploy users may run the deploy script as root, for their own target only, and nothing
+# else. They are not in the docker group. The script checks its arguments itself (a digest and
+# nothing else); `*` here cannot add a second argument that the script would accept.
+Defaults:confera-deploy-be,confera-deploy-web !requiretty, env_reset, secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+
+confera-deploy-be  ALL=(root) NOPASSWD: /usr/local/sbin/confera-deploy be sha256\:*
+confera-deploy-web ALL=(root) NOPASSWD: /usr/local/sbin/confera-deploy web sha256\:*

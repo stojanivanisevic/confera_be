@@ -1,0 +1,5 @@
+# /etc/ssh/confera-deploy/confera-deploy-be.keys (root:root, 0644): the one key of confera_be's
+# pipeline. confera-deploy-web.keys holds the one key of confera_fe's pipeline, with `web`.
+# The public key only; the private key is the secret STAGING_DEPLOY_KEY of the repository's
+# GitHub environment `staging` (README, "Production image and pipeline").
+restrict,command="/usr/local/sbin/confera-deploy-gate be" ssh-ed25519 AAAA...replace-with-the-public-key confera_be pipeline
