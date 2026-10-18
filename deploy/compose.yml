@@ -1,0 +1,294 @@
+# The production topology of a Confera server: staging and production alike (M4-BE-07;
+# ADR-26, ADR-27). Not for a developer machine: that is docker-compose.yml at the root.
+#
+#   docker compose --project-name confera \
+#     --env-file /srv/confera/compose.env --env-file /srv/confera/images.env \
+#     --file /srv/confera/deploy/compose.yml up --detach
+#
+# Only the deploy script (deploy/server/confera-deploy) and the operator run this. The pipeline
+# never does: it hands the deploy script an image digest and nothing else (ADR-27).
+#
+# - Two networks (ADR-26): `edge` holds proxy, web and API; `backend` holds API, worker,
+#   Postgres and ClamAV. The web container is on `edge` only: it cannot reach Postgres or ClamAV.
+# - Secrets per service, as files (ADR-26): each service is given only the secret files it needs,
+#   mounted under /run/secrets. The web container and the proxy are given none.
+# - One image for the API and the worker (CONFERA_API_IMAGE); the one-shot jobs have their own
+#   (CONFERA_JOBS_IMAGE). Every Confera image is referenced by digest (images.env, written by the
+#   deploy script); every other image is pinned by digest here.
+# - No published port except the proxy's 80 and 443. No container mounts the Docker socket.
+#   Neither proxy nor web mounts the file volume.
+# - Every container: non-root, read-only root file system, every capability dropped, no new
+#   privileges, memory, CPU and process limits (ST-53; deploy/checks/topology.mjs proves it).
+#
+# The settings are in /srv/confera/compose.env (template: deploy/compose.env.example), the
+# settings of each service in its own file under CONFERA_CONFIG_DIR (templates: api.env.example,
+# web.env.example, proxy.env.example), the secrets one file each under CONFERA_SECRETS_DIR
+# (README section 15 lists them, with the owner and mode each must have).
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '5'
+
+x-api-environment:
+  &api-environment # Fixed by this topology; everything the operator decides is in api.env.
+  STAGE: prod
+  INSTANCE: ${CONFERA_INSTANCE:?set CONFERA_INSTANCE in compose.env (staging or production)}
+  PORT: '3001'
+  LISTEN_HOST: 0.0.0.0
+  FILE_STORAGE_DIR: /var/lib/confera/files
+  CLAMAV_ADDRESS: clamav:3310
+
+x-api-healthcheck: &api-healthcheck
+  test:
+    [
+      'CMD',
+      'node',
+      '-e',
+      "fetch('http://127.0.0.1:3001/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+    ]
+  interval: 10s
+  timeout: 5s
+  retries: 6
+  start_period: 30s
+
+services:
+  proxy:
+    <<: *hardened
+    # Caddy 2.11.7 (Alpine). Runs as an unprivileged user on 8080 and 8443 inside the container.
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    user: '10002:10002'
+    # The caddy binary of the image carries the file capability cap_net_bind_service, and the kernel
+    # refuses to start a binary whose file capabilities lie outside the bounding set. So this one
+    # capability stays in the bounding set; with no-new-privileges the file capability is never
+    # granted, and the process holds no capability at all (CapEff and CapPrm are 0; the topology
+    # check reads them). It listens on 8080 and 8443, so it needs none.
+    cap_add: [NET_BIND_SERVICE]
+    ports:
+      - '${CONFERA_HTTP_PORT:-80}:8080'
+      - '${CONFERA_HTTPS_PORT:-443}:8443'
+    env_file:
+      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/proxy.env
+    environment:
+      CONFERA_ADMIN_HOST: ${CONFERA_ADMIN_HOST:?set CONFERA_ADMIN_HOST in compose.env}
+      CONFERA_PUBLIC_HOST: ${CONFERA_PUBLIC_HOST:?set CONFERA_PUBLIC_HOST in compose.env}
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./proxy/gate-${CONFERA_INSTANCE:?set CONFERA_INSTANCE in compose.env}.caddy:/etc/caddy/gate.caddy:ro
+      # Certificates and the ACME account: a directory of the host owned by uid 10002 (README section 15).
+      - ${CONFERA_PROXY_DATA_DIR:?set CONFERA_PROXY_DATA_DIR in compose.env}:/data
+    tmpfs:
+      - /config:uid=10002,gid=10002,mode=0700
+      - /tmp:uid=10002,gid=10002,mode=0700
+    networks: [edge]
+    depends_on: [web, api]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 200
+
+  web:
+    <<: *hardened
+    image: ${CONFERA_WEB_IMAGE:?the deploy script writes CONFERA_WEB_IMAGE into images.env}
+    env_file:
+      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/web.env
+    environment:
+      # The web application holds no secret and no database address (ADR-20, ADR-26).
+      STAGE: prod
+      CONFERA_API_ORIGIN: http://api:3001
+      PORT: '3000'
+      LISTEN_HOST: 0.0.0.0
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+      - /app/apps/web/.next/cache:uid=1000,gid=1000,mode=0700
+    networks: [edge]
+    depends_on: [api]
+    healthcheck:
+      # Any answer below 500: 127.0.0.1 is neither surface, so the application answers 404 itself.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 200
+
+  api:
+    <<: *hardened
+    image: ${CONFERA_API_IMAGE:?the deploy script writes CONFERA_API_IMAGE into images.env}
+    env_file:
+      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/api.env
+    environment:
+      <<: *api-environment
+      # The API serves requests only: the worker below runs the outbox and the file jobs, so
+      # exactly one process does (the outbox is not claimed with row locks).
+      MAIL_WORKER_INTERVAL_SECONDS: '0'
+      JOBS_INTERVAL_SECONDS: '0'
+    secrets: [database_url, system_database_url, data_key]
+    volumes:
+      - files:/var/lib/confera/files
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+    networks: [edge, backend]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *api-healthcheck
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 200
+
+  worker:
+    <<: *hardened
+    # The same image as the API, by the same digest. It also answers /health, on the backend
+    # network only: nothing routes to it.
+    image: ${CONFERA_API_IMAGE:?the deploy script writes CONFERA_API_IMAGE into images.env}
+    env_file:
+      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/api.env
+    environment:
+      <<: *api-environment
+    secrets: [database_url, system_database_url, data_key]
+    volumes:
+      - files:/var/lib/confera/files
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+    networks: [backend]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *api-healthcheck
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 200
+
+  postgres:
+    <<: *hardened
+    # PostgreSQL 18.6 (Debian trixie), the same image as the development stack.
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    user: '999:999'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - pgdata:/var/lib/postgresql
+    tmpfs:
+      - /var/run/postgresql:uid=999,gid=999,mode=0755
+      - /tmp:uid=999,gid=999,mode=0700
+    shm_size: 256m
+    networks: [backend]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready --username postgres --dbname postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 300
+
+  clamav:
+    <<: *hardened
+    # ClamAV 1.4 (Alpine) with the signature databases of its build; freshclam keeps them current.
+    image: clamav/clamav:1.4@sha256:b5b910ce43d595bf8a2fe401e34db56434602b2c755b7c2b07f00c917d04d469
+    user: '100:101'
+    # The image's own start script needs root (it changes owners and writes into /etc and /var);
+    # the two daemons need none. tini (init: true) is process 1.
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - freshclam --daemon --foreground --stdout --checks=12 --config-file=/etc/clamav/freshclam.conf & exec clamd --foreground --config-file=/etc/clamav/clamd.conf
+    volumes:
+      - clamav-db:/var/lib/clamav
+    tmpfs:
+      - /tmp:uid=100,gid=101,mode=0700
+      - /run/clamav:uid=100,gid=101,mode=0750
+      - /var/log/clamav:uid=100,gid=101,mode=0750
+    networks: [backend]
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 100
+
+  # ---- One-shot jobs: never running, started by the deploy script or the operator -----------
+
+  migrate:
+    <<: *hardened
+    restart: 'no'
+    image: ${CONFERA_JOBS_IMAGE:?the deploy script writes CONFERA_JOBS_IMAGE into images.env}
+    profiles: [jobs]
+    command: ['node_modules/.bin/prisma', 'migrate', 'deploy']
+    # The owner role's address exists in this job only (ADR-05, ADR-26).
+    secrets: [migration_database_url]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+    networks: [backend]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 100
+
+  provision:
+    <<: *hardened
+    restart: 'no'
+    image: ${CONFERA_JOBS_IMAGE:?the deploy script writes CONFERA_JOBS_IMAGE into images.env}
+    profiles: [provision]
+    # Creates the database roles and the database (scripts/db-provision.mjs); the operator runs
+    # it once at provisioning and first after a restore. The superuser's password exists in this
+    # job and in Postgres only.
+    command: ['node', 'scripts/db-provision.mjs']
+    secrets: [postgres_password, migration_database_url, database_url, system_database_url]
+    # The superuser's password file belongs to Postgres (uid 999, group 999, mode 0440): this job
+    # reads it through the group.
+    group_add: ['999']
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700
+    networks: [backend]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+
+networks:
+  edge: {}
+  backend: {}
+
+volumes:
+  pgdata: {}
+  files: {}
+  clamav-db: {}
+
+# One file per secret under CONFERA_SECRETS_DIR, readable by the user of the service that is
+# given it and by nobody else (README section 15). Compose mounts each read-only.
+secrets:
+  database_url:
+    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/database_url
+  system_database_url:
+    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/system_database_url
+  data_key:
+    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/data_key
+  migration_database_url:
+    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/migration_database_url
+  postgres_password:
+    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/postgres_password

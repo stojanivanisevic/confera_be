@@ -1,0 +1,31 @@
+# The access gate of the STAGING server (ADR-27, staging instance, rule 2), imported into both
+# sites by deploy/proxy/Caddyfile.
+#
+# - Every path asks for the gate's user and password (HTTP basic authentication over TLS).
+#   The password is kept as a bcrypt hash in the proxy's environment, never in git:
+#   `caddy hash-password --bcrypt-cost 10` makes it (deploy/proxy.env.example).
+# - Exceptions, and no others:
+#     * the certificate challenge: Caddy answers it before any route, so the gate never sees it;
+#     * the PayPal webhook (0.7.0): added here when the route exists;
+#     * the public form paths of the embed trial (M4-QA-04): opened ONLY after the staging tests of
+#       M4-QA-03 pass, by the change described at @gated below (a change the Security reviewer sees).
+# - noindex on everything (ADR-27).
+#
+# The application itself refuses a public route under the admin host and the reverse (ADR-02),
+# so one gate for both host names opens nothing the other host would not.
+
+header X-Robots-Tag "noindex, nofollow"
+
+@gated {
+	# Every path. To open the public form paths after M4-QA-03 has passed, replace the line
+	# "path *" by the block below (and nothing else):
+	#	not {
+	#		host {$CONFERA_PUBLIC_HOST}
+	#		path /f/* /embed/* /public/v1/forms/*
+	#	}
+	path *
+}
+
+basic_auth @gated {
+	{$CONFERA_GATE_USER} {$CONFERA_GATE_PASSWORD_HASH}
+}

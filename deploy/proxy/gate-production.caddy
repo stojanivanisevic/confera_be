@@ -1,0 +1,3 @@
+# Imported into both sites by deploy/proxy/Caddyfile on a PRODUCTION server: no gate.
+# (A file of its own, so that a production server never carries the staging gate by mistake:
+# deploy/compose.yml imports gate-${CONFERA_INSTANCE}.caddy, and INSTANCE has exactly two values.)
