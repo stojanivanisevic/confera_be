@@ -119,6 +119,7 @@ describe('OpenAPI pipeline', () => {
       expect(operation?.operationId).toBe('getMeta');
       expect(JSON.stringify(operation?.responses['200'])).toContain('#/components/schemas/Meta');
       expect(Object.keys(admin.components.schemas.Meta?.properties ?? {})).toEqual([
+        'instance',
         'name',
         'version',
       ]);
