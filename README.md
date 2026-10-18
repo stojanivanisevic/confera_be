@@ -475,7 +475,8 @@ the two equal. The OpenAPI document carries the declaration of every operation
   unattached bytes in an organisation, uploads on their way included, uploads are refused (503
   `upload_quota_reached`) and the admins told; the files of an expired token are purged once
   its chain of renewals has ended, 24 hours after the chain began (until then a renewal takes
-  them back), any unattached file 30 hours after its upload, the token a day after its issue,
+  them back), any unattached file 30 hours after its upload (the row first, checked again,
+  then the bytes: SEC-M3-05), the token a day after its issue,
   and a temporary file untouched for an hour. A `.docx` counts as holding macros by the name, the content type
   or the relationship of its VBA project. Its inspection is bounded (SEC-M3-01): at most 64
   parts, 2 MB inflated in all and 1 s per file; a ZIP whose entries repeat a name or overlap

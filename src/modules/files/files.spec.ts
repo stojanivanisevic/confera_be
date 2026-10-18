@@ -17,10 +17,15 @@ import { repoRoot } from '../../../test/support/run-node';
 import type { AppConfig } from '../../config/config';
 import { attachmentHeader, asciiFileName, safeFileName } from './file-names';
 import { detectFileType, MAX_PARTS_READ } from './file-type';
-import { retryDelayMs } from './files-worker';
+import type { AppLogger } from '../../common/logging/app-logger';
+import type { SystemResolvers } from '../../platform/prisma/system/resolvers';
+import type { TenantDatabase } from '../../platform/prisma/tenant-database';
+import type { TenantContext } from '../../platform/tenancy/tenant-context';
+import type { MailQueue } from '../mail/mail-queue';
+import { FilesWorker, retryDelayMs } from './files-worker';
 import { mayServe } from './serving';
 import { FileStorage, StorageKeyError } from './storage';
-import { ClamdScanner, verdictOf } from './virus-scanner';
+import { ClamdScanner, verdictOf, type VirusScanner } from './virus-scanner';
 
 const folder = join(repoRoot, 'tmp', `files-unit-${randomUUID()}`);
 
@@ -295,6 +300,58 @@ describe('the antivirus (M3-BE-08, ST-38)', () => {
     expect(mayServe({ kind: 'submission_file', scanState: 'infected' })).toBe('file_not_clean');
     expect(mayServe({ kind: 'submission_file', scanState: 'not_clean' })).toBe('file_not_clean');
     expect(mayServe({ kind: 'generated_document', scanState: 'pending' })).toBe('serve');
+  });
+
+  it('the purge deletes the row first, and keeps the bytes of a file that a renewal or a submit took meanwhile (SEC-M3-05)', async () => {
+    const removed: string[] = [];
+    const deletions: unknown[] = [];
+    const orphans = [
+      { id: 'moved', storageKey: 'org/a/moved' },
+      { id: 'orphan', storageKey: 'org/a/orphan' },
+    ];
+    const database = {
+      db: {
+        formToken: {
+          findMany: () => Promise.resolve([{ id: 'expired-token' }]),
+          deleteMany: () => Promise.resolve({ count: 0 }),
+        },
+        storedFile: {
+          findMany: () => Promise.resolve(orphans),
+          // Between the look-up and the delete a renewal moved the first file to a new token.
+          deleteMany: (query: { where: { id: string } }) => {
+            deletions.push(query.where);
+            return Promise.resolve({ count: query.where.id === 'moved' ? 0 : 1 });
+          },
+        },
+      },
+    };
+    const worker = new FilesWorker(
+      { jobs: { intervalSeconds: 0 } } as AppConfig,
+      {} as VirusScanner,
+      { organisationsWithUsers: () => Promise.resolve(['org-a']) } as unknown as SystemResolvers,
+      { run: (_id: string, work: () => Promise<void>) => work() } as unknown as TenantContext,
+      database as unknown as TenantDatabase,
+      {
+        removeStaleIncoming: () => Promise.resolve(0),
+        remove: (key: string) => {
+          removed.push(key);
+          return Promise.resolve();
+        },
+      } as unknown as FileStorage,
+      {} as MailQueue,
+      { info: () => undefined, warn: () => undefined } as unknown as AppLogger,
+    );
+    // Only the purge is under test (the fake's look-up of files would answer the scan too).
+    jest
+      .spyOn(worker as unknown as { scan: () => Promise<void> }, 'scan')
+      .mockResolvedValue(undefined);
+    const report = await worker.tick(new Date());
+    expect(removed).toEqual(['org/a/orphan']);
+    expect(report.purged).toBe(1);
+    // Each delete names the row and checks again that it is unattached and purgeable.
+    expect(deletions[0]).toEqual(
+      expect.objectContaining({ id: 'moved', submissionId: null, OR: expect.any(Array) }),
+    );
   });
 
   it('tries a pending scan again after 1, 2, 4 ... minutes, at most an hour apart', () => {

@@ -144,22 +144,28 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
       take: 500,
     });
     const tokenIds = expired.map((token) => token.id);
+    const purgeable = {
+      submissionId: null,
+      OR: [
+        { formTokenId: { in: tokenIds } },
+        { createdAt: { lte: new Date(now.getTime() - UNATTACHED_KEPT_MS) } },
+      ],
+    };
     const orphans = await this.database.db.storedFile.findMany({
-      where: {
-        submissionId: null,
-        OR: [
-          { formTokenId: { in: tokenIds } },
-          { createdAt: { lte: new Date(now.getTime() - UNATTACHED_KEPT_MS) } },
-        ],
-      },
+      where: purgeable,
       select: { id: true, storageKey: true },
       take: 500,
     });
     for (const orphan of orphans) {
-      await this.storage.remove(orphan.storageKey);
-      await this.database.db.storedFile.deleteMany({
-        where: { id: orphan.id, submissionId: null },
+      // The row first, on the same conditions, checked again on the locked row (SEC-M3-05): a
+      // file a renewal moved or a submit attached in the meantime keeps its row and its bytes.
+      const deleted = await this.database.db.storedFile.deleteMany({
+        where: { id: orphan.id, ...purgeable },
       });
+      if (deleted.count !== 1) {
+        continue;
+      }
+      await this.storage.remove(orphan.storageKey);
       report.purged += 1;
     }
     await this.database.db.formToken.deleteMany({
