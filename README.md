@@ -673,7 +673,8 @@ the migrations grant to them by name; their passwords come from the addresses in
 
 `db:provision` connects as the superuser `postgres` of the development stack (password
 `POSTGRES_PASSWORD`). For another server set `PROVISION_DATABASE_URL` to a superuser
-address.
+address. It sends each role's password as its SCRAM-SHA-256 verifier, never in clear, so a
+statement that fails and lands in the server's log holds no password (M1-ISS-14).
 
 **At every start the API asks the database what its two roles may do** and refuses to
 start when the application role is a superuser, may bypass row-level security, owns
