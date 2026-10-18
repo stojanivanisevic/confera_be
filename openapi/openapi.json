@@ -1446,6 +1446,130 @@
         }
       }
     },
+    "/api/v1/mail-images": {
+      "post": {
+        "operationId": "uploadMailImage",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailImageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Uploads an email image: multipart, one part `file`, at most 5 MB. PNG, JPEG or GIF by\ncontent (415 `image_type_refused` otherwise, SVG included); at most 8,000 pixels a side\nand 16 megapixels by its header (422 `image_too_many_pixels`); 422 `image_unreadable`\nwhen it cannot be decoded in time; re-encoded at most 600 pixels wide and 200 KB (413\n`image_too_large`). Its scan is pending until ClamAV says clean.",
+        "tags": [
+          "MailImages"
+        ],
+        "x-confera-access": {
+          "permission": "templates.manage"
+        }
+      },
+      "get": {
+        "operationId": "listMailImages",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailImageListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The email images of the organisation, newest first.",
+        "tags": [
+          "MailImages"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
+    "/api/v1/mail-images/{id}": {
+      "get": {
+        "operationId": "getMailImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One image, to a signed-in admin of its organisation only, and only once its scan is clean\n(409 `scan_pending`, `file_not_clean`); as an attachment with its fixed type, never sniffed.",
+        "tags": [
+          "MailImages"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
     "/api/v1/mail-log": {
       "get": {
         "operationId": "listMailLog",
@@ -1556,6 +1680,84 @@
         }
       }
     },
+    "/api/v1/mail-log/retention": {
+      "get": {
+        "operationId": "getMailLogRetention",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailLogRetentionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "How long the log keeps an entry (FR-SMTP-06): 24 months unless an admin set another period.",
+        "tags": [
+          "MailLog"
+        ],
+        "x-confera-access": {
+          "permission": "mail_log.read"
+        }
+      },
+      "put": {
+        "operationId": "setMailLogRetention",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailLogRetentionUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailLogRetentionDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sets the retention: entries older than it are removed by the next run of the job.",
+        "tags": [
+          "MailLog"
+        ],
+        "x-confera-access": {
+          "permission": "mail_log.manage"
+        }
+      }
+    },
     "/api/v1/mail-log/{id}": {
       "get": {
         "operationId": "getMailLogEntry",
@@ -1596,6 +1798,50 @@
         ],
         "x-confera-access": {
           "permission": "mail_log.read"
+        }
+      }
+    },
+    "/api/v1/mail-log/{id}/resend": {
+      "post": {
+        "operationId": "resendMailLogEntry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResentDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resends the message of this entry (FR-SMTP-05): as it was sent, with a fresh secure link\nthat ends the earlier one, or rendered again from the template when the content was not\nkept. 409 `resend_refused` for a test message, or a message that is not done yet.",
+        "tags": [
+          "MailLog"
+        ],
+        "x-confera-access": {
+          "permission": "mail_log.manage"
         }
       }
     },
@@ -5013,6 +5259,14 @@
           "expiresAt"
         ]
       },
+      "MailImageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MailImageListDto": {
+        "type": "object",
+        "properties": {}
+      },
       "MailLogEntryDto": {
         "type": "object",
         "properties": {
@@ -5020,6 +5274,14 @@
             "enum": [
               "sent",
               "failed"
+            ],
+            "type": "string"
+          },
+          "resendMode": {
+            "nullable": true,
+            "enum": [
+              "copy",
+              "rendered_again"
             ],
             "type": "string"
           },
@@ -5064,12 +5326,18 @@
             "type": "boolean",
             "description": "True when the attempt went to the mail catcher of the staging server and not to the\nconfigured server (ADR-27, ST-50); `recipient` is still the original recipient."
           },
-          "sentAt": {
-            "type": "string"
-          },
           "subject": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "The subject as sent (M2-ISS-14), with every secure link as `[link]`; null when the organisation keeps no content."
+          },
+          "resendOf": {
+            "type": "string",
+            "nullable": true,
+            "description": "The message this attempt resent (FR-SMTP-05), and how: `copy` or `rendered_again`."
+          },
+          "sentAt": {
+            "type": "string"
           },
           "bodyHtml": {
             "type": "string",
@@ -5078,10 +5346,18 @@
           "bodyText": {
             "type": "string",
             "nullable": true
+          },
+          "imageIds": {
+            "description": "The email images the body showed: their ids, not their bytes (ADR-13).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "result",
+          "resendMode",
           "id",
           "messageId",
           "recipient",
@@ -5093,10 +5369,12 @@
           "attempt",
           "errorCode",
           "diverted",
-          "sentAt",
           "subject",
+          "resendOf",
+          "sentAt",
           "bodyHtml",
-          "bodyText"
+          "bodyText",
+          "imageIds"
         ]
       },
       "MailLogPageDto": {
@@ -5125,6 +5403,41 @@
           "pageSize"
         ]
       },
+      "MailLogRetentionDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number",
+            "description": "Days; 730 (24 months) on a fresh install."
+          },
+          "version": {
+            "type": "number",
+            "description": "The version of the organisation profile."
+          }
+        },
+        "required": [
+          "days",
+          "version"
+        ]
+      },
+      "MailLogRetentionUpdateDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number",
+            "minimum": 30,
+            "maximum": 3650
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "days",
+          "version"
+        ]
+      },
       "MailLogSummaryDto": {
         "type": "object",
         "properties": {
@@ -5132,6 +5445,14 @@
             "enum": [
               "sent",
               "failed"
+            ],
+            "type": "string"
+          },
+          "resendMode": {
+            "nullable": true,
+            "enum": [
+              "copy",
+              "rendered_again"
             ],
             "type": "string"
           },
@@ -5176,12 +5497,23 @@
             "type": "boolean",
             "description": "True when the attempt went to the mail catcher of the staging server and not to the\nconfigured server (ADR-27, ST-50); `recipient` is still the original recipient."
           },
+          "subject": {
+            "type": "string",
+            "nullable": true,
+            "description": "The subject as sent (M2-ISS-14), with every secure link as `[link]`; null when the organisation keeps no content."
+          },
+          "resendOf": {
+            "type": "string",
+            "nullable": true,
+            "description": "The message this attempt resent (FR-SMTP-05), and how: `copy` or `rendered_again`."
+          },
           "sentAt": {
             "type": "string"
           }
         },
         "required": [
           "result",
+          "resendMode",
           "id",
           "messageId",
           "recipient",
@@ -5193,6 +5525,8 @@
           "attempt",
           "errorCode",
           "diverted",
+          "subject",
+          "resendOf",
           "sentAt"
         ]
       },
@@ -5655,6 +5989,29 @@
         },
         "required": [
           "released"
+        ]
+      },
+      "ResentDto": {
+        "type": "object",
+        "properties": {
+          "resendMode": {
+            "enum": [
+              "copy",
+              "rendered_again"
+            ],
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "resendOf": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resendMode",
+          "messageId",
+          "resendOf"
         ]
       },
       "ResetRequestDto": {

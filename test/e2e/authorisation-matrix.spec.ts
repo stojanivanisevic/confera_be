@@ -148,6 +148,8 @@ const SAMPLE_BODIES: Readonly<Record<string, () => object>> = {
     body: { type: 'doc', children: [] },
   }),
   setStatusEmails: () => ({ types: [], version: 99 }),
+  uploadMailImage: () => ({}),
+  setMailLogRetention: () => ({ days: 730, version: 99 }),
   changePaymentDetails: () => ({
     rsdAccount: null,
     eurIban: null,
@@ -251,8 +253,16 @@ async function objectsOfA(
        RETURNING id`,
       [organisationId, submission, `org/${organisationId}/${randomUUID()}`],
     );
+    const image = await one(
+      `INSERT INTO files (organisation_id, kind, storage_key, original_name, detected_type,
+         size_bytes, sha256, width, height)
+       VALUES ($1, 'email_image', $2, 'logo.png', 'png', 1, 'x', 1, 1)
+       RETURNING id`,
+      [organisationId, `org/${organisationId}/${randomUUID()}`],
+    );
     await owner.query('COMMIT');
     return {
+      '/api/v1/mail-images/': image,
       '/api/v1/mail-servers/': server,
       '/api/v1/conferences/': conference,
       '/api/v1/mail-templates/': template,

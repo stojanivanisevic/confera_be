@@ -426,6 +426,36 @@ the two equal. The OpenAPI document carries the declaration of every operation
   by itself. With no server or no template a message waits and the application stays
   healthy.
 
+- **Email images** (M4-BE-06, ADR-10, ADR-12; ST-60, ST-67): `POST /api/v1/mail-images`
+  (multipart, one part `file`, at most 5 MB; permission `templates.manage`), `GET
+/api/v1/mail-images` and `GET /api/v1/mail-images/{id}`. The type is read from the content:
+  PNG, JPEG or GIF; an SVG or anything else is 415 `image_type_refused`. The size is read from
+  the header before anything is decoded: at most 8,000 pixels a side, 16 megapixels and 100
+  GIF frames (422 `image_too_many_pixels`), so a pixel bomb ends at once. The image is then
+  decoded in a worker thread of its own (`src/modules/files/email-images.ts`, pure JavaScript
+  decoders `pngjs`, `jpeg-js`, `omggif`: no native code), within 5 s and a heap limit, with an
+  empty environment (422 `image_unreadable` for a broken one or one past its time), and
+  re-encoded at most 600 pixels wide: PNG and GIF (its first frame) as PNG, JPEG as JPEG; the
+  new file holds pixels only, so no metadata of the upload survives; above 200 KB it becomes a
+  JPEG of lower quality, or 413 `image_too_large`. It is stored as a file of the kind
+  `email_image`, scanned by the files worker, and served only to a signed-in admin of its
+  organisation once clean, as an attachment. A message carries its images as inline parts
+  (`cid:`), never a remote address; the mail log keeps their ids, not their bytes; the
+  preview embeds them as data. At most 500 images per organisation (409 `image_quota_reached`).
+- **Resend and retention** (M4-BE-05, FR-SMTP-05, 06): `POST /api/v1/mail-log/{id}/resend`
+  (permission `mail_log.manage`) queues a new message that names the one it repeats
+  (`resendOf`): `copy` when the content was kept, sent as it was with a fresh secure link that
+  ends the earlier one; `rendered_again` when the organisation keeps no content. A test
+  message, or a message not done yet, is 409 `resend_refused`. A log entry lists its
+  `subject` (M2-ISS-14), `resendOf` and `resendMode`. `GET`/`PUT /api/v1/mail-log/retention`
+  (`{ days, version }`, 30 to 3650; 730, 24 months, on a fresh install).
+- **The maintenance worker** (`src/modules/jobs/maintenance-worker.ts`): every
+  `JOBS_INTERVAL_SECONDS`, at most once an hour, the security summary (failed sign-ins of
+  unknown addresses as one entry in every audit log, security events older than 90 days
+  removed; M2-ISS-12) and the retention of the mail log of each organisation (entries older
+  than its period, and messages done with that are as old, with an audit entry
+  `mail_log.purged`). A message that still waits is never removed.
+
 ### Forms, embed and intake (0.3.0)
 
 - **Forms** (ADR-09, M3-BE-01): one form of a type per conference (`abstract` in 0.3.0),
