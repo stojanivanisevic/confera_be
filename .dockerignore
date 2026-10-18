@@ -1,0 +1,28 @@
+# The build context of the images (Dockerfile, deploy/checks). An allowlist: everything is left
+# out unless it is named here, so a .env, a key or a local database can never reach an image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!prisma.config.ts
+!tsconfig.json
+!tsconfig.build.json
+!prisma/
+!src/
+!scripts/build.mjs
+!scripts/db-provision.mjs
+!scripts/seed-production.mjs
+!scripts/first-admin.mjs
+!scripts/lib/
+!deploy/image/
+!deploy/server/
+!deploy/checks/st-63/
+
+# Never, even inside an allowed folder.
+**/.env
+**/.env.*
+**/*.spec.ts
+**/__fixtures__/
+src/generated/
+src/modules/dev-tools/
+src/**/testing/
