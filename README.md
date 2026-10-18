@@ -486,7 +486,9 @@ the two equal. The OpenAPI document carries the declaration of every operation
   UTF-16, character references decoded; a part that is neither counts as macros. The names
   of an old `.doc` are compared in any casing. A `.docx` whose relationships reach outside it
   (a remote template, frame or object, a UNC or `file:` target; a plain hyperlink does not
-  count) is kept and flagged `external_links`, like a `.doc` with macros. A file is served only by
+  count) is kept and flagged `external_links`, like a `.doc` with macros. No regular
+  expression runs over a part (SEC-M3-11): parts are read by a linear scan, at most 10 000
+  elements of at most 16 KB each, the time budget looked at between elements. A file is served only by
   `GET /api/v1/submissions/{id}/files/{fileId}`, as an attachment with `filename*`, and only
   when its scan is clean (409 `scan_pending` or `file_not_clean`).
 - **Antivirus** (M3-BE-08): the files worker (every `JOBS_INTERVAL_SECONDS`) sends every
@@ -658,7 +660,9 @@ To add one:
   is a step of its own, so no other test runs beside it, and the middle one of five
   processes counts (three of the five must be under the limit): other work on the
   machine can only add time to a measurement, but the luckiest process alone must not
-  meet a limit that a person waits for.
+  meet a limit that a person waits for. A fresh process also reads a 1 MB relationship part
+  of a `.docx` in each shape that makes a backtracking scan quadratic in under 100 ms (the
+  middle one of three processes, SEC-M3-11).
 - **Supply chain:** the checks of section 12 fail when they should, on planted cases.
 - **Integration:** row-level security as the application role (raw SQL, Prisma, nested
   relations, a pool of one connection, 200 interleaved requests of two organisations),

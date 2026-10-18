@@ -192,13 +192,24 @@ async function zipPart(
   return null;
 }
 
+/*
+ * No regular expression runs over the content of a part (SEC-M3-11): a backtracking pattern
+ * can take time that grows with the square of a part's length, and the time budget cannot
+ * stop a match half way. Parts are read by `indexOf` loops that look at each character a
+ * bounded number of times; the guard test runs every pattern of this file on 1 MB.
+ */
+
+/** The longest element of a relationship part that is read (SEC-M3-11): a real one is < 1 KB. */
+export const MAX_ELEMENT_CHARS = 16 * 1024;
+/** The most elements of one relationship part that are read (SEC-M3-11). */
+export const MAX_ELEMENTS = 10_000;
+
 /**
  * The text of an XML part as Word reads it (SEC-M3-06): UTF-8, or UTF-16 by its byte order
- * mark or its first `<`, with the character references and the five named entities decoded,
- * so that `vba&#80;roject` or a part in UTF-16 is matched like plain text. Null when it is
- * none of these (a NUL is left, as in UTF-32): such a part cannot be judged.
+ * mark or its first `<`. Null when it is none of these (a NUL is left, as in UTF-32): such a
+ * part cannot be judged. Character references are not decoded here (`decodeReferences`).
  */
-export function xmlPartText(bytes: Buffer): string | null {
+function partText(bytes: Buffer): string | null {
   let text: string;
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
     text = bytes.subarray(2).toString('utf16le');
@@ -214,26 +225,198 @@ export function xmlPartText(bytes: Buffer): string | null {
     const start = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
     text = bytes.subarray(start).toString('utf8');
   }
-  if (text.includes('\0')) {
+  return text.includes('\0') ? null : text;
+}
+
+/** The five named entities of XML, by their names in lower case. */
+const NAMED_ENTITY_LIST: readonly (readonly [string, string])[] = [
+  ['amp', '&'],
+  ['lt', '<'],
+  ['gt', '>'],
+  ['quot', '"'],
+  ['apos', "'"],
+];
+
+/**
+ * The character of the reference `text[from, to)`, between its `&` and `;` (`#80`, `#x50`,
+ * `amp`), or null. By character codes, without copying: it runs once per `&` of a part.
+ */
+function referenced(text: string, from: number, to: number): string | null {
+  if (text.charCodeAt(from) !== 0x23) {
+    const size = to - from;
+    if (size < 2 || size > 4) {
+      return null;
+    }
+    // By the letters, in lower case, without copying them.
+    for (const [name, character] of NAMED_ENTITY_LIST) {
+      if (name.length !== size) {
+        continue;
+      }
+      let same = true;
+      for (let index = 0; index < size && same; index += 1) {
+        same = (text.charCodeAt(from + index) | 0x20) === name.charCodeAt(index);
+      }
+      if (same) {
+        return character;
+      }
+    }
     return null;
   }
-  const named: Readonly<Record<string, string>> = {
-    amp: '&',
-    lt: '<',
-    gt: '>',
-    quot: '"',
-    apos: "'",
-  };
-  return text.replace(
-    /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|(amp|lt|gt|quot|apos));/giu,
-    (whole, decimal?: string, hex?: string, name?: string) => {
-      if (name !== undefined) {
-        return named[name.toLowerCase()] ?? whole;
+  let at = from + 1;
+  const hex = (text.charCodeAt(at) | 0x20) === 0x78;
+  if (hex) {
+    at += 1;
+  }
+  if (to - at < 1 || to - at > (hex ? 6 : 7)) {
+    return null;
+  }
+  let code = 0;
+  for (; at < to; at += 1) {
+    const digit = text.charCodeAt(at);
+    const lower = digit | 0x20;
+    if (digit >= 0x30 && digit <= 0x39) {
+      code = code * (hex ? 16 : 10) + (digit - 0x30);
+    } else if (hex && lower >= 0x61 && lower <= 0x66) {
+      code = code * 16 + (lower - 0x57);
+    } else {
+      return null;
+    }
+  }
+  return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : null;
+}
+
+const AMP = 0x26;
+const SEMICOLON = 0x3b;
+const LT = 0x3c;
+const GT = 0x3e;
+const SLASH = 0x2f;
+const EQUALS = 0x3d;
+const QUOTE = 0x22;
+const APOSTROPHE = 0x27;
+const BANG = 0x21;
+const QUESTION = 0x3f;
+
+/**
+ * The character references and the five named entities of XML decoded (SEC-M3-06), so that
+ * `vba&#80;roject` reads as `vbaProject`. One pass by character codes; each `&` looks at most
+ * ten characters ahead.
+ */
+export function decodeReferences(text: string): string {
+  if (!text.includes('&')) {
+    return text;
+  }
+  let decoded = '';
+  let copied = 0;
+  const length = text.length;
+  for (let amp = 0; amp < length; amp += 1) {
+    if (text.charCodeAt(amp) !== AMP) {
+      continue;
+    }
+    let semicolon = -1;
+    const limit = Math.min(length, amp + 11);
+    for (let at = amp + 1; at < limit; at += 1) {
+      const code = text.charCodeAt(at);
+      if (code === SEMICOLON) {
+        semicolon = at;
+        break;
       }
-      const code = decimal !== undefined ? Number(decimal) : Number.parseInt(hex ?? '', 16);
-      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
-    },
-  );
+      if (code === AMP) {
+        break;
+      }
+    }
+    if (semicolon < 0) {
+      continue;
+    }
+    const character = referenced(text, amp + 1, semicolon);
+    if (character === null) {
+      continue;
+    }
+    decoded += text.slice(copied, amp) + character;
+    copied = semicolon + 1;
+    amp = semicolon;
+  }
+  return decoded + text.slice(copied);
+}
+
+/** The text of an XML part with its references decoded, or null (see `partText`). */
+export function xmlPartText(bytes: Buffer): string | null {
+  const text = partText(bytes);
+  return text === null ? null : decodeReferences(text);
+}
+
+const isSpace = (code: number): boolean =>
+  code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
+
+/** Where `needle` begins in `text` at `from` or later, or -1: a loop, no call per step. */
+function find(text: string, needle: string, from: number): number {
+  const first = needle.charCodeAt(0);
+  const last = text.length - needle.length;
+  for (let at = from; at <= last; at += 1) {
+    if (text.charCodeAt(at) === first && text.startsWith(needle, at)) {
+      return at;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The attributes of the start tag `text[from, to)` (after its name), names in lower case and
+ * values with their references decoded. One pass: each character is looked at once.
+ */
+function attributesOf(text: string, from: number, to: number): Map<string, string> {
+  const attributes = new Map<string, string>();
+  let at = from;
+  while (at < to) {
+    while (at < to && (isSpace(text.charCodeAt(at)) || text.charCodeAt(at) === SLASH)) {
+      at += 1;
+    }
+    const nameStart = at;
+    while (at < to) {
+      const code = text.charCodeAt(at);
+      if (code === EQUALS || code === SLASH || isSpace(code)) {
+        break;
+      }
+      at += 1;
+    }
+    const name = text.slice(nameStart, at).toLowerCase();
+    while (at < to && isSpace(text.charCodeAt(at))) {
+      at += 1;
+    }
+    if (at >= to || text.charCodeAt(at) !== EQUALS) {
+      at = Math.max(at, nameStart + 1);
+      continue;
+    }
+    at += 1;
+    while (at < to && isSpace(text.charCodeAt(at))) {
+      at += 1;
+    }
+    const quote = text.charCodeAt(at);
+    if (at >= to || (quote !== QUOTE && quote !== APOSTROPHE)) {
+      continue;
+    }
+    // Within the tag only, so that a value never makes the scan read past it.
+    let end = at + 1;
+    while (end < to && text.charCodeAt(end) !== quote) {
+      end += 1;
+    }
+    if (end >= to) {
+      break;
+    }
+    attributes.set(name, decodeReferences(text.slice(at + 1, end)));
+    at = end + 1;
+  }
+  return attributes;
+}
+
+/** Whether one `Relationship` element reaches outside the document (SEC-M3-06). */
+function reachesOutside(attributes: Map<string, string>): boolean {
+  const target = (attributes.get('target') ?? '').trim().toLowerCase();
+  if (target.startsWith('\\\\') || target.startsWith('//') || target.startsWith('file:')) {
+    return true;
+  }
+  const mode = (attributes.get('targetmode') ?? '').trim().toLowerCase();
+  const type = (attributes.get('type') ?? '').trim().toLowerCase();
+  return mode === 'external' && !type.endsWith('/hyperlink');
 }
 
 /**
@@ -241,23 +424,82 @@ export function xmlPartText(bytes: Buffer): string | null {
  * (SEC-M3-06): a remote template, frame or object (`TargetMode="External"`, other than a
  * hyperlink, which the reader must click), or a UNC or `file:` target of any kind, which
  * Windows may open by itself and hand the user's credentials to.
+ *
+ * A linear scan by character codes (SEC-M3-11): element by element, a quoted `>` inside its
+ * tag, comments, processing instructions and CDATA skipped whole. An element longer than any
+ * relationship is, more elements than a part ever has, or a scan past the file's time, is
+ * `'crafted'`; the budget is looked at between elements.
  */
-function hasExternalLink(text: string): boolean {
-  for (const element of text.matchAll(/<(?:[\w.-]+:)?Relationship\b([^>]*)>/giu)) {
-    const attributes = new Map<string, string>();
-    for (const attribute of (element[1] ?? '').matchAll(
-      /([\w.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/gu,
-    )) {
-      attributes.set((attribute[1] ?? '').toLowerCase(), attribute[2] ?? attribute[3] ?? '');
+function hasExternalLink(text: string, until: number): boolean | 'crafted' {
+  const length = text.length;
+  let elements = 0;
+  let at = 0;
+  while (at < length) {
+    if (text.charCodeAt(at) !== LT) {
+      at += 1;
+      continue;
     }
-    const target = (attributes.get('target') ?? '').trim();
-    if (/^(?:\\\\|\/\/|file:)/iu.test(target)) {
-      return true;
+    const open = at;
+    elements += 1;
+    if (elements > MAX_ELEMENTS || (elements % 256 === 0 && Date.now() > until)) {
+      return 'crafted';
     }
-    if (
-      (attributes.get('targetmode') ?? '').trim().toLowerCase() === 'external' &&
-      !/\/hyperlink$/iu.test((attributes.get('type') ?? '').trim())
-    ) {
+    const next = text.charCodeAt(open + 1);
+    if (next === BANG || next === QUESTION) {
+      const closing = text.startsWith('<!--', open)
+        ? '-->'
+        : text.startsWith('<![CDATA[', open)
+          ? ']]>'
+          : next === QUESTION
+            ? '?>'
+            : '>';
+      const end = find(text, closing, open + 2);
+      if (end < 0) {
+        return false;
+      }
+      at = end + closing.length;
+      continue;
+    }
+    // The name, then the end of the tag; a quoted value may hold a `>`.
+    let cursor = open + 1;
+    while (cursor < length) {
+      const code = text.charCodeAt(cursor);
+      if (code === SLASH || code === GT || code === LT || isSpace(code)) {
+        break;
+      }
+      cursor += 1;
+    }
+    const nameEnd = cursor;
+    let close = -1;
+    let quote = 0;
+    while (cursor < length) {
+      if (cursor - open > MAX_ELEMENT_CHARS) {
+        return 'crafted';
+      }
+      const code = text.charCodeAt(cursor);
+      if (quote !== 0) {
+        if (code === quote) {
+          quote = 0;
+        }
+      } else if (code === GT) {
+        close = cursor;
+        break;
+      } else if (code === LT) {
+        break;
+      } else if (code === QUOTE || code === APOSTROPHE) {
+        quote = code;
+      }
+      cursor += 1;
+    }
+    if (close < 0) {
+      // No end of this tag before the next one, or before the end: read nothing of it.
+      at = cursor;
+      continue;
+    }
+    at = close + 1;
+    const name = text.slice(open + 1, nameEnd).toLowerCase();
+    const local = name.slice(name.lastIndexOf(':') + 1);
+    if (local === 'relationship' && reachesOutside(attributesOf(text, nameEnd, close))) {
       return true;
     }
   }
@@ -304,17 +546,26 @@ async function inspectDocx(
     }
     budget.parts -= 1;
     const part = await zipPart(handle, size, entry, budget);
-    const text = part === null ? null : xmlPartText(part);
-    if (text === null) {
+    const raw = part === null ? null : partText(part);
+    if (raw === null) {
       return { macros: true, externalLinks };
     }
+    const text = decodeReferences(raw).toLowerCase();
+    const named = (words: readonly string[]) => words.some((word) => text.includes(word));
     if (
-      (contentTypes && /vbaProject|macroEnabled|vbaData/i.test(text)) ||
-      (relationships && /relationships\/(?:vbaProject|wordVbaData)/i.test(text))
+      (contentTypes && named(['vbaproject', 'macroenabled', 'vbadata'])) ||
+      (relationships && named(['relationships/vbaproject', 'relationships/wordvbadata']))
     ) {
       return { macros: true, externalLinks };
     }
-    externalLinks ||= relationships && hasExternalLink(text);
+    if (relationships && !externalLinks) {
+      // The structure is read from the text as it stands: a decoded `&gt;` is no end of a tag.
+      const outside = hasExternalLink(raw, budget.until);
+      if (outside === 'crafted') {
+        return { macros: 'crafted', externalLinks };
+      }
+      externalLinks = outside;
+    }
   }
   return { macros: false, externalLinks };
 }

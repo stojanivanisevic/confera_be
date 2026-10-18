@@ -1,12 +1,15 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import ts from 'typescript';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import {
   compoundFileOf,
+  adversarialRelationships,
   deflatedZipOf,
   docOf,
   docxOf,
+  docxWithRelationships,
   EICAR,
   overlappingZipOf,
   pdfOf,
@@ -16,7 +19,7 @@ import { startFakeClamd } from '../../../test/support/fake-clamd';
 import { repoRoot } from '../../../test/support/run-node';
 import type { AppConfig } from '../../config/config';
 import { attachmentHeader, asciiFileName, safeFileName } from './file-names';
-import { detectFileType, MAX_PARTS_READ } from './file-type';
+import { detectFileType, MAX_ELEMENT_CHARS, MAX_PARTS_READ } from './file-type';
 import type { AppLogger } from '../../common/logging/app-logger';
 import type { SystemResolvers } from '../../platform/prisma/system/resolvers';
 import type { TenantDatabase } from '../../platform/prisma/tenant-database';
@@ -198,6 +201,101 @@ describe('the type of a file, from its content', () => {
           ? { type: 'docx', macros: false, externalLinks: true }
           : { type: 'docx', macros: false },
       );
+    });
+  });
+
+  describe('the relationship scan is linear (SEC-M3-11)', () => {
+    const adversarial = adversarialRelationships();
+
+    // The gate of 100 ms is the timing tier (test/timing/docx-inspection.spec.ts), in plain
+    // Node: inside Jest the same scan takes five to twenty times as long. Here a guard that a
+    // quadratic scan, hours for 1 MB, could never meet.
+    it.each(adversarial)('a 1 MB part of %s is judged in bounded time', async (_name, rels) => {
+      const path = written(docxWithRelationships(rels));
+      const started = performance.now();
+      const detected = await detectFileType(path);
+      expect(performance.now() - started).toBeLessThan(5_000);
+      expect(detected.type).toBe('docx');
+    });
+
+    it('every pattern in file-type.ts runs over 1 MB of each shape in under 100 ms', () => {
+      const source = readFileSync(
+        join(repoRoot, 'src', 'modules', 'files', 'file-type.ts'),
+        'utf8',
+      );
+      const file = ts.createSourceFile('file-type.ts', source, ts.ScriptTarget.Latest, true);
+      const patterns: RegExp[] = [];
+      const visit = (node: ts.Node): void => {
+        if (ts.isRegularExpressionLiteral(node)) {
+          const text = node.text;
+          const slash = text.lastIndexOf('/');
+          const flags = text.slice(slash + 1);
+          patterns.push(
+            new RegExp(text.slice(1, slash), flags.includes('g') ? flags : `${flags}g`),
+          );
+        }
+        // A pattern built at run time could not be judged here: there is none.
+        if (ts.isNewExpression(node) || ts.isCallExpression(node)) {
+          expect(node.expression.getText(file)).not.toBe('RegExp');
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(file);
+      for (const pattern of patterns) {
+        for (const [name, input] of adversarial) {
+          const started = performance.now();
+          const matches = input.match(pattern)?.length ?? 0;
+          expect({
+            pattern: pattern.source,
+            name,
+            matches,
+            fast: performance.now() - started < 100,
+          }).toEqual({ pattern: pattern.source, name, matches, fast: true });
+        }
+      }
+    });
+
+    it.each([
+      [
+        'a decoded &gt; in an earlier value',
+        '<Relationship Id="a&gt;" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://x.example.test/t.dotm" TargetMode="External"/>',
+      ],
+      [
+        'a > inside a quoted value',
+        '<Relationship Id="a>b" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://x.example.test/t.dotm" TargetMode="External"/>',
+      ],
+      [
+        'a comment with an apostrophe before it',
+        '<!-- don\'t --><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://x.example.test/t.dotm" TargetMode="External"/>',
+      ],
+      [
+        'a target written with references',
+        '<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="&#92;&#92;files.example.test&#92;a.png"/>',
+      ],
+    ])('an external relationship behind %s is still flagged', async (_name, relationship) => {
+      const zip = zipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/settings.xml.rels': `<?xml version="1.0"?><Relationships>${relationship}</Relationships>`,
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({
+        type: 'docx',
+        macros: false,
+        externalLinks: true,
+      });
+    });
+
+    it(`an element longer than ${MAX_ELEMENT_CHARS} characters is refused as macros`, async () => {
+      const zip = zipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/document.xml.rels': `<Relationship Target="${'x'.repeat(MAX_ELEMENT_CHARS)}"/>`,
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({
+        type: 'docx',
+        macros: true,
+        crafted: true,
+      });
     });
   });
 

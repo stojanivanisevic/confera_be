@@ -89,6 +89,40 @@ export function overlappingZipOf(records: number): Buffer {
   return Buffer.concat([local, firstName, data, directory, end]);
 }
 
+/**
+ * Relationship parts of about 1 MB in the shapes that make a backtracking pattern, or a scan
+ * that reads ahead from every position, take time that grows with the square of their length
+ * (SEC-M3-11). The unit tier and the timing tier both read them.
+ */
+export function adversarialRelationships(): readonly (readonly [string, string])[] {
+  const MB = 1024 * 1024;
+  const size = MB - 1024;
+  return (
+    [
+      ['tags that never end', '<Relationship '.repeat(MB / 14)],
+      ['one tag of names without values', `<Relationship ${'a '.repeat(MB / 2)}`],
+      ['names and = without quotes', `<Relationship ${'a='.repeat(MB / 2)}`],
+      ['quotes that never close', `<Relationship Target="${'x'.repeat(MB)}`],
+      ['prefixes without a name', '<a:'.repeat(MB / 3)],
+      ['ampersands without a reference', '&#'.repeat(MB / 2)],
+      ['references that all decode', '&amp;'.repeat(MB / 5)],
+      ['many small elements', '<Relationship Target="x"/>'.repeat(MB / 26)],
+      ['comments that never close', `<!-- ${"' ".repeat(MB / 2)}`],
+      ['many short declarations', '<!>'.repeat(MB / 3)],
+      ['a quote in every tag', '<a "'.repeat(MB / 4)],
+    ] as const
+  ).map(([name, text]) => [name, text.slice(0, size)] as const);
+}
+
+/** A `.docx` whose one relationship part is `relationships`. */
+export function docxWithRelationships(relationships: string): Buffer {
+  return deflatedZipOf({
+    '[Content_Types].xml': '<Types/>',
+    'word/document.xml': '<w:document/>',
+    'word/_rels/document.xml.rels': relationships,
+  });
+}
+
 /** A ZIP whose entries are deflated (a `.docx` written by Word is). */
 export function deflatedZipOf(entries: Readonly<Record<string, string | Buffer>>): Buffer {
   const locals: Buffer[] = [];
