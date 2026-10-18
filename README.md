@@ -132,8 +132,8 @@ Stop the API with Ctrl+C.
 
 **Step 7. Run the tests that need the database.** They build the application, create a
 database of their own (`confera_integration_test`) with the same two commands as step 5,
-and leave your development database alone. `test:int` takes about 12 minutes (0.3.0, on
-the development laptop, alone and in the blank-slate run alike).
+and leave your development database alone. `test:int` takes about 4 minutes on a quiet
+machine and about 12 minutes on a loaded one (0.3.0).
 
 ```
 corepack pnpm test:int
@@ -143,8 +143,8 @@ It ends with `Tests: ... passed` and no failure.
 
 **Step 8. Run the end-to-end tests.** They start the real application on a database of
 their own (`confera_e2e_test`), created with the same two commands as step 5, and send
-HTTP requests to it. They also talk to the mail catcher. About 21 to 23 minutes (0.3.0, on
-the development laptop).
+HTTP requests to it. They also talk to the mail catcher. About 8 minutes on a quiet
+machine and about 22 minutes on a loaded one (0.3.0).
 
 ```
 corepack pnpm test:e2e
