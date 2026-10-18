@@ -263,7 +263,8 @@ that did not answer within 20 s); **1** anything else.
 
 No secret is ever committed. `.env` is ignored by git, and `pnpm supply-chain` scans the
 files git would take. `deploy/api.env.example` is the template of a server's environment;
-it holds no value for a secret and no `DEV_` key.
+it holds no secret at all (on a server each secret is a file of its own, section 15) and no
+`DEV_` key.
 
 ### Development conveniences
 
@@ -1009,7 +1010,9 @@ the version is too young, wait or take the one before.
 ```
 prisma/              schema and committed migrations
 openapi/             the generated, committed OpenAPI files
-deploy/              environment template of a server
+Dockerfile           the production images: runtime (API and worker) and jobs (section 15)
+deploy/              the production topology, its templates, the proxy, the server scripts, the checks (section 15)
+.github/             the pipeline: ci, image, deploy-staging (section 15)
 src/startup.ts       checks the configuration before the framework and the application are loaded
 src/config/          the configuration schema and the STAGE guard; the only reader of the environment
 src/common/          HTTP layer (errors, surfaces, headers), logging
@@ -1093,3 +1096,196 @@ eslint/              the lint rules with a security purpose
   (an old stack of 0.1.0, a PostgreSQL of your own): `corepack pnpm stack:ports`.
 - **Never write `\uXXXX`-style invisible characters into a file as real characters.**
   Use the escape in the source, so that a reviewer can see them.
+
+## 15. Production image and pipeline
+
+0.4.0 (M4-BE-07, M4-BE-08) adds the production images, the topology of a server and the
+pipeline. They are built and checked here **without a server**: the staging server is rented
+only after Gate 4a. No workflow of this repository can reach a server before then.
+
+### The images
+
+| Image                                      | Target    | What it holds                                                                                                                                                     |
+| ------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ghcr.io/stojanivanisevic/confera-be`      | `runtime` | `dist/` (the production build, without the dev-tools module), the production dependencies, `package.json`. The API **and** the worker run it, by the same digest. |
+| `ghcr.io/stojanivanisevic/confera-be-jobs` | `jobs`    | The one-shot jobs: `prisma migrate deploy` (its default), `db-provision`, `seed-production`, `first-admin`. Never serves a request.                               |
+
+- Every stage of `Dockerfile` starts from Node 22.23.3 (Debian bookworm, slim) **by digest**.
+- The runtime image holds no source, no test, no script, no development dependency and no
+  package manager (npm, npx, corepack and yarn are removed). It runs as `node` (uid 1000) and
+  works on a **read-only root**: it writes only to the file volume and to `/tmp`.
+- The jobs image needs the Prisma command line, a development dependency, so it carries the
+  full installation; it holds no source, no build and no test tool (`seed:e2e`, the stubs).
+- The runtime image names its jobs image **by digest** in the label
+  `org.udekom.confera.jobs-image`, so a deploy names one digest and the migration that goes
+  with it follows from the content of that image.
+- **Secrets are files** (`/run/secrets/<name>`), never `ENV` lines, build arguments or
+  `docker inspect` entries. `deploy/image/entrypoint.sh` turns the files a service is given
+  into the variables of `src/config` and runs the command; it knows five names and refuses to
+  start on any other file.
+
+```
+docker build --target runtime -t confera-be .
+docker build --target jobs -t confera-be-jobs .
+```
+
+### The topology of a server: `deploy/`
+
+| File                                                                                          | What it is                                                                                                      |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `deploy/compose.yml`                                                                          | proxy, web, api, worker, postgres, clamav, and the jobs `migrate` and `provision`; staging and production alike |
+| `deploy/compose.env.example`                                                                  | the settings of the topology: instance, the two host names, where settings and secrets live, the two ports      |
+| `deploy/api.env.example`                                                                      | the settings of the API and the worker (no secret)                                                              |
+| `deploy/web.env.example`                                                                      | the settings of the web application: its two origins, nothing else (it must never get a secret)                 |
+| `deploy/proxy.env.example`                                                                    | the ACME address, and on staging the gate's user and password hash                                              |
+| `deploy/proxy/Caddyfile`                                                                      | the reverse proxy (Caddy 2.11.7): TLS, routing by host and path, body limits, HSTS                              |
+| `deploy/proxy/gate-staging.caddy`                                                             | the access gate of staging (every path, noindex); `gate-production.caddy` adds nothing                          |
+| `deploy/server/confera-deploy`                                                                | the deploy script (root): one target and one digest, nothing else                                               |
+| `deploy/server/confera-deploy-gate`                                                           | the forced command of the deploy keys                                                                           |
+| `deploy/server/sshd-confera-deploy.conf`, `sudoers-confera-deploy`, `authorized_keys.example` | how sshd and sudo are set up for the deploy keys                                                                |
+| `deploy/server/deploy.conf.example`                                                           | the deploy script's settings: the fixed image repositories                                                      |
+
+What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` proves:
+
+- **Two networks.** `edge`: proxy, web, api. `backend`: api, worker, postgres, clamav and the
+  jobs. The web container cannot reach Postgres or ClamAV, by name or by address.
+- **Secrets per service.** api and worker: `database_url`, `system_database_url`, `data_key`.
+  migrate: `migration_database_url` (the owner role exists only there). postgres:
+  `postgres_password`. provision: the four database ones. web, proxy and clamav: none.
+- **Every container** runs as a user of its own (web, api, worker and the jobs uid 1000,
+  postgres 999, clamav 100, proxy 10002), on a read-only root file system, with every
+  capability dropped, no new privileges, and memory, CPU and process limits. The proxy keeps
+  `NET_BIND_SERVICE` in its bounding set only because the Caddy binary carries that file
+  capability; with no new privileges no process holds it (the check reads `CapEff` and
+  `CapPrm` of every process of every container). No container mounts the Docker socket; only
+  the proxy publishes ports (80 and 443); neither proxy nor web mounts the file volume.
+- **One worker.** The API runs with `MAIL_WORKER_INTERVAL_SECONDS=0` and
+  `JOBS_INTERVAL_SECONDS=0`; the worker container (the same image) runs the outbox and the
+  file jobs. Run one worker only: the outbox is not claimed with row locks.
+- **The proxy** (M3-ISS-06): `/api/v1/*` on the admin host and `/public/v1/*` on the public host
+  go **straight to the API**; everything else goes to the web application, whose framework
+  keeps only 10 MB of a body. An upload (`POST /public/v1/forms/<slug>/uploads`) may carry
+  51 MB (the largest file a form may take, 50 MB, and the envelope); every other route 1 MB. A
+  declared `Content-Length` above the limit is refused with 413 before anything is forwarded.
+  The proxy overwrites `X-Forwarded-For` (it trusts no proxy in front of it), passes `Host`
+  unchanged, adds HSTS and no other security header, and answers no other host name.
+
+#### The files on a server
+
+| Path                                                                                             | Owner, mode            | Holds                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/srv/confera/deploy/`                                                                           | root, 0755             | a copy of this repository's `deploy/` folder, put there by the operator                                                                                 |
+| `/srv/confera/compose.env`                                                                       | root, 0644             | from `compose.env.example`                                                                                                                              |
+| `/srv/confera/images.env`                                                                        | root, 0644             | `CONFERA_API_IMAGE`, `CONFERA_JOBS_IMAGE`, `CONFERA_WEB_IMAGE`, each `repository@sha256:...`; the deploy script writes it (by hand for the first start) |
+| `/srv/confera/config/api.env`, `web.env`                                                         | root, 0644             | from the templates                                                                                                                                      |
+| `/srv/confera/config/proxy.env`                                                                  | root, 0640             | from the template (the gate's hash in single quotes)                                                                                                    |
+| `/srv/confera/secrets/database_url`, `system_database_url`, `data_key`, `migration_database_url` | uid 1000, 0400         | one value each, nothing else                                                                                                                            |
+| `/srv/confera/secrets/postgres_password`                                                         | uid 999, gid 999, 0440 | the superuser's password; `provision` reads it through group 999                                                                                        |
+| `/srv/confera/proxy-data/`                                                                       | uid 10002, 0700        | the proxy's certificates and ACME account                                                                                                               |
+| `/etc/confera/deploy.conf`                                                                       | root, 0644             | from `deploy/server/deploy.conf.example`                                                                                                                |
+
+Compose bind-mounts the secret files read-only, so their owner on the host is the owner the
+container sees. The first start, once the files are in place (`C` stands for
+`docker compose --project-name confera --env-file /srv/confera/compose.env --env-file /srv/confera/images.env --file /srv/confera/deploy/compose.yml`):
+
+```
+C up --detach --wait postgres
+C run --rm provision          the roles and the database (again first after a restore)
+C run --rm migrate
+C up --detach --wait
+```
+
+### The deploy by digest (ADR-27)
+
+A deploy is `confera-deploy <be|web> sha256:<64 hex>`. It pulls `<fixed repository>@<digest>`
+(the repositories are in root's `/etc/confera/deploy.conf`, never in the request), for `be`
+also the jobs image the API image names, runs the migration (a failed one restarts nothing),
+writes the digest into `images.env`, restarts the services of the target, waits for their
+health checks and smoke-tests (the API's readiness; the web application answers). If the new
+version does not come up, it puts `images.env.previous` back and restarts the previous version.
+Migrations must therefore stay compatible with the previous version (expand, then contract in
+a later release): a rollback restores the image, never the schema. One deploy runs at a time.
+
+- **Staging:** the pipeline calls it through SSH. Each repository has its own deploy user and
+  key (`confera-deploy-be`, `confera-deploy-web`). sshd forces the command
+  `/usr/local/sbin/confera-deploy-gate <target>` for that user, whatever the client asks; the
+  key line carries `restrict` as well. The gate accepts exactly one digest and hands it to the
+  deploy script through a sudo rule that allows that script and that target only. No shell, no
+  terminal, no forwarding, no sftp or scp, no membership of the docker group.
+- **Production:** the server pulls. The operator runs `sudo confera-deploy be <digest>` (and
+  `web`) by hand with the digest staging ran, after Stojan's approval (Gate 4).
+
+### The pipeline: `.github/workflows/`
+
+Every third-party action is pinned by commit hash (its version in a comment), every image by
+digest (BuildKit v0.33.1 included). The default token is read-only.
+
+| Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                             |
+| `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (no checkout, so no project code; may write packages): copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. |
+| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Needs the environment `staging` (protection rule) and refuses until its variable `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command.                                                                                                                                             |
+
+`.github/CODEOWNERS` names Stojan for `.github/`, `deploy/`, `Dockerfile` and `.dockerignore`.
+
+### The checks on this machine (Docker)
+
+```
+node deploy/checks/deploy-gate.mjs                         ST-63, the part that needs no server
+node deploy/checks/topology.mjs                            ST-02, ST-04, ST-53, M3-ISS-06 on the real images and compose file
+node deploy/checks/topology.mjs --images-only --no-build   ST-02 and ST-04 only, nothing started (the pipeline)
+```
+
+- `deploy-gate.mjs` builds an SSH server set up from `deploy/server/` with a stand-in for docker,
+  and proves: a deploy key hands over a digest and the script pulls exactly
+  `<fixed repository>@<digest>`; 34 malformed requests (tags, repositories, two digests, shell
+  syntax, a newline, options, `sftp`, `scp`, `rsync`) are refused with nothing reaching docker;
+  the key opens no shell, no terminal and no forward; one repository's key cannot deploy the
+  other's image; the deploy user can run nothing else as root; the deploy script refuses a
+  foreign or tagged jobs image and an unsafe configuration, and changes nothing on a failed
+  migration.
+- `topology.mjs` builds both images (or takes them with `--no-build`), takes the web image
+  `confera-m4-infra-web:check` (built from `../confera_fe` when it is missing), and starts
+  `deploy/compose.yml` as a staging instance (project `confera-m4-infra`, host names under
+  `.localhost`, random secrets in files, free ports): provision, migrate, every service healthy,
+  then every guarantee listed above. `--without-clamav` saves about 1.5 GB of memory; `--keep`
+  leaves the stack up for a look by hand.
+- Both remove everything they create (names start with `confera-m4-infra`). Logs:
+  `.artifacts/deploy-checks/`. On Windows the large uploads are sent from a container on the
+  edge network: WSL's localhost relay stalls large bodies on a published port.
+
+### Gate 4a: what must be set up, and what only the staging server can prove
+
+On GitHub, in each repository:
+
+- [ ] Branch protection on `develop` and `main`: pull request required, **review from Code
+      Owners required** (CODEOWNERS covers `.github/`, `deploy/`, `Dockerfile`), no bypass, and
+      automation tokens that cannot approve or push.
+- [ ] Actions settings: the workflow token read-only by default; Actions may not approve pull
+      requests; only actions pinned to a full commit hash allowed.
+- [ ] The environment **`staging`** with a protection rule (Stojan approves each run) and
+      deployments from `develop` only; its secret `STAGING_DEPLOY_KEY` (the private key of this
+      repository's deploy user, nothing else) and its variables `STAGING_SSH_HOST`,
+      `STAGING_SSH_KNOWN_HOSTS` (the server's host key line) and `STAGING_DEPLOY_ENABLED=true`.
+- [ ] The packages `confera-be`, `confera-be-jobs` and `confera-web` private; the server pulls
+      with a read-only token of its own.
+- [ ] The event that starts a staging deploy named in the reduced runbook (here: by hand, with
+      the digest from the summary of `image.yml`).
+
+On the staging server (M4-OPS-01, M4-QA-03), proved there and not here:
+
+- [ ] ST-63 against the real sshd: the deploy keys open no shell; a deploy by digest pulls,
+      migrates, restarts and smoke-tests; a broken image rolls back.
+- [ ] ST-53 on the real host: the checks of `topology.mjs` against the running stack, plus the
+      owners and modes of the secret files and of the proxy's data directory.
+- [ ] ST-02 and ST-04 on the digests staging runs (the pipeline proves them on every build).
+- [ ] ST-25: a forged `X-Forwarded-For` does not change the throttle key behind the real proxy.
+- [ ] ST-50 and ST-64: from outside only 80, 443 and SSH answer; without the gate credentials
+      every path but the listed exceptions is refused; outgoing mail ports closed.
+- [ ] A 20 MB upload from outside through the real proxy and TLS (M3-ISS-06 end to end); the
+      certificate issued and renewed by Caddy itself.
+- [ ] ClamAV keeps its signatures current (freshclam as uid 100) on the server's network.
+- [ ] Open for the reduced runbook: request-rate and concurrent-upload limits at the proxy
+      (ADR-26). The official Caddy image has no rate-limit module; until it is decided the API's
+      own limits apply. The staging mail catcher (Mailpit behind the gate) is not in the compose
+      file yet.
