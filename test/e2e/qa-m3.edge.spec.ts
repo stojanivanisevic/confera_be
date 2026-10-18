@@ -491,4 +491,78 @@ describe('0.3.0 edge probes of the public forms (Q3)', () => {
     const after = await page(e2e, 'get', `/public/v1/forms/${form.slug}/frame-sites`);
     expect(after.body).toEqual({ sites: [] });
   });
+
+  describe('the renewal of a refused token (Q3-01 fix round): broken on purpose', () => {
+    async function renew(slug: string, previous: string, address: string): Promise<string> {
+      const response = await page(e2e, 'post', `/public/v1/forms/${slug}/tokens`, address)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ previousFormToken: previous }));
+      expect(response.status).toBe(201);
+      return (response.body as { formToken: string }).formToken;
+    }
+    const sendAtOnce = (slug: string, token: string, address: string) =>
+      submit(e2e, slug, token, { language: 'en', answers: abstractAnswers() }, { address });
+
+    it('Q3-14: a token renewed the moment it was fetched is still a submit faster than a person (ADR-08, item 7)', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      const renewed = await renew(form.slug, formToken, address);
+      expect((await sendAtOnce(form.slug, renewed, address)).status).toBe(201);
+      expect(await storedOf(form.formId)).toBe(0);
+    });
+
+    it('Q3-14: one token renewed twice gives one chain, not two that skip the fill time', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      await ageTokens(owner, orgA());
+      await renew(form.slug, formToken, address);
+      const second = await renew(form.slug, formToken, address);
+      expect((await sendAtOnce(form.slug, second, address)).status).toBe(201);
+      expect(await storedOf(form.formId)).toBe(0);
+    });
+
+    it('holds: a renewal that names the token of another form starts a chain of its own', async () => {
+      const form = await openForm(e2e, admin);
+      const other = await openForm(e2e, admin);
+      const address = freshAddress();
+      const foreign = await tokenFor(e2e, other.slug, address);
+      await ageTokens(owner, orgA());
+      const renewed = await renew(form.slug, foreign.formToken, address);
+      expect((await sendAtOnce(form.slug, renewed, address)).status).toBe(201);
+      expect(await storedOf(form.formId)).toBe(0);
+    });
+
+    it('holds: a token older than 24 hours is not renewed', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      await inOrganisation(
+        owner,
+        orgA(),
+        "UPDATE form_tokens SET issued_at = now() - interval '25 hours', expires_at = now() - interval '19 hours' WHERE form_id = $1",
+        [form.formId],
+      );
+      const renewed = await renew(form.slug, formToken, address);
+      expect((await sendAtOnce(form.slug, renewed, address)).status).toBe(201);
+      expect(await storedOf(form.formId)).toBe(0);
+    });
+
+    it('holds: an expired token renewed an afternoon later is stored at once, with its email queued', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      await inOrganisation(
+        owner,
+        orgA(),
+        "UPDATE form_tokens SET issued_at = now() - interval '7 hours', expires_at = now() - interval '1 hour' WHERE form_id = $1",
+        [form.formId],
+      );
+      expect((await sendAtOnce(form.slug, formToken, address)).status).toBe(403);
+      const renewed = await renew(form.slug, formToken, address);
+      expect((await sendAtOnce(form.slug, renewed, address)).status).toBe(201);
+      expect(await storedOf(form.formId)).toBe(1);
+    });
+  });
 });
