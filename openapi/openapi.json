@@ -114,6 +114,7 @@
                 "organisation.updated",
                 "organisation.payment_details_changed",
                 "security.unknown_address_sign_ins",
+                "instance.global_revoke",
                 "mail_server.created",
                 "mail_server.updated",
                 "mail_server.deleted",

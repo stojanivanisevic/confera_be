@@ -128,6 +128,8 @@ describe('database roles', () => {
         'security_events',
         'sessions',
         'submission_authors',
+        'submission_notes',
+        'submission_revisions',
         'submission_status_history',
         'submissions',
         'user_roles',

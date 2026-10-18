@@ -7,6 +7,23 @@ version at every milestone (ADR-19).
 
 ## [Unreleased]
 
+Statuses, status emails, template management, email images and the mail log (0.4.0, backend).
+
+### Added
+
+- The status model of Spec section 5 (M4-BE-01; FR-SUB-05 to 08; ST-43): `POST /api/v1/submissions/{id}/status` by the state table, transition 2 a POST and never a side effect of a GET, versions against double clicks and two admins, the history with transition, reason, text and email state; notes; corrections on the author's behalf with kept revisions; withdrawal out of the default view.
+- Status emails (M4-BE-02; FR-MAIL-03, 05, 07, 08; ST-44): seven template types in English and Serbian, queued and rendered in the transaction of the change, the server's preview with a digest the change must send back, and the switch per conference.
+- Template management (M4-BE-03; ST-58, ST-59): create, change and remove overrides, the effective fallback per conference, checks on save, the server's sample render; the image node and the multi-line note in the document format; an allowlist pass over the rendered HTML.
+- The table's search without diacritics (đ as dj, Serbian Cyrillic), filters, a fixed sort map and paging (M4-BE-04, NFR-PERF-02 with 20,000 rows).
+- Resend from the mail log with fresh links, the retention setting and its job (M4-BE-05); the maintenance worker also runs the security summary (M2-ISS-12).
+- Email images (M4-BE-06; ST-60, ST-67): a private file kind, typed by content, size from the header, decoded and re-encoded in a worker thread by pure JavaScript decoders (pngjs 7.0.0, jpeg-js 0.4.4, omggif 1.0.10), scanned, sent as inline parts.
+- The staging mail redirect to the catcher (`STAGING_MAIL_CATCHER`, ST-50) and `instance` in `/api/v1/meta`.
+- Held mail can be discarded (M3-ISS-14); `sessions:revoke-all` (M2-ISS-12).
+
+### Changed
+
+- The status `received` is `new`; a message is rendered when it is queued (M2-ISS-05); the trap alias `website` is gone (M3-ISS-19); failed test messages name a cause and test messages are capped and rate-limited (M2-ISS-14, M3-ISS-02); `db:provision` sends SCRAM verifiers (M1-ISS-14); documentation, 6to4 and local NAT64 mail targets are refused (M2-ISS-19); a GCM tag must be 16 bytes (M2-ISS-20); the Serbian confirmation no longer declines the conference name (M3-ISS-13); an unterminated comment in a `.docx` part is scanned by the engine's search (M3-ISS-12).
+
 ## 0.3.0 – 2026-10-18
 
 Forms, embed and intake: the public abstract form, its files and its confirmation, and the admin API of forms, deadlines, submissions and held mail.
