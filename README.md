@@ -426,8 +426,9 @@ the two equal. The OpenAPI document carries the declaration of every operation
   success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
   (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
   with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form,
-  issued within 24 hours, takes over its files and its count of uploads, uses it up, and is
-  never taken for a script (the minimum fill time counts from the first token of the chain).
+  issued within 24 hours and not renewed before, takes over its files and its count of
+  uploads and uses it up; the minimum fill time counts from the first token of the chain, so
+  a submit at once after a renewal is stored when the chain began 3 s ago or more.
   Limits per client (an IPv4 address, or the /64 of an IPv6 address): 30 tokens in 10
   minutes, 10 submits an hour, 40 uploads in 10 minutes (429). The **proof-of-work** (13
   zero bits) is asked for above 20 submissions in 10 minutes on a form, or from a client that

@@ -186,7 +186,9 @@ export class IntakeService {
 
   /**
    * The token a renewal names (Q3-01): of this form, issued within 24 hours, expired or used
-   * or not; otherwise none, and the new token starts a chain of its own.
+   * or not, and not renewed before (Q3-14: one chain, not two); otherwise none, and the new
+   * token starts a chain of its own. Its row is locked, so that two renewals of one token at
+   * once cannot both take it over.
    */
   private async renewable(
     tx: Prisma.TransactionClient,
@@ -201,14 +203,19 @@ export class IntakeService {
     if (row?.formId !== formId || now.getTime() - row.issuedAt.getTime() > RENEWAL_WINDOW_MS) {
       return null;
     }
-    return row;
+    await tx.$queryRaw`SELECT id FROM form_tokens WHERE id = ${row.id}::uuid FOR UPDATE`;
+    const successor = await tx.formToken.findFirst({
+      where: { renewedFrom: row.id },
+      select: { id: true },
+    });
+    return successor === null ? row : null;
   }
 
   /**
    * A single-use token for one form (ADR-08, item 1). Under load it carries a proof-of-work:
    * more than 20 submissions in 10 minutes on the form, or a client that behaved like a
    * script. With `previousFormToken` (Q3-01) it renews a refused token of the same form: it
-   * keeps the moment the author began (the minimum fill time does not apply to it), takes over
+   * keeps the moment the author began (the minimum fill time counts from there), takes over
    * the files uploaded with the old one and its count of uploads, and the old one is used up.
    */
   async issueToken(slug: string, address: string, previous?: string): Promise<FormTokenDto> {
@@ -393,12 +400,13 @@ export class IntakeService {
     const { form, state } = await this.load(tx, resolved.formId, now);
 
     // The trap and the minimum fill time (ADR-08, item 7): a fake success, nothing stored.
-    // The fill time counts from the first token of a chain of renewals, and a renewal is
-    // never taken for a script (Q3-01): the page renews a refused token and submits at once.
+    // The fill time counts from the first token of a chain of renewals (Q3-01, Q3-14): the
+    // page renews a refused token and submits at once, and that is a person when the chain
+    // began 3 s ago or more; a renewal never skips the rule.
     const started = token.fillStartedAt ?? token.issuedAt;
     if (
       (input.trap !== undefined && input.trap !== '') ||
-      (token.renewedFrom === null && now.getTime() - started.getTime() < MINIMUM_FILL_MS)
+      now.getTime() - started.getTime() < MINIMUM_FILL_MS
     ) {
       this.limits.suspicious(input.address);
       return this.decoy(
