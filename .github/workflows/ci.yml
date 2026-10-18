@@ -1,0 +1,83 @@
+# Checks of confera_be on GitHub's runners (ADR-01, ADR-27; M4-BE-08). Builds and tests only:
+# no job of this workflow holds a secret, can push an image or can reach a server.
+#
+# Runs on every pull request to develop or main, and on every push to develop, main and release/**.
+name: ci
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main, 'release/**']
+
+# The default token can read the repository and nothing else (ADR-27, rule 2).
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: pnpm check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-node v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+      - name: Install (frozen lockfile)
+        run: corepack pnpm install --frozen-lockfile
+      - name: Every check of ADR-01
+        run: corepack pnpm check
+
+  database:
+    name: integration and end-to-end tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-node v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+      - name: Install (frozen lockfile)
+        run: corepack pnpm install --frozen-lockfile
+      - name: The development stack (PostgreSQL and Mailpit, by digest)
+        run: |
+          cp .env.example .env
+          corepack pnpm stack:up
+          corepack pnpm db:provision
+          corepack pnpm db:migrate
+      - name: Integration tests
+        run: corepack pnpm test:int
+      - name: End-to-end tests
+        run: corepack pnpm test:e2e
+      - name: Stop the stack
+        if: always()
+        run: corepack pnpm stack:wipe
+
+  deploy-gate:
+    name: ST-63, the deploy gate (local part)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-node v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+      - name: An SSH server set up by deploy/server, and every way past the forced command
+        run: node deploy/checks/deploy-gate.mjs

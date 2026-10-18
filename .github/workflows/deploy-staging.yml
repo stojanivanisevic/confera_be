@@ -1,0 +1,62 @@
+# Deploys one image of confera_be to the STAGING server (M4-BE-08; ADR-27, staging rule 4). ST-63.
+#
+# Started by hand only (workflow_dispatch), with the digest from the summary of the image workflow.
+# It runs NO project code: there is no checkout. It holds the one deploy key of this repository,
+# which the server accepts for one thing only: handing over an image digest to the forced command
+# /usr/local/sbin/confera-deploy-gate (deploy/server). The key opens no shell, no forward and no
+# file transfer, and can name no other repository's image.
+#
+# Before Gate 4a it refuses to run: the GitHub environment `staging` (with its protection rule:
+# Stojan approves each run), its secret STAGING_DEPLOY_KEY and its variables STAGING_SSH_HOST,
+# STAGING_SSH_KNOWN_HOSTS and STAGING_DEPLOY_ENABLED=true are set up at Gate 4a (README,
+# "Production image and pipeline").
+name: deploy-staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: 'The digest of ghcr.io/stojanivanisevic/confera-be to deploy (sha256: and 64 hex digits)'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - name: Refuse before Gate 4a
+        if: vars.STAGING_DEPLOY_ENABLED != 'true'
+        run: |
+          echo "Staging deploys are not enabled: the environment 'staging' is set up at Gate 4a." >&2
+          exit 1
+      - name: Refuse anything but a digest
+        env:
+          DIGEST: ${{ inputs.digest }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Not an image digest." >&2; exit 1; }
+      - name: Hand the digest to the server
+        env:
+          DIGEST: ${{ inputs.digest }}
+          DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+          SSH_HOST: ${{ vars.STAGING_SSH_HOST }}
+          KNOWN_HOSTS: ${{ vars.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(mktemp)
+          known=$(mktemp)
+          trap 'rm -f "$key" "$known"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" >"$key"
+          printf '%s\n' "$KNOWN_HOSTS" >"$known"
+          ssh -T -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" \
+            -o ForwardAgent=no -o ClearAllForwardings=yes \
+            "confera-deploy-be@$SSH_HOST" "$DIGEST"
