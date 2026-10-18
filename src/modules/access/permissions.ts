@@ -41,6 +41,12 @@ export const PERMISSIONS = [
   'submissions.read',
   /** See the emails the send breaker holds, and release them (ADR-08, M3-FE-08). */
   'held_mail.manage',
+  /** Change the status of submissions, add notes, correct their data for the author (0.4.0). */
+  'submissions.manage',
+  /** Edit the email templates and their images, switch status emails off (0.4.0). */
+  'templates.manage',
+  /** Resend an email from the mail log, and set how long the log keeps its entries (0.4.0). */
+  'mail_log.manage',
 ] as const;
 
 export type PermissionName = (typeof PERMISSIONS)[number];

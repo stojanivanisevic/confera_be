@@ -27,6 +27,8 @@ export const TENANT_TABLES = [
   'mail_log',
   'mail_outbox',
   'files',
+  'submission_notes',
+  'submission_revisions',
   'submission_status_history',
   'submission_authors',
   'submissions',

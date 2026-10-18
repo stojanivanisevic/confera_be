@@ -245,7 +245,7 @@ describe('seed:e2e', () => {
               argon2id: password !== undefined,
             })),
         );
-        expect(await context.run(organisation.id, () => database.db.mailTemplate.count())).toBe(16);
+        expect(await context.run(organisation.id, () => database.db.mailTemplate.count())).toBe(30);
       },
     );
 

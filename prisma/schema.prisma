@@ -63,26 +63,28 @@ model Organisation {
   breakerPerHour          Int       @default(30) @map("breaker_per_hour")
   breakerPerDay           Int       @default(200) @map("breaker_per_day")
 
-  users              User[]
-  userRoles          UserRole[]
-  sessions           Session[]
-  knownDevices       KnownDevice[]
-  secureLinks        SecureLink[]
-  mailMessages       MailMessage[]
-  auditEntries       AuditEntry[]
-  mailServers        MailServer[]
-  conferences        Conference[]
-  templates          MailTemplate[]
-  mailLog            MailLogEntry[]
-  forms              Form[]
-  formVersions       FormVersion[]
-  formTokens         FormToken[]
-  deadlines          ConferenceDeadline[]
-  deadlineChanges    ConferenceDeadlineChange[]
-  submissions        Submission[]
-  submissionAuthors  SubmissionAuthor[]
-  submissionStatuses SubmissionStatusChange[]
-  files              StoredFile[]
+  users               User[]
+  userRoles           UserRole[]
+  sessions            Session[]
+  knownDevices        KnownDevice[]
+  secureLinks         SecureLink[]
+  mailMessages        MailMessage[]
+  auditEntries        AuditEntry[]
+  mailServers         MailServer[]
+  conferences         Conference[]
+  templates           MailTemplate[]
+  mailLog             MailLogEntry[]
+  forms               Form[]
+  formVersions        FormVersion[]
+  formTokens          FormToken[]
+  deadlines           ConferenceDeadline[]
+  deadlineChanges     ConferenceDeadlineChange[]
+  submissions         Submission[]
+  submissionAuthors   SubmissionAuthor[]
+  submissionStatuses  SubmissionStatusChange[]
+  submissionNotes     SubmissionNote[]
+  submissionRevisions SubmissionRevision[]
+  files               StoredFile[]
 
   @@map("organisations")
 }
@@ -147,6 +149,8 @@ model Conference {
   privacyNoticeUrl    String?   @map("privacy_notice_url")
   /// The last number given to a submission reference of this conference.
   submissionCounter   Int       @default(0) @map("submission_counter")
+  /// The status-email template types switched off for this conference (FR-MAIL-07).
+  statusMailOff       String[]  @default([]) @map("status_mail_off")
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
   version             Int       @default(1)
@@ -211,6 +215,8 @@ model MailLogEntry {
   subject        String?
   bodyHtml       String?  @map("body_html")
   bodyText       String?  @map("body_text")
+  /// The email images the body showed (ADR-13: their ids, not their bytes).
+  imageIds       String[] @default([]) @map("image_ids") @db.Uuid
   /// The attempt went to the mail catcher of a staging instance, not to the server (ST-50).
   diverted       Boolean  @default(false)
   sentAt         DateTime @default(now()) @map("sent_at") @db.Timestamptz(3)
@@ -252,6 +258,8 @@ model User {
   deadlineChanges       ConferenceDeadlineChange[]
   releasedMessages      MailMessage[]              @relation("ReleasedMessages")
   discardedMessages     MailMessage[]              @relation("DiscardedMessages")
+  submissionNotes       SubmissionNote[]
+  submissionRevisions   SubmissionRevision[]
 
   @@unique([organisationId, id])
   @@map("users")
@@ -406,6 +414,15 @@ model MailMessage {
   heldCount        Int?      @map("held_count")
   heldLimit        Int?      @map("held_limit")
   heldWindowHours  Int?      @map("held_window_hours")
+  /// The message as rendered when it was queued (ADR-13, M2-ISS-05); the secure link is a
+  /// mark replaced at send time. Null for a message rendered at send time.
+  renderedSubject  String?   @map("rendered_subject")
+  renderedHtml     String?   @map("rendered_html")
+  renderedText     String?   @map("rendered_text")
+  /// The mail server of the template it was rendered from (FR-SMTP-02).
+  templateServerId String?   @map("template_server_id") @db.Uuid
+  /// The email images of the message (inline parts at send time, M4-BE-06).
+  imageIds         String[]  @default([]) @map("image_ids") @db.Uuid
   releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
   releasedBy       String?   @map("released_by") @db.Uuid
   /// A held message an admin discarded (M3-ISS-14): never sent, never released.
@@ -630,8 +647,8 @@ model Submission {
   reference              String
   /// en or sr: the language of every later email to the author (FR-FORM-09).
   language               String
-  /// received (0.3.0); the statuses of FR-SUB-05 arrive with 0.4.0.
-  status                 String   @default("received")
+  /// new, open, returned_for_revision, accepted, rejected, withdrawn (Spec section 5).
+  status                 String   @default("new")
   /// The answers by field key, as checked by the rule interpreter.
   answers                Json
   title                  String?
@@ -651,6 +668,12 @@ model Submission {
   /// SHA-256 of the request, so that a repeated key with another body is told apart.
   payloadHash            String   @map("payload_hash")
   receivedAt             DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+  /// Raised by every change of status or data; a change naming an older version is refused.
+  version                Int      @default(1)
+  updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  /// Reference, title and authors folded for the search (src/modules/submissions/search.ts),
+  /// with a trigram index of the migration that Prisma cannot express (db:diff lists it).
+  searchText             String   @default("") @map("search_text")
 
   organisation Organisation             @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   conference   Conference               @relation(fields: [organisationId, conferenceId], references: [organisationId, id], onDelete: Restrict)
@@ -660,6 +683,8 @@ model Submission {
   statuses     SubmissionStatusChange[]
   files        StoredFile[]
   messages     MailMessage[]
+  notes        SubmissionNote[]
+  revisions    SubmissionRevision[]
 
   @@unique([organisationId, id])
   @@unique([organisationId, reference])
@@ -667,6 +692,7 @@ model Submission {
   @@index([organisationId, receivedAt])
   @@index([organisationId, conferenceId, receivedAt])
   @@index([organisationId, correspondingDomain, receivedAt])
+  @@index([organisationId, status, receivedAt])
   @@map("submissions")
 }
 
@@ -703,6 +729,16 @@ model SubmissionStatusChange {
   changedAt      DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
   /// Who changed it; null for the author's own submit.
   actorUserId    String?  @map("actor_user_id") @db.Uuid
+  fromStatus     String?  @map("from_status")
+  /// The row of the state table (Spec section 5): 1, 2, 4 to 9.
+  transition     Int
+  /// The internal reason of a withdrawal or a reopening: never sent.
+  reason         String?
+  /// The text for the author that the email carried (FR-MAIL-08).
+  message        String?
+  /// queued (the outbox row is messageId), template_off (FR-MAIL-07) or none.
+  mailState      String   @map("mail_state")
+  messageId      String?  @map("message_id") @db.Uuid
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   submission   Submission   @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Cascade)
@@ -712,13 +748,54 @@ model SubmissionStatusChange {
   @@map("submission_status_history")
 }
 
+/// A note of an admin on a submission (FR-SUB-07): admins only. Insert-only.
+model SubmissionNote {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  submissionId   String   @map("submission_id") @db.Uuid
+  authorUserId   String   @map("author_user_id") @db.Uuid
+  body           String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  submission   Submission   @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Cascade)
+  author       User         @relation(fields: [organisationId, authorUserId], references: [organisationId, id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@index([organisationId, submissionId, createdAt])
+  @@map("submission_notes")
+}
+
+/// A kept revision of a submission (FR-SUB-06): a correction by an admin. Insert-only.
+model SubmissionRevision {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  submissionId   String   @map("submission_id") @db.Uuid
+  number         Int
+  changedAt      DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+  changedBy      String   @map("changed_by") @db.Uuid
+  /// The answer keys that changed.
+  fields         String[]
+  /// The answers before and after the correction.
+  before         Json
+  after          Json
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  submission   Submission   @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Cascade)
+  changer      User         @relation(fields: [organisationId, changedBy], references: [organisationId, id], onDelete: Restrict)
+
+  @@unique([organisationId, id])
+  @@unique([organisationId, submissionId, number])
+  @@map("submission_revisions")
+}
+
 /// A stored file (ADR-10): on the private volume under a key that never holds the client's
 /// name; the type detected from the content; the SHA-256; the scan state. Served only by
 /// the endpoint that decides by its owner and kind.
 model StoredFile {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organisationId String    @map("organisation_id") @db.Uuid
-  /// submission_file (0.3.0).
+  /// submission_file (0.3.0), email_image (0.4.0: an image of the email templates, M4-BE-06).
   kind           String
   /// org/<organisation>/<uuid>: never the client's file name.
   storageKey     String    @unique @map("storage_key")
@@ -726,6 +803,9 @@ model StoredFile {
   originalName   String    @map("original_name")
   /// pdf, docx, doc, jpeg or png: what the content is.
   detectedType   String    @map("detected_type")
+  /// The pixel size of an email image as stored (after re-encoding).
+  width          Int?
+  height         Int?
   sizeBytes      Int       @map("size_bytes")
   sha256         String
   /// pending, clean, infected or not_clean (a limit of the scanner was exceeded).
@@ -753,5 +833,6 @@ model StoredFile {
   @@index([organisationId, submissionId])
   @@index([organisationId, formTokenId])
   @@index([organisationId, scanState, nextScanAt])
+  @@index([organisationId, kind, createdAt])
   @@map("files")
 }

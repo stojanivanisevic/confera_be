@@ -1,226 +1,128 @@
 import {
+  Body,
   Get,
+  HttpCode,
   HttpStatus,
-  Injectable,
   Module,
   Param,
   ParseUUIDPipe,
+  Post,
+  Put,
   Query,
   Res,
   StreamableFile,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ProblemException } from '../../common/http/problem';
 import { AdminController } from '../../common/http/surface';
-import type { Prisma } from '../../generated/prisma/client';
-import { TenantDatabase } from '../../platform/prisma/tenant-database';
-import { Permission } from '../access/access.decorators';
-import { FilesModule } from '../files/files.module';
-import { FileStorage } from '../files/storage';
+import type { Access } from '../access/access';
+import { CurrentAccess, Permission } from '../access/access.decorators';
 import { attachmentHeader } from '../files/file-names';
 import { MEDIA_TYPES } from '../files/file-type';
-import { downloadBlocked, mayServe } from '../files/serving';
+import { FilesModule } from '../files/files.module';
+import { FileStorage } from '../files/storage';
 import type { FileType } from '../forms/catalogue';
-import { heldNumbersOf } from '../held-mail/send-breaker';
+import { SubmissionChangesService } from './submission-changes.service';
 import {
-  MAX_PAGE_SIZE,
-  SCAN_FLAGS,
+  NoteDto,
+  StatusChangeDto,
+  StatusEmailPreviewDto,
+  StatusTextsDto,
   SubmissionDetailDto,
+  SubmissionEditDto,
+  SubmissionNoteDto,
   SubmissionPageDto,
   SubmissionQueryDto,
-  type SubmissionSummaryDto,
 } from './submissions.dto';
-
-const DEFAULT_PAGE_SIZE = 25;
-
-type SummaryRow = Prisma.SubmissionGetPayload<{
-  include: { conference: { select: { id: true; code: true; name: true; editionYear: true } } };
-}> & { readonly files: readonly { scanState: string; scanFlag: string | null }[] };
-
-function scanFlagOf(flag: string | null): (typeof SCAN_FLAGS)[number] | null {
-  return SCAN_FLAGS.find((known) => known === flag) ?? null;
-}
-
-/** The fields of a row of the table, as a plain object (a detail spreads it). */
-type Summary = { [Field in keyof SubmissionSummaryDto]: SubmissionSummaryDto[Field] };
-
-function summary(row: SummaryRow): Summary {
-  return {
-    id: row.id,
-    reference: row.reference,
-    conference: row.conference,
-    title: row.title,
-    firstAuthor: row.firstAuthorName,
-    institution: row.firstAuthorInstitution,
-    participationType: row.participationType,
-    status: row.status,
-    memberMatch: null,
-    billingStatus: null,
-    language: row.language,
-    authorCount: row.authorCount,
-    receivedAt: row.receivedAt.toISOString(),
-    fileSigns: {
-      flags: SCAN_FLAGS.filter((flag) => row.files.some((file) => file.scanFlag === flag)),
-      scanPending: row.files.some((file) => file.scanState === 'pending'),
-    },
-  };
-}
-
-/**
- * The submissions of the organisation, read only (M3-BE-07; FR-SUB-02, FR-SUB-04): a paged
- * list, newest first, and one submission with everything that exists about it so far. Its
- * files are downloaded by the endpoint that decides by the owning submission and the kind
- * of the file (ADR-10, FR-FILE-02): an admin of the organisation, and only a clean file.
- */
-@Injectable()
-export class SubmissionsService {
-  constructor(private readonly database: TenantDatabase) {}
-
-  async list(query: SubmissionQueryDto): Promise<SubmissionPageDto> {
-    const page = query.page ?? 1;
-    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
-    const where: Prisma.SubmissionWhereInput =
-      query.conferenceId === undefined ? {} : { conferenceId: query.conferenceId };
-    const [total, rows] = await this.database.transaction((tx) =>
-      Promise.all([
-        tx.submission.count({ where }),
-        tx.submission.findMany({
-          where,
-          include: {
-            conference: { select: { id: true, code: true, name: true, editionYear: true } },
-            files: { select: { scanState: true, scanFlag: true } },
-          },
-          orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ]),
-    );
-    return { items: rows.map(summary), total, page, pageSize };
-  }
-
-  async detail(id: string): Promise<SubmissionDetailDto> {
-    return this.database.transaction(async (tx) => {
-      const row = await tx.submission.findUnique({
-        where: { id },
-        include: {
-          conference: { select: { id: true, code: true, name: true, editionYear: true } },
-          form: { select: { id: true, publicKey: true } },
-          formVersion: { select: { number: true } },
-          authors: { orderBy: { position: 'asc' } },
-          files: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-          statuses: {
-            orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
-          },
-          messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-        },
-      });
-      if (row === null) {
-        throw new ProblemException(404, 'not_found');
-      }
-      const actors = await tx.user.findMany({
-        where: {
-          id: {
-            in: row.statuses
-              .map((status) => status.actorUserId)
-              .filter((value): value is string => value !== null),
-          },
-        },
-        select: { id: true, displayName: true },
-      });
-      const links = row.consentLinks as Record<string, string | null>;
-      return {
-        ...summary(row),
-        form: { id: row.form.id, slug: row.form.publicKey, versionNumber: row.formVersion.number },
-        answers: row.answers as Record<string, unknown>,
-        authors: row.authors.map((author) => ({
-          position: author.position,
-          firstName: author.firstName,
-          lastName: author.lastName,
-          institution: author.institution,
-          institutionAddress: author.institutionAddress,
-          orcid: author.orcid,
-          email: author.email,
-          phone: author.phone,
-          isCorresponding: author.isCorresponding,
-        })),
-        files: row.files.map((file) => ({
-          id: file.id,
-          field: file.fieldKey,
-          name: file.originalName,
-          type: file.detectedType,
-          sizeBytes: file.sizeBytes,
-          scanState: file.scanState as 'pending' | 'clean' | 'infected' | 'not_clean',
-          scanFlag: scanFlagOf(file.scanFlag),
-          scannedAt: file.scannedAt?.toISOString() ?? null,
-          pendingSince:
-            file.scanState === 'pending' ? (file.attachedAt ?? file.createdAt).toISOString() : null,
-          nextScanAt: file.scanState === 'pending' ? file.nextScanAt.toISOString() : null,
-          downloadBlocked: downloadBlocked(file),
-          sha256: file.sha256,
-        })),
-        consent: {
-          text: row.consentText,
-          links,
-          version: row.consentVersion,
-          consentedAt: row.consentedAt.toISOString(),
-        },
-        statusHistory: row.statuses.map((status) => ({
-          status: status.status,
-          changedAt: status.changedAt.toISOString(),
-          actor: actors.find((actor) => actor.id === status.actorUserId) ?? null,
-        })),
-        emails: row.messages.map((message) => ({
-          id: message.id,
-          kind: message.kind,
-          recipient: message.recipientAddress,
-          status: message.status,
-          heldReason: message.heldReason,
-          heldBy: heldNumbersOf(message),
-          lastErrorCode: message.lastErrorCode,
-          createdAt: message.createdAt.toISOString(),
-          sentAt: message.sentAt?.toISOString() ?? null,
-        })),
-      };
-    });
-  }
-
-  /** The file of a submission, if its owner and its scan allow it (FR-FILE-02, ST-38). */
-  async file(submissionId: string, fileId: string) {
-    const file = await this.database.db.storedFile.findFirst({
-      where: { id: fileId, submissionId },
-    });
-    if (file === null) {
-      throw new ProblemException(404, 'not_found');
-    }
-    const decision = mayServe(file);
-    if (decision !== 'serve') {
-      throw new ProblemException(409, decision);
-    }
-    return file;
-  }
-}
+import { SubmissionsService } from './submissions.service';
 
 const ID = new ParseUUIDPipe({ version: '4', errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
+/**
+ * The submissions of the organisation (FR-SUB-02 to 08): the table, one submission, its
+ * files, and the changes an admin makes. Reading changes nothing (ST-43): the move from
+ * New to Open (transition 2) is a POST that the detail screen sends once it is shown.
+ */
 @AdminController('submissions')
 export class SubmissionsController {
   constructor(
     private readonly submissions: SubmissionsService,
+    private readonly changes: SubmissionChangesService,
     private readonly storage: FileStorage,
   ) {}
 
-  /** The submissions of the organisation, newest first, a page at a time (FR-SUB-02). */
+  /**
+   * The submissions of the organisation, a page at a time (FR-SUB-02, FR-SUB-03): searched
+   * without diacritics, filtered, in one of the fixed orders. Withdrawn ones only on request.
+   */
   @Get()
   @Permission('submissions.read')
   listSubmissions(@Query() query: SubmissionQueryDto): Promise<SubmissionPageDto> {
     return this.submissions.list(query);
   }
 
-  /** One submission with its data, files, status history and emails (FR-SUB-04). */
+  /** One submission with everything about it (FR-SUB-04). Changes nothing. */
   @Get(':id')
   @Permission('submissions.read')
   getSubmission(@Param('id', ID) id: string): Promise<SubmissionDetailDto> {
+    return this.submissions.detail(id);
+  }
+
+  /**
+   * The email a change of status would send (FR-MAIL-08), rendered by the server with the
+   * images embedded, and its hash. Nothing changes and nothing is queued.
+   */
+  @Post(':id/status/preview')
+  @Permission('submissions.manage')
+  @HttpCode(200)
+  previewStatusEmail(
+    @Param('id', ID) id: string,
+    @Body() body: StatusTextsDto,
+  ): Promise<StatusEmailPreviewDto> {
+    return this.changes.preview(id, body);
+  }
+
+  /**
+   * A change of status by the state table of Spec section 5 (FR-SUB-05): 409
+   * `transition_refused` for a change the table does not have, `version_conflict` for a
+   * stale or repeated request, `preview_outdated` when the email is no longer the one shown.
+   * Its email is queued in the same transaction, unless the conference switched it off.
+   */
+  @Post(':id/status')
+  @Permission('submissions.manage')
+  @HttpCode(200)
+  async changeSubmissionStatus(
+    @CurrentAccess() access: Access,
+    @Param('id', ID) id: string,
+    @Body() body: StatusChangeDto,
+  ): Promise<SubmissionDetailDto> {
+    await this.changes.change(access, id, body);
+    return this.submissions.detail(id);
+  }
+
+  /** A note of an admin (FR-SUB-07): never shown to authors or reviewers. */
+  @Post(':id/notes')
+  @Permission('submissions.manage')
+  addSubmissionNote(
+    @CurrentAccess() access: Access,
+    @Param('id', ID) id: string,
+    @Body() body: NoteDto,
+  ): Promise<SubmissionNoteDto> {
+    return this.changes.addNote(access, id, body);
+  }
+
+  /**
+   * A correction of the data on the author's behalf (FR-SUB-06): the answers that change,
+   * checked like a submit; the old values are kept as a revision. Sends no email: the
+   * return to processing after a revision is the status change `resume`.
+   */
+  @Put(':id')
+  @Permission('submissions.manage')
+  async editSubmission(
+    @CurrentAccess() access: Access,
+    @Param('id', ID) id: string,
+    @Body() body: SubmissionEditDto,
+  ): Promise<SubmissionDetailDto> {
+    await this.changes.edit(access, id, body);
     return this.submissions.detail(id);
   }
 
@@ -246,6 +148,6 @@ export class SubmissionsController {
 @Module({
   imports: [FilesModule],
   controllers: [SubmissionsController],
-  providers: [SubmissionsService],
+  providers: [SubmissionsService, SubmissionChangesService],
 })
 export class SubmissionsModule {}

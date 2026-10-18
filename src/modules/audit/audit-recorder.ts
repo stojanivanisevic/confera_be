@@ -45,6 +45,17 @@ export const AUDIT_ACTIONS = [
   'held_mail.released',
   'held_mail.discarded',
   'organisation.breaker_changed',
+  'submission.status_changed',
+  'submission.note_added',
+  'submission.edited',
+  'template.created',
+  'template.updated',
+  'template.deleted',
+  'conference.status_emails_changed',
+  'mail_image.uploaded',
+  'mail.resent',
+  'mail_log.retention_changed',
+  'mail_log.purged',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

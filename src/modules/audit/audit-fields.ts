@@ -62,6 +62,13 @@ export const AUDIT_VALUE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   form: ['versionNumber', 'breakerPerHour', 'breakerPerDay'],
   // The send breaker of the organisation, and how many held emails were released.
   organisation_breaker: ['breakerPerHour', 'breakerPerDay'],
+  // A submission's status (Spec section 5): a state of the workflow, not what the author
+  // typed. A correction is kept by its field names only; the revisions keep the values.
+  submission: ['status'],
+  // The status emails switched off for a conference (FR-MAIL-07), and the retention of
+  // the mail log (FR-SMTP-06): settings.
+  conference_status_emails: ['off'],
+  mail_log_retention: ['days'],
 };
 
 /** May the old and new values of this field of this kind of subject be recorded? */

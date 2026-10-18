@@ -109,8 +109,9 @@ describe('the production seed and the first admin (ST-27)', () => {
     const templates = await inOrganisation<{ type: string; language: string }>(
       'SELECT type, language FROM mail_templates WHERE conference_id IS NULL ORDER BY type, language',
     );
-    // Eight types in English and Serbian: the confirmation of a submission came with 0.3.0.
-    expect(templates).toHaveLength(16);
+    // Fifteen types in English and Serbian: the confirmation of a submission came with 0.3.0,
+    // the seven status emails of Spec section 5 with 0.4.0 (FR-MAIL-03).
+    expect(templates).toHaveLength(30);
     expect(
       templates.filter(({ type }) => type === 'invitation' || type === 'password_reset'),
     ).toHaveLength(4);

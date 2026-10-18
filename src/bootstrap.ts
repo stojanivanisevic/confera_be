@@ -49,8 +49,28 @@ export async function createApp(
   return app;
 }
 
-/** The largest JSON body of an ordinary request (ST-41 caps it; the forms of 0.3.0 raise it where needed). */
+/** The largest JSON body of an ordinary request (ST-41 caps it). */
 export const JSON_BODY_LIMIT = '64kb';
+
+/**
+ * The largest JSON body of the paths of the email templates: a template document may hold
+ * 200 KB (ADR-12), a subject and the envelope besides. Every other path keeps 64 KB.
+ */
+export const TEMPLATE_BODY_LIMIT_BYTES = 512 * 1024;
+export const TEMPLATE_PATH = '/api/v1/mail-templates';
+
+/** The 64 KB of an ordinary JSON body, on every path but the templates' (bodyLimit refuses by size). */
+function ordinaryJsonLimit(): ReturnType<typeof bodyLimit> {
+  const limit = bodyLimit(64 * 1024);
+  return (req, res, next) => {
+    const type = (req.headers['content-type'] ?? '').toLowerCase();
+    if (req.path.startsWith(TEMPLATE_PATH) || !type.includes('json')) {
+      next();
+      return;
+    }
+    limit(req, res, next);
+  };
+}
 
 /** The middleware of every request, in order. Tests apply it to their own application too. */
 export function configureHttp(app: NestExpressApplication, logger: AppLogger): void {
@@ -66,8 +86,9 @@ export function configureHttp(app: NestExpressApplication, logger: AppLogger): v
   // content security policy as application/csp-report or application/reports+json, with
   // a limit of their own, smaller than the general one.
   app.use(CSP_REPORT_PATH, bodyLimit(CSP_REPORT_BODY_LIMIT));
+  app.use(ordinaryJsonLimit());
   app.useBodyParser('json', {
-    limit: JSON_BODY_LIMIT,
+    limit: TEMPLATE_BODY_LIMIT_BYTES,
     type: ['application/json', 'application/csp-report', 'application/reports+json'],
   });
   // A body nested deeper than any request of the API is refused right after it is parsed:

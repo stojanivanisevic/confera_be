@@ -145,6 +145,8 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
     });
     const tokenIds = expired.map((token) => token.id);
     const purgeable = {
+      // Uploads of a form only: an email image is attached to nothing and is kept.
+      kind: 'submission_file',
       submissionId: null,
       OR: [
         { formTokenId: { in: tokenIds } },
@@ -178,7 +180,12 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
 
   private async scan(organisationId: string, now: Date, report: FilesTickReport): Promise<void> {
     const due = await this.database.db.storedFile.findMany({
-      where: { scanState: 'pending', submissionId: { not: null }, nextScanAt: { lte: now } },
+      where: {
+        scanState: 'pending',
+        nextScanAt: { lte: now },
+        // An attached upload of a form, or an email image (M4-BE-06): both are scanned.
+        OR: [{ submissionId: { not: null } }, { kind: 'email_image' }],
+      },
       orderBy: [{ nextScanAt: 'asc' }, { id: 'asc' }],
       take: BATCH,
     });

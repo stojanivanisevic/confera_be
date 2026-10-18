@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ProblemException } from '../../common/http/problem';
 import { VALIDATION_FAILED } from '../../common/http/validation';
@@ -11,12 +11,13 @@ import { TenantContext } from '../../platform/tenancy/tenant-context';
 import { frameSites } from '../conferences/listed-sites';
 import { SendBreaker } from '../held-mail/send-breaker';
 import { MailQueue } from '../mail/mail-queue';
-import { AUTHORS_SECTION, type FormLanguage, type Localised } from './catalogue';
+import { type FormLanguage, type Localised } from './catalogue';
 import { type FormDefinition, fileFieldsOf, parseDefinition } from './definition';
 import { DEADLINE_OF_FORM, formState, type FormStateResult } from './form-state';
 import type { FormTokenDto, PublicFormDto, SubmittedDto } from './forms.dto';
 import { newChallenge, PROOF_OF_WORK_DIFFICULTY, proofOfWorkHolds } from './proof-of-work';
 import { LIMITS, PublicLimits } from './public-limits';
+import { columnsOf, searchTextOfColumns } from '../submissions/submission-columns';
 import { type AnswerValue, checkAnswers } from './rules';
 
 /**
@@ -503,10 +504,9 @@ export class IntakeService {
       }
     }
 
-    const authors = (answers[AUTHORS_SECTION] ?? []) as Record<string, AnswerValue>[];
-    const first = authors[0] ?? {};
-    const email = asText(first.email ?? undefined) ?? '';
-    const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+    const columns = columnsOf(answers);
+    const email = columns.correspondingEmail;
+    const domain = columns.correspondingDomain;
     const reference = await this.nextReference(tx, form.conferenceId, now);
     const language = input.language;
     const consentText = localisedIn(definition.texts.consent, language);
@@ -524,14 +524,14 @@ export class IntakeService {
         reference,
         language,
         answers: answers,
-        title: asText(answers.title),
-        participationType: asText(answers.participationType),
-        firstAuthorName:
-          `${asText(first.firstName ?? undefined) ?? ''} ${asText(first.lastName ?? undefined) ?? ''}`.trim(),
-        firstAuthorInstitution: asText(first.institution ?? undefined),
+        title: columns.title,
+        participationType: columns.participationType,
+        firstAuthorName: columns.firstAuthorName,
+        firstAuthorInstitution: columns.firstAuthorInstitution,
         correspondingEmail: email,
         correspondingDomain: domain,
-        authorCount: authors.length,
+        authorCount: columns.authorCount,
+        searchText: searchTextOfColumns(reference, columns),
         consentText,
         consentLinks,
         consentVersion: createHash('sha256')
@@ -544,25 +544,22 @@ export class IntakeService {
       },
     });
     await tx.submissionAuthor.createMany({
-      data: authors.map((author, index) => ({
+      data: columns.authors.map((author) => ({
         organisationId: resolved.organisationId,
         submissionId: submission.id,
-        position: index + 1,
-        firstName: asText(author.firstName ?? undefined) ?? '',
-        lastName: asText(author.lastName ?? undefined) ?? '',
-        institution: asText(author.institution ?? undefined),
-        institutionAddress: asText(author.institutionAddress ?? undefined),
-        orcid: asText(author.orcid ?? undefined),
-        email: asText(author.email ?? undefined) ?? '',
-        phone: asText(author.phone ?? undefined),
-        isCorresponding: index === 0,
+        ...author,
       })),
     });
+    // Transition 1 of the state table (Spec section 5): the confirmation is its email.
+    const confirmationId = randomUUID();
     await tx.submissionStatusChange.create({
       data: {
         organisationId: resolved.organisationId,
         submissionId: submission.id,
-        status: 'received',
+        status: 'new',
+        transition: 1,
+        mailState: 'queued',
+        messageId: confirmationId,
         changedAt: now,
       },
     });
@@ -586,6 +583,7 @@ export class IntakeService {
       now,
     });
     await this.mail.enqueue(tx, {
+      id: confirmationId,
       organisationId: resolved.organisationId,
       kind: 'submission_confirmation',
       recipientAddress: email,

@@ -429,7 +429,7 @@ describe('forms and intake (M3)', () => {
         [2, 'Šćepanović', false],
         [3, 'Čolić', false],
       ]);
-      expect(shown.statusHistory.map((s) => s.status)).toEqual(['received']);
+      expect(shown.statusHistory.map((s) => s.status)).toEqual(['new']);
       expect(shown.consent.version).toMatch(/^[0-9a-f]{64}$/);
       expect(shown.emails).toEqual([
         expect.objectContaining({ kind: 'submission_confirmation', status: 'queued' }),

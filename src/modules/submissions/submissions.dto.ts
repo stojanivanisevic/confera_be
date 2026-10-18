@@ -1,7 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { isMultilineText, Satisfies } from '../../common/validation/satisfies';
 import { HeldNumbersDto } from '../held-mail/held-mail.dto';
+import { MAX_QUERY_LENGTH } from './search';
+import { STATUS_ACTIONS, SUBMISSION_STATUSES } from './status-machine';
 
 /** The largest page of a list (ST-41: a page size above it is refused). */
 export const MAX_PAGE_SIZE = 100;
@@ -14,6 +30,30 @@ export const SCAN_FLAGS = ['macros', 'external_links'] as const;
  * `file_not_clean`, infected or beyond the scanner's limits, never.
  */
 export const DOWNLOAD_BLOCKS = ['scan_pending', 'scan_retrying', 'file_not_clean'] as const;
+
+/**
+ * The orders of the table (M4-BE-04): a fixed map from these names to columns, never a
+ * column named by the client. Ties are broken by the id, so that pages never overlap.
+ */
+export const SUBMISSION_SORTS = [
+  'receivedAt',
+  'reference',
+  'title',
+  'firstAuthor',
+  'institution',
+  'participationType',
+  'status',
+  'conference',
+] as const;
+export type SubmissionSort = (typeof SUBMISSION_SORTS)[number];
+
+/** A list in a query: `status=new,open` or the parameter repeated. */
+function listOf({ value }: { value: unknown }): unknown {
+  const values: unknown[] = Array.isArray(value) ? (value as unknown[]) : [value];
+  return values
+    .flatMap((item) => (typeof item === 'string' ? item.split(',') : [item]))
+    .filter((item) => item !== '');
+}
 
 /** What the table shows of the files of a submission (UX3-07), without opening it. */
 export class SubmissionFileSignsDto {
@@ -33,7 +73,9 @@ export class SubmissionSummaryDto {
   firstAuthor!: string;
   institution!: string | null;
   participationType!: string | null;
-  status!: string;
+  /** The status of Spec section 5. */
+  @ApiProperty({ enum: SUBMISSION_STATUSES })
+  status!: (typeof SUBMISSION_STATUSES)[number];
   /** Not matched yet (0.8.0). */
   memberMatch!: string | null;
   /** No proforma yet (0.6.0). */
@@ -42,19 +84,65 @@ export class SubmissionSummaryDto {
   authorCount!: number;
   receivedAt!: string;
   fileSigns!: SubmissionFileSignsDto;
+  /** Raised by every change of status or data: send it with the next change (409 otherwise). */
+  version!: number;
 }
 
 export class SubmissionPageDto {
   items!: SubmissionSummaryDto[];
+  /** All rows that match the search and the filters, on every page. */
   total!: number;
   page!: number;
   pageSize!: number;
 }
 
+/**
+ * The table's search, filters, order and page (FR-SUB-03, M4-BE-04). Without a `status`
+ * filter a withdrawn submission is left out (FR-SUB-08); it is found with `status=withdrawn`.
+ */
 export class SubmissionQueryDto {
+  /**
+   * Searched in reference, title, the authors' names, emails and institutions, without
+   * diacritics both ways ("Zivkovic" finds "Živković", "Djordje" finds "Đorđe", Serbian
+   * Cyrillic finds the Latin spelling). Every word must occur.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_QUERY_LENGTH)
+  q?: string;
+
   @IsOptional()
   @IsUUID('4')
   conferenceId?: string;
+
+  /** One status or several, comma-separated: `status=new,open`. */
+  @IsOptional()
+  @Transform(listOf)
+  @IsArray()
+  @ArrayMaxSize(SUBMISSION_STATUSES.length)
+  @IsIn(SUBMISSION_STATUSES, { each: true })
+  @ApiProperty({ required: false, enum: SUBMISSION_STATUSES, isArray: true })
+  status?: (typeof SUBMISSION_STATUSES)[number][];
+
+  /** One participation type or several, comma-separated (the options of the form's field). */
+  @IsOptional()
+  @Transform(listOf)
+  @IsArray()
+  @ArrayMaxSize(20)
+  @Matches(/^[a-z][a-z0-9_]{0,40}$/, { each: true })
+  @ApiProperty({ required: false, type: [String] })
+  participationType?: string[];
+
+  @IsOptional()
+  @IsIn(SUBMISSION_SORTS)
+  @ApiProperty({ required: false, enum: SUBMISSION_SORTS, default: 'receivedAt' })
+  sort?: SubmissionSort;
+
+  /** Default: newest first for `receivedAt`, A to Z for the rest. */
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  @ApiProperty({ required: false, enum: ['asc', 'desc'] })
+  order?: 'asc' | 'desc';
 
   @IsOptional()
   @Type(() => Number)
@@ -111,18 +199,38 @@ export class SubmissionFileDto {
   sha256!: string;
 }
 
-export class SubmissionStatusDto {
-  status!: string;
-  changedAt!: string;
-  actor!: { id: string; displayName: string } | null;
+export class PersonDto {
+  id!: string;
+  displayName!: string;
 }
 
-/** An email about the submission (its confirmation), with what became of it. */
+/** A change of the status (Spec section 5), with what became of its email. */
+export class SubmissionStatusDto {
+  @ApiProperty({ enum: SUBMISSION_STATUSES })
+  status!: (typeof SUBMISSION_STATUSES)[number];
+  @ApiProperty({ enum: SUBMISSION_STATUSES, nullable: true })
+  fromStatus!: (typeof SUBMISSION_STATUSES)[number] | null;
+  /** The row of the state table: 1 (the form), 2, 4 to 9. */
+  transition!: number;
+  changedAt!: string;
+  /** Null for the author's own submit (transition 1). */
+  actor!: PersonDto | null;
+  /** The internal reason of a withdrawal or a reopening: for the admins only, never sent. */
+  reason!: string | null;
+  /** The text for the author that the email carried (FR-MAIL-08). */
+  message!: string | null;
+  /** `queued`: the email is `emailId`; `template_off`: no email, switched off (FR-MAIL-07); `none`. */
+  @ApiProperty({ enum: ['queued', 'template_off', 'none'] })
+  email!: 'queued' | 'template_off' | 'none';
+  emailId!: string | null;
+}
+
+/** An email about the submission (its confirmation, its status emails), with what became of it. */
 export class SubmissionEmailDto {
   id!: string;
   kind!: string;
   recipient!: string;
-  /** queued, sending, sent, failed, held, stuck or waiting_for_server. */
+  /** queued, sending, sent, failed, held, stuck, waiting_for_server or discarded. */
   status!: string;
   heldReason!: string | null;
   /** The numbers of the hold, as in the held emails (UX3-06); null when not held or unknown. */
@@ -132,7 +240,27 @@ export class SubmissionEmailDto {
   sentAt!: string | null;
 }
 
-/** Everything about one submission that exists in 0.3.0 (FR-SUB-04, FR-SUB-01). */
+/** A note of an admin (FR-SUB-07): admins only, never shown to authors or reviewers. */
+export class SubmissionNoteDto {
+  id!: string;
+  body!: string;
+  author!: PersonDto;
+  createdAt!: string;
+}
+
+/** A kept revision (FR-SUB-06): what an admin corrected, old and new answers of each field. */
+export class SubmissionRevisionDto {
+  number!: number;
+  changedAt!: string;
+  changedBy!: PersonDto;
+  /** The answer keys that changed. */
+  fields!: string[];
+  /** The values of those keys before and after; the first revision's `before` is the original. */
+  before!: Record<string, unknown>;
+  after!: Record<string, unknown>;
+}
+
+/** Everything about one submission (FR-SUB-04, FR-SUB-01). */
 export class SubmissionDetailDto extends SubmissionSummaryDto {
   form!: { id: string; slug: string; versionNumber: number };
   /** The answers by field key, as checked (contracts/form-rule-vectors.json). */
@@ -146,5 +274,86 @@ export class SubmissionDetailDto extends SubmissionSummaryDto {
     consentedAt: string;
   };
   statusHistory!: SubmissionStatusDto[];
+  /** The changes of status an admin may make now, in the order of the state table. */
+  @ApiProperty({ enum: STATUS_ACTIONS, isArray: true })
+  actions!: (typeof STATUS_ACTIONS)[number][];
   emails!: SubmissionEmailDto[];
+  notes!: SubmissionNoteDto[];
+  revisions!: SubmissionRevisionDto[];
+}
+
+/** The texts a change of status may carry (Spec section 5, FR-MAIL-08). */
+export class StatusTextsDto {
+  @IsIn(STATUS_ACTIONS)
+  @ApiProperty({ enum: STATUS_ACTIONS })
+  action!: (typeof STATUS_ACTIONS)[number];
+
+  /** The internal reason: required to withdraw and to reopen, refused otherwise; never sent. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  @Satisfies('isMultilineText', isMultilineText)
+  reason?: string;
+
+  /**
+   * The text for the author, carried by the email word for word: required to return for
+   * revision, allowed to reject, withdraw and reopen, refused otherwise.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  @Satisfies('isMultilineText', isMultilineText)
+  message?: string;
+}
+
+/**
+ * A change of status (POST, with the CSRF header: never a GET, ST-43). `version` is the
+ * submission's; a repeat of the same request is refused (409 `version_conflict`) and sends
+ * no second email. With a `message`, `previewDigest` is the one of the preview the admin saw
+ * (FR-MAIL-08): the email sent is exactly that one, or the change is refused (409
+ * `preview_outdated`, when the template changed in the meantime).
+ */
+export class StatusChangeDto extends StatusTextsDto {
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @IsOptional()
+  @Matches(/^[0-9a-f]{64}$/)
+  previewDigest?: string;
+}
+
+/** The email a change of status would send (FR-MAIL-08), before anything changes. */
+export class StatusEmailPreviewDto {
+  /** False when the conference switched this email off (FR-MAIL-07): nothing will be sent. */
+  sends!: boolean;
+  to!: string | null;
+  language!: string | null;
+  subject!: string | null;
+  /** The HTML with its images embedded: show it in a sandboxed frame only (ST-28). */
+  html!: string | null;
+  text!: string | null;
+  /** Send it back with the change when it carries a `message`. */
+  previewDigest!: string | null;
+}
+
+export class NoteDto {
+  @IsString()
+  @MaxLength(5000)
+  @Satisfies('isMultilineText', isMultilineText)
+  body!: string;
+}
+
+/**
+ * A correction on the author's behalf (FR-SUB-06): the answers that change, by field key
+ * (a section such as `authors` as a whole), checked by the rules of the form's version like
+ * a submit. A file field cannot be changed here. The old values stay in the revisions.
+ */
+export class SubmissionEditDto {
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @IsObject()
+  answers!: Record<string, unknown>;
 }
