@@ -26,6 +26,12 @@ export class MailLogSummaryDto {
    * configured server (ADR-27, ST-50); `recipient` is still the original recipient.
    */
   diverted!: boolean;
+  /** The subject as sent (M2-ISS-14), with every secure link as `[link]`; null when the organisation keeps no content. */
+  subject!: string | null;
+  /** The message this attempt resent (FR-SMTP-05), and how: `copy` or `rendered_again`. */
+  resendOf!: string | null;
+  @ApiProperty({ enum: ['copy', 'rendered_again'], nullable: true })
+  resendMode!: 'copy' | 'rendered_again' | null;
   sentAt!: string;
 }
 
@@ -35,9 +41,37 @@ export class MailLogSummaryDto {
  * frame without scripts or same-origin (ST-28).
  */
 export class MailLogEntryDto extends MailLogSummaryDto {
-  subject!: string | null;
   bodyHtml!: string | null;
   bodyText!: string | null;
+  /** The email images the body showed: their ids, not their bytes (ADR-13). */
+  imageIds!: string[];
+}
+
+/** A resend (FR-SMTP-05): the new message, and whether it is a copy or rendered again. */
+export class ResentDto {
+  messageId!: string;
+  resendOf!: string;
+  @ApiProperty({ enum: ['copy', 'rendered_again'] })
+  resendMode!: 'copy' | 'rendered_again';
+}
+
+/** How long the mail log keeps an entry (FR-SMTP-06). */
+export class MailLogRetentionDto {
+  /** Days; 730 (24 months) on a fresh install. */
+  days!: number;
+  /** The version of the organisation profile. */
+  version!: number;
+}
+
+export class MailLogRetentionUpdateDto {
+  @IsInt()
+  @Min(30)
+  @Max(3650)
+  days!: number;
+
+  @IsInt()
+  @Min(1)
+  version!: number;
 }
 
 export class MailLogPageDto {

@@ -1,17 +1,37 @@
-import { Get, HttpStatus, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import {
+  Body,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Injectable,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ProblemException } from '../../common/http/problem';
 import { AdminController } from '../../common/http/surface';
 import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
-import { Permission } from '../access/access.decorators';
+import type { Access } from '../access/access';
+import { CurrentAccess, Permission } from '../access/access.decorators';
+import { AuditRecorder } from '../audit/audit-recorder';
+import { type MailKind, MailQueue } from '../mail/mail-queue';
 import {
   MailLogEntryDto,
   MailLogPageDto,
   MailLogQueryDto,
+  MailLogRetentionDto,
+  MailLogRetentionUpdateDto,
   MailLogSummaryDto,
+  ResentDto,
 } from './mail-log.dto';
 
-type Row = Prisma.MailLogEntryGetPayload<object>;
+type Row = Prisma.MailLogEntryGetPayload<{
+  include: { message: { select: { resendOf: true; resendMode: true } } };
+}>;
 
 function summaryOf(row: Row): MailLogSummaryDto {
   return {
@@ -27,14 +47,159 @@ function summaryOf(row: Row): MailLogSummaryDto {
     result: row.result as 'sent' | 'failed',
     errorCode: row.errorCode,
     diverted: row.diverted,
+    subject: row.subject,
+    resendOf: row.message.resendOf,
+    resendMode: row.message.resendMode as 'copy' | 'rendered_again' | null,
     sentAt: row.sentAt.toISOString(),
   };
 }
 
-/** The mail log (FR-SMTP-04, ADR-13), newest first. */
+const INCLUDE = { message: { select: { resendOf: true, resendMode: true } } } as const;
+
+/** The kinds that are never resent: a test message is sent anew from its server. */
+const NOT_RESENT: readonly string[] = ['test_message'];
+
+/**
+ * Resending and the retention of the mail log (M4-BE-05; FR-SMTP-05, FR-SMTP-06).
+ *
+ * A resend is a new message that names the one it repeats. When the content of the first
+ * was kept (the organisation's setting `mailLogContent`), it is sent as it was, with a
+ * fresh secure link that ends the earlier one (`copy`); otherwise the template is rendered
+ * again now (`rendered_again`). The log entry of each attempt says which.
+ */
+@Injectable()
+export class MailLogService {
+  constructor(
+    private readonly database: TenantDatabase,
+    private readonly mail: MailQueue,
+    private readonly audit: AuditRecorder,
+  ) {}
+
+  async resend(actor: Access, entryId: string): Promise<ResentDto> {
+    return this.database.transaction(async (tx) => {
+      const entry = await tx.mailLogEntry.findUnique({
+        where: { id: entryId },
+        include: { message: true },
+      });
+      if (entry === null) {
+        throw new ProblemException(404, 'not_found');
+      }
+      const original = entry.message;
+      if (
+        NOT_RESENT.includes(original.kind) ||
+        !['sent', 'failed', 'stuck'].includes(original.status)
+      ) {
+        throw new ProblemException(409, 'resend_refused');
+      }
+      const id = randomUUID();
+      const uniqueKey = `resend:${original.id}:${id}`;
+      const copy =
+        original.renderedSubject !== null &&
+        original.renderedHtml !== null &&
+        original.renderedText !== null;
+      await tx.mailMessage.create({
+        data: {
+          id,
+          organisationId: actor.organisationId,
+          uniqueKey,
+          kind: original.kind,
+          recipientUserId: original.recipientUserId,
+          recipientAddress: original.recipientAddress,
+          linkPurpose: original.linkPurpose,
+          linkUserId: original.linkUserId,
+          parameters: original.parameters as Prisma.InputJsonValue,
+          language: original.language,
+          conferenceId: original.conferenceId,
+          formId: original.formId,
+          submissionId: original.submissionId,
+          resendOf: original.id,
+          resendMode: copy ? 'copy' : 'rendered_again',
+          ...(copy
+            ? {
+                renderedSubject: original.renderedSubject,
+                renderedHtml: original.renderedHtml,
+                renderedText: original.renderedText,
+                templateServerId: original.templateServerId,
+                imageIds: original.imageIds,
+              }
+            : {}),
+        },
+      });
+      if (!copy) {
+        // The row exists under its key: the queue renders it now, from the template as it is.
+        await this.mail.enqueue(tx, {
+          id,
+          organisationId: actor.organisationId,
+          kind: original.kind as MailKind,
+          recipientAddress: original.recipientAddress,
+          uniqueKey,
+        });
+      }
+      await this.audit.record(tx, {
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        action: 'mail.resent',
+        subjectType: 'mail_message',
+        subjectId: original.id,
+      });
+      return {
+        messageId: id,
+        resendOf: original.id,
+        resendMode: copy ? ('copy' as const) : ('rendered_again' as const),
+      };
+    });
+  }
+
+  async retention(): Promise<MailLogRetentionDto> {
+    const organisation = await this.database.db.organisation.findFirstOrThrow({
+      select: { mailLogRetentionDays: true, version: true },
+    });
+    return { days: organisation.mailLogRetentionDays, version: organisation.version };
+  }
+
+  async setRetention(
+    actor: Access,
+    input: MailLogRetentionUpdateDto,
+  ): Promise<MailLogRetentionDto> {
+    await this.database.transaction(async (tx) => {
+      const before = await tx.organisation.findFirstOrThrow({
+        select: { id: true, mailLogRetentionDays: true },
+      });
+      const changed = await tx.organisation.updateMany({
+        where: { id: before.id, version: input.version },
+        data: {
+          mailLogRetentionDays: input.days,
+          version: { increment: 1 },
+          updatedAt: new Date(),
+        },
+      });
+      if (changed.count !== 1) {
+        throw new ProblemException(409, 'version_conflict');
+      }
+      await this.audit.record(tx, {
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        action: 'mail_log.retention_changed',
+        subjectType: 'mail_log_retention',
+        subjectId: before.id,
+        changes: {
+          days: { old: String(before.mailLogRetentionDays), new: String(input.days) },
+        },
+      });
+    });
+    return this.retention();
+  }
+}
+
+const ID = new ParseUUIDPipe({ version: '4', errorHttpStatusCode: HttpStatus.NOT_FOUND });
+
+/** The mail log (FR-SMTP-04 to 06, ADR-13), newest first. */
 @AdminController('mail-log')
 export class MailLogController {
-  constructor(private readonly database: TenantDatabase) {}
+  constructor(
+    private readonly database: TenantDatabase,
+    private readonly log: MailLogService,
+  ) {}
 
   @Get()
   @Permission('mail_log.read')
@@ -52,6 +217,7 @@ export class MailLogController {
         tx.mailLogEntry.count({ where }),
         tx.mailLogEntry.findMany({
           where,
+          include: INCLUDE,
           orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
           skip: (page - 1) * pageSize,
           take: pageSize,
@@ -61,20 +227,52 @@ export class MailLogController {
     return { items: rows.map(summaryOf), total, page, pageSize };
   }
 
+  /** How long the log keeps an entry (FR-SMTP-06): 24 months unless an admin set another period. */
+  @Get('retention')
+  @Permission('mail_log.read')
+  getMailLogRetention(): Promise<MailLogRetentionDto> {
+    return this.log.retention();
+  }
+
+  /** Sets the retention: entries older than it are removed by the next run of the job. */
+  @Put('retention')
+  @Permission('mail_log.manage')
+  setMailLogRetention(
+    @CurrentAccess() access: Access,
+    @Body() body: MailLogRetentionUpdateDto,
+  ): Promise<MailLogRetentionDto> {
+    return this.log.setRetention(access, body);
+  }
+
   @Get(':id')
   @Permission('mail_log.read')
-  async getMailLogEntry(
-    @Param('id', new ParseUUIDPipe({ version: '4', errorHttpStatusCode: HttpStatus.NOT_FOUND }))
-    id: string,
-  ): Promise<MailLogEntryDto> {
-    const row = await this.database.db.mailLogEntry.findUnique({ where: { id } });
+  async getMailLogEntry(@Param('id', ID) id: string): Promise<MailLogEntryDto> {
+    const row = await this.database.db.mailLogEntry.findUnique({
+      where: { id },
+      include: INCLUDE,
+    });
     if (row === null) {
       throw new ProblemException(404, 'not_found');
     }
     return Object.assign(summaryOf(row), {
-      subject: row.subject,
       bodyHtml: row.bodyHtml,
       bodyText: row.bodyText,
+      imageIds: row.imageIds,
     });
+  }
+
+  /**
+   * Resends the message of this entry (FR-SMTP-05): as it was sent, with a fresh secure link
+   * that ends the earlier one, or rendered again from the template when the content was not
+   * kept. 409 `resend_refused` for a test message, or a message that is not done yet.
+   */
+  @Post(':id/resend')
+  @Permission('mail_log.manage')
+  @HttpCode(200)
+  resendMailLogEntry(
+    @CurrentAccess() access: Access,
+    @Param('id', ID) id: string,
+  ): Promise<ResentDto> {
+    return this.log.resend(access, id);
   }
 }

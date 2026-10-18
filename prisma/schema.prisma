@@ -62,6 +62,8 @@ model Organisation {
   /// above these counts are held for an admin.
   breakerPerHour          Int       @default(30) @map("breaker_per_hour")
   breakerPerDay           Int       @default(200) @map("breaker_per_day")
+  /// Days the mail log keeps an entry (FR-SMTP-06): 24 months on a fresh install.
+  mailLogRetentionDays    Int       @default(730) @map("mail_log_retention_days")
 
   users               User[]
   userRoles           UserRole[]
@@ -425,6 +427,10 @@ model MailMessage {
   imageIds         String[]  @default([]) @map("image_ids") @db.Uuid
   releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
   releasedBy       String?   @map("released_by") @db.Uuid
+  /// The message this one resends (FR-SMTP-05), and how: copy (the content as sent, a
+  /// fresh link) or rendered_again (the content was not kept).
+  resendOf         String?   @map("resend_of") @db.Uuid
+  resendMode       String?   @map("resend_mode")
   /// A held message an admin discarded (M3-ISS-14): never sent, never released.
   discardedAt      DateTime? @map("discarded_at") @db.Timestamptz(3)
   discardedBy      String?   @map("discarded_by") @db.Uuid
@@ -443,6 +449,8 @@ model MailMessage {
   @@index([organisationId, recipientUserId, kind, createdAt])
   @@index([organisationId, formId, createdAt])
   @@index([organisationId, submissionId])
+  @@index([organisationId, resendOf])
+  @@index([organisationId, status, createdAt])
   @@map("mail_outbox")
 }
 

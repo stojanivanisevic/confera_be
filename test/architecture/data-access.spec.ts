@@ -92,7 +92,7 @@ describe('data access architecture', () => {
       expect(Object.keys(resolversModule.SystemResolvers.prototype)).toEqual([]);
     });
 
-    it('is used through SystemResolvers by the start-up check, sign-in, sessions, secure links, the mail worker, the public forms and the files worker, and by nothing else', () => {
+    it('is used through SystemResolvers by the start-up check, sign-in, sessions, secure links, the mail worker, the public forms, the files worker and the maintenance worker, and by nothing else', () => {
       // Every new user of the resolvers shows up here, in a diff a reviewer sees.
       expect(importers((specifier) => /(^|\/)system\/resolvers$/.test(specifier))).toEqual([
         'src/modules/access/account.service.ts',
@@ -101,6 +101,7 @@ describe('data access architecture', () => {
         'src/modules/audit/security-summary.ts',
         'src/modules/files/files-worker.ts',
         'src/modules/forms/intake.service.ts',
+        'src/modules/jobs/maintenance-worker.ts',
         'src/modules/links/secure-links.ts',
         'src/modules/mail/mail-worker.ts',
         'src/platform/prisma/database-role-check.ts',
