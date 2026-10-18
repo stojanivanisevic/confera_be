@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Client } from 'pg';
 import { FilesWorker } from '../../src/modules/files/files-worker';
 import { UploadsService } from '../../src/modules/files/uploads.service';
+import { tokenHash } from '../../src/modules/forms/intake.service';
+import { solveProofOfWork } from '../../src/modules/forms/proof-of-work';
 import { type FakeClamd, startFakeClamd } from '../support/fake-clamd';
 import { docOf, docxOf, EICAR, overlappingZipOf, pdfOf } from '../support/office-files';
 import { type Actors, as, createActors, type SignedIn, signIn } from './support/actors';
@@ -423,5 +425,122 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     const list = await as(e2e, admin, 'get', '/api/v1/submissions?pageSize=100');
     expect((list.body as { total: number }).total).toBeGreaterThanOrEqual(3);
     expect(randomUUID()).toMatch(/-/);
+  });
+
+  describe('a chain of renewals ends, and its files with it (SEC-M3-02)', () => {
+    async function renew(previous: string, address: string): Promise<string> {
+      const response = await page(e2e, 'post', `/public/v1/forms/${form.slug}/tokens`, address)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ previousFormToken: previous }));
+      expect(response.status).toBe(201);
+      return (response.body as { formToken: string }).formToken;
+    }
+
+    async function fileFor(token: string, address: string, name: string): Promise<string> {
+      const uploaded = await upload(form.slug, token, pdfOf(), name, { address });
+      expect(uploaded.status).toBe(201);
+      return (uploaded.body as { fileId: string }).fileId;
+    }
+
+    async function sendWith(
+      token: string,
+      address: string,
+      fileId: string,
+      proofOfWork?: string,
+    ): Promise<number> {
+      await ageTokens(owner, orgA());
+      const response = await submit(
+        e2e,
+        form.slug,
+        token,
+        {
+          language: 'en',
+          answers: abstractAnswers({ biographies: fileId }),
+          ...(proofOfWork === undefined ? {} : { proofOfWork }),
+        },
+        { address },
+      );
+      return response.status;
+    }
+
+    const setToken = (token: string, assignments: string) =>
+      inOrganisation(owner, orgA(), `UPDATE form_tokens SET ${assignments} WHERE token_hash = $1`, [
+        tokenHash(token),
+      ]);
+
+    it('a live token is not renewed: its files stay with it, and the new token starts a chain of its own', async () => {
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      const fileId = await fileFor(formToken, address, 'zivi.pdf');
+      const other = await renew(formToken, address);
+      expect(await sendWith(other, address, fileId)).toBe(400);
+      // The live token was not used up by the renewal.
+      expect(await sendWith(formToken, address, fileId)).toBe(201);
+    });
+
+    it('a chain that began more than 24 hours ago is not renewed', async () => {
+      const address = freshAddress();
+      const { formToken } = await tokenFor(e2e, form.slug, address);
+      const fileId = await fileFor(formToken, address, 'stari.pdf');
+      // The last token of a chain begun 25 hours ago, issued 5 hours ago, just expired.
+      await setToken(
+        formToken,
+        "fill_started_at = now() - interval '25 hours', issued_at = now() - interval '5 hours', expires_at = now() - interval '1 minute'",
+      );
+      const renewed = await renew(formToken, address);
+      expect(await sendWith(renewed, address, fileId)).toBe(400);
+    });
+
+    it('the purge takes the files of an ended chain, whatever token holds them, and keeps those a renewal may still take', async () => {
+      const address = freshAddress();
+      const open = await tokenFor(e2e, form.slug, address);
+      const ended = await tokenFor(e2e, form.slug, address);
+      const kept = await fileFor(open.formToken, address, 'ostaje.pdf');
+      const gone = await fileFor(ended.formToken, address, 'odlazi.pdf');
+      await setToken(
+        open.formToken,
+        "issued_at = now() - interval '10 hours', expires_at = now() - interval '4 hours'",
+      );
+      await setToken(
+        ended.formToken,
+        "fill_started_at = now() - interval '25 hours', issued_at = now() - interval '2 hours', expires_at = now() - interval '1 minute'",
+      );
+      await files.tick();
+      const left = await inOrganisation<{ id: string }>(
+        owner,
+        orgA(),
+        'SELECT id FROM files WHERE id = ANY($1::uuid[])',
+        [[kept, gone]],
+      );
+      expect(left.map((row) => row.id)).toEqual([kept]);
+      // Four hours after its token expired, a renewal still gets its file back.
+      const renewed = await renew(open.formToken, address);
+      expect(await sendWith(renewed, address, kept)).toBe(201);
+    });
+
+    it('a token the proof-of-work refused is renewed with its files (Q3-02)', async () => {
+      const address = freshAddress();
+      const { formToken, proofOfWork } = await tokenFor(e2e, form.slug, address);
+      expect(proofOfWork).toBeNull();
+      const fileId = await fileFor(formToken, address, 'rad.pdf');
+      // The client then behaves like a script: three crafted uploads.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await upload(form.slug, formToken, overlappingZipOf(100), 'x.docx', { address });
+      }
+      expect(await sendWith(formToken, address, fileId)).toBe(403);
+      const response = await page(e2e, 'post', `/public/v1/forms/${form.slug}/tokens`, address)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ previousFormToken: formToken }));
+      const renewed = response.body as {
+        formToken: string;
+        proofOfWork: { challenge: string; difficulty: number } | null;
+      };
+      expect(renewed.proofOfWork).not.toBeNull();
+      const counter = solveProofOfWork(
+        renewed.proofOfWork?.challenge ?? '',
+        renewed.proofOfWork?.difficulty ?? 13,
+      );
+      expect(await sendWith(renewed.formToken, address, fileId, counter)).toBe(201);
+    });
   });
 });

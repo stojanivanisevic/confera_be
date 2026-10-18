@@ -27,9 +27,10 @@ import { FileStorage } from './storage';
  *   not accept); a `.docx` with macros is refused (422 `docx_macros`, G2-22); an old `.doc`
  *   with macros is kept and flagged.
  * - Above the quota of unattached bytes of the organisation uploads are refused (503
- *   `upload_quota_reached`) and the admins are told, once an hour.
+ *   `upload_quota_reached`) and the admins are told, once an hour; one client keeps at most
+ *   half of it (429, SEC-M3-02).
  * - The file waits, unattached and unscanned, until the submit attaches it; the purge removes
- *   it when its token expires.
+ *   it when its token has expired and its chain of renewals has ended.
  */
 export const UNATTACHED_QUOTA_BYTES = 2 * 1024 * 1024 * 1024;
 
@@ -64,7 +65,7 @@ export class UploadsService {
     request: Request,
     address: string,
   ): Promise<UploadedFileDto> {
-    if (!this.limits.takeUpload(address)) {
+    if (!this.limits.takeUpload(address) || this.limits.uploadBytesLeft(address) === 0) {
       throw new ProblemException(429, 'too_many_requests');
     }
     return this.intake.inForm(slug, async (resolved) => {
@@ -132,6 +133,10 @@ export class UploadsService {
         if (detected.type === 'docx' && detected.macros) {
           throw new ProblemException(422, 'docx_macros');
         }
+        // One client cannot hold the quota of an organisation alone (SEC-M3-02).
+        if (received.size > this.limits.uploadBytesLeft(address)) {
+          throw new ProblemException(429, 'too_many_requests');
+        }
         const key = this.storage.newKey(resolved.organisationId);
         const name = safeFileName(received.name, detected.type);
         const type = detected.type;
@@ -160,6 +165,7 @@ export class UploadsService {
               },
             });
           });
+          this.limits.keptUploadBytes(address, received.size);
           return { fileId: stored.id, name, sizeBytes: received.size, type };
         } catch (error) {
           await this.storage.remove(key);

@@ -185,10 +185,11 @@ export class IntakeService {
   }
 
   /**
-   * The token a renewal names (Q3-01): of this form, issued within 24 hours, expired or used
-   * or not, and not renewed before (Q3-14: one chain, not two); otherwise none, and the new
-   * token starts a chain of its own. Its row is locked, so that two renewals of one token at
-   * once cannot both take it over.
+   * The token a renewal names (Q3-01): of this form, refused (expired, used, or refused by
+   * the proof-of-work), never a live one, in a chain that began within 24 hours (SEC-M3-02:
+   * a chain ends, and its files with it), and not renewed before (Q3-14: one chain, not two);
+   * otherwise none, and the new token starts a chain of its own. Its row is locked and read
+   * again, so that two renewals of one token at once cannot both take it over.
    */
   private async renewable(
     tx: Prisma.TransactionClient,
@@ -199,11 +200,24 @@ export class IntakeService {
     if (previous === undefined || !TOKEN_SHAPE.test(previous)) {
       return null;
     }
-    const row = await tx.formToken.findFirst({ where: { tokenHash: tokenHash(previous) } });
-    if (row?.formId !== formId || now.getTime() - row.issuedAt.getTime() > RENEWAL_WINDOW_MS) {
+    const found = await tx.formToken.findFirst({
+      where: { tokenHash: tokenHash(previous) },
+      select: { id: true, formId: true },
+    });
+    if (found?.formId !== formId) {
       return null;
     }
-    await tx.$queryRaw`SELECT id FROM form_tokens WHERE id = ${row.id}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM form_tokens WHERE id = ${found.id}::uuid FOR UPDATE`;
+    const row = await tx.formToken.findUnique({ where: { id: found.id } });
+    if (row === null) {
+      return null;
+    }
+    const live =
+      row.expiresAt.getTime() > now.getTime() && row.usedAt === null && row.refusedAt === null;
+    const started = row.fillStartedAt ?? row.issuedAt;
+    if (live || now.getTime() - started.getTime() > RENEWAL_WINDOW_MS) {
+      return null;
+    }
     const successor = await tx.formToken.findFirst({
       where: { renewedFrom: row.id },
       select: { id: true },
@@ -341,6 +355,18 @@ export class IntakeService {
       } catch (error) {
         if (error instanceof ProblemException && error.code === 'form_token_invalid') {
           this.limits.suspicious(input.address);
+        }
+        // The page renews a token the proof-of-work refused (Q3-02); the refusal rolled the
+        // submit back, so it is written on its own: such a token is no longer live (SEC-M3-02).
+        if (
+          error instanceof ProblemException &&
+          error.code === 'proof_of_work_failed' &&
+          input.token !== undefined
+        ) {
+          await this.database.db.formToken.updateMany({
+            where: { tokenHash: tokenHash(input.token), formId: resolved.formId, usedAt: null },
+            data: { refusedAt: now },
+          });
         }
         // Two submits of one key at once: the second one lost the token to the first.
         if (error instanceof ProblemException && error.code === 'form_token_used') {

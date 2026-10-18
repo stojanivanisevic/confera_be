@@ -425,12 +425,15 @@ the two equal. The OpenAPI document carries the declaration of every operation
   the trap field: filled, or a submit within 3 s of the token, is answered with a fake
   success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
   (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
-  with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form,
-  issued within 24 hours and not renewed before, takes over its files and its count of
-  uploads and uses it up; the minimum fill time counts from the first token of the chain, so
-  a submit at once after a renewal is stored when the chain began 3 s ago or more.
-  Limits per client (an IPv4 address, or the /64 of an IPv6 address): 30 tokens in 10
-  minutes, 10 submits an hour, 40 uploads in 10 minutes (429). The **proof-of-work** (13
+  with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form
+  that is no longer live (expired, used, or refused by the proof-of-work), in a chain that
+  began within 24 hours and not renewed before, takes over its files and its count of
+  uploads and uses it up (SEC-M3-02: a live token is never renewed, and a chain ends 24 hours
+  after its first token); otherwise the new token starts a chain of its own. The minimum fill
+  time counts from the first token of the chain, so a submit at once after a renewal is
+  stored when the chain began 3 s ago or more. Limits per client (an IPv4 address, or the
+  /64 of an IPv6 address): 30 tokens in 10 minutes, 10 submits an hour, 40 uploads in 10
+  minutes, 1 GB of kept uploads in 30 hours (429). The **proof-of-work** (13
   zero bits) is asked for above 20 submissions in 10 minutes on a form, or from a client that
   did three things a script does in 10 minutes (the trap, a submit faster than a person, a
   failed proof, a token not valid); volume alone from one address does not. It is decided
@@ -467,9 +470,10 @@ the two equal. The OpenAPI document carries the declaration of every operation
   name, at most 150 characters, the extension of the content). A refused or broken upload
   uses none of the token's uploads up, and leaves no temporary file. Above 2 GB of
   unattached bytes in an organisation, uploads on their way included, uploads are refused (503
-  `upload_quota_reached`) and the admins told; the files of a token are purged an hour after
-  it expired (time for a renewal), the token a day after its issue, and a temporary file
-  untouched for an hour. A `.docx` counts as holding macros by the name, the content type
+  `upload_quota_reached`) and the admins told; the files of an expired token are purged once
+  its chain of renewals has ended, 24 hours after the chain began (until then a renewal takes
+  them back), any unattached file 30 hours after its upload, the token a day after its issue,
+  and a temporary file untouched for an hour. A `.docx` counts as holding macros by the name, the content type
   or the relationship of its VBA project. Its inspection is bounded (SEC-M3-01): at most 64
   parts, 2 MB inflated in all and 1 s per file; a ZIP whose entries repeat a name or overlap
   is refused (415), one that needs more counts as holding macros (422), and either upload

@@ -546,6 +546,9 @@ model FormToken {
   fillStartedAt  DateTime? @map("fill_started_at") @db.Timestamptz(3)
   /// The token this one renews, when the page renewed a refused one (Q3-01).
   renewedFrom    String?   @map("renewed_from") @db.Uuid
+  /// When a submit was refused for its proof-of-work: the page renews it although it is
+  /// not expired (Q3-02); a live token is never renewed (SEC-M3-02).
+  refusedAt      DateTime? @map("refused_at") @db.Timestamptz(3)
   powChallenge   String?   @map("pow_challenge")
   powDifficulty  Int?      @map("pow_difficulty")
 

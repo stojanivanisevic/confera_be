@@ -1,4 +1,5 @@
-import { clientKey, PublicLimits } from './public-limits';
+import { UNATTACHED_QUOTA_BYTES } from '../files/uploads.service';
+import { clientKey, LIMITS, PublicLimits } from './public-limits';
 
 /** Q3-03, Q3-08: who a client is, and what switches the proof-of-work on. */
 describe('the limits of the public forms', () => {
@@ -37,5 +38,18 @@ describe('the limits of the public forms', () => {
     expect(limits.addressUnderLoad('198.51.100.2')).toBe(false);
     limits.suspicious('198.51.100.2');
     expect(limits.addressUnderLoad('198.51.100.2')).toBe(true);
+  });
+
+  it('one client keeps at most half the quota of unattached bytes of an organisation (SEC-M3-02)', () => {
+    const limits = new PublicLimits();
+    const cap = LIMITS.uploadBytesPerAddress.limit;
+    expect(cap).toBe(UNATTACHED_QUOTA_BYTES / 2);
+    expect(limits.uploadBytesLeft('2001:db8:3:4::1')).toBe(cap);
+    limits.keptUploadBytes('2001:db8:3:4::1', cap - 10);
+    // The same /64, another address: the same client.
+    expect(limits.uploadBytesLeft('2001:db8:3:4::2')).toBe(10);
+    limits.keptUploadBytes('2001:db8:3:4::2', 10);
+    expect(limits.uploadBytesLeft('2001:db8:3:4::1')).toBe(0);
+    expect(limits.uploadBytesLeft('2001:db8:3:5::1')).toBe(cap);
   });
 });

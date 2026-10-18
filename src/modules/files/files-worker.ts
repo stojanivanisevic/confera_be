@@ -10,6 +10,7 @@ import { APP_CONFIG } from '../../config/config.module';
 import { SystemResolvers } from '../../platform/prisma/system/resolvers';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import { TenantContext } from '../../platform/tenancy/tenant-context';
+import { FORM_TOKEN_LIFETIME_MS, RENEWAL_WINDOW_MS } from '../forms/intake.service';
 import { MailQueue } from '../mail/mail-queue';
 import { FileStorage } from './storage';
 import { VIRUS_SCANNER, type VirusScanner } from './virus-scanner';
@@ -17,11 +18,14 @@ import { VIRUS_SCANNER, type VirusScanner } from './virus-scanner';
 /** A temporary upload file untouched this long belongs to an upload that stopped. */
 export const STALE_UPLOAD_MS = 60 * 60_000;
 
-/** The unattached files of an expired token stay this long, so that a renewal can take them (Q3-01). */
-export const PURGE_GRACE_MS = 60 * 60_000;
+/**
+ * An unattached file older than this is purged whatever token it sits on (SEC-M3-02): a chain
+ * of renewals begins at most 24 hours before its last token, which lives 6 hours.
+ */
+export const UNATTACHED_KEPT_MS = RENEWAL_WINDOW_MS + FORM_TOKEN_LIFETIME_MS;
 
 /** An expired token is removed this long after it was issued: until then it may be renewed. */
-export const TOKEN_KEPT_MS = 24 * 60 * 60_000;
+export const TOKEN_KEPT_MS = RENEWAL_WINDOW_MS;
 
 /** Files a run looks at per organisation, at most. */
 const BATCH = 20;
@@ -48,7 +52,8 @@ export interface FilesTickReport {
  *   attempts counted, is tried again later, and the admins are told (once an hour); a
  *   submission is never blocked by a pending scan.
  * - **Purges** the files that were uploaded and never attached once their form token has
- *   expired, file and row, and then the expired tokens themselves.
+ *   expired and its chain of renewals has ended (24 hours from its start, SEC-M3-02), file
+ *   and row, and then the expired tokens themselves.
  *
  * Every `JOBS_INTERVAL_SECONDS`, organisation by organisation; tests call `tick()`.
  */
@@ -121,19 +126,34 @@ export class FilesWorker implements OnApplicationBootstrap, OnApplicationShutdow
     return report;
   }
 
+  /**
+   * The files of an expired token stay while its chain may still be renewed (Q3-01): 24 hours
+   * from the chain's start (SEC-M3-02), whatever token they were moved to; then file and row go.
+   */
   private async purge(now: Date, report: FilesTickReport): Promise<void> {
+    const chainEnded = new Date(now.getTime() - RENEWAL_WINDOW_MS);
     const expired = await this.database.db.formToken.findMany({
-      where: { expiresAt: { lte: new Date(now.getTime() - PURGE_GRACE_MS) } },
-      select: { id: true, issuedAt: true },
+      where: {
+        expiresAt: { lte: now },
+        OR: [
+          { fillStartedAt: { lte: chainEnded } },
+          { fillStartedAt: null, issuedAt: { lte: chainEnded } },
+        ],
+      },
+      select: { id: true },
       take: 500,
     });
-    if (expired.length === 0) {
-      return;
-    }
     const tokenIds = expired.map((token) => token.id);
     const orphans = await this.database.db.storedFile.findMany({
-      where: { formTokenId: { in: tokenIds }, submissionId: null },
+      where: {
+        submissionId: null,
+        OR: [
+          { formTokenId: { in: tokenIds } },
+          { createdAt: { lte: new Date(now.getTime() - UNATTACHED_KEPT_MS) } },
+        ],
+      },
       select: { id: true, storageKey: true },
+      take: 500,
     });
     for (const orphan of orphans) {
       await this.storage.remove(orphan.storageKey);

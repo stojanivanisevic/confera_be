@@ -17,8 +17,11 @@ export class RateLimiter {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Counts one event of `key`. True while the key is within its limit, this event included. */
-  take(key: string): boolean {
+  /**
+   * Counts one event of `key`, or `amount` units of it (bytes). True while the key is within
+   * its limit, this event included.
+   */
+  take(key: string, amount = 1): boolean {
     const now = this.now();
     let window = this.#windows.get(key);
     if (window === undefined || now - window.started >= this.windowMs) {
@@ -27,8 +30,14 @@ export class RateLimiter {
       this.#windows.delete(key);
       this.#windows.set(key, window);
     }
-    window.count += 1;
+    window.count += amount;
     return window.count <= this.limit;
+  }
+
+  /** What the key has used of its limit in the current window. Counts nothing. */
+  used(key: string): number {
+    const window = this.#windows.get(key);
+    return window !== undefined && this.now() - window.started < this.windowMs ? window.count : 0;
   }
 
   /** True when the key has used up its limit in the current window. Counts nothing. */

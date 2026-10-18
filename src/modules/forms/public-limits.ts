@@ -25,6 +25,12 @@ export const LIMITS = {
   powSubmissionsPerForm: { count: 20, windowMs: 10 * 60_000 },
   /** Uploads per client: at most this many in 10 minutes. */
   uploadsPerAddress: { limit: 40, windowMs: 10 * 60_000 },
+  /**
+   * Bytes of kept uploads per client (SEC-M3-02): at most half the quota of unattached bytes
+   * of an organisation in the 30 hours an unattached file may live, so one client alone
+   * cannot hold the quota. A faculty behind one address still has room for many authors.
+   */
+  uploadBytesPerAddress: { limit: 1024 * 1024 * 1024, windowMs: 30 * 60 * 60_000 },
 } as const;
 
 /** The client an address belongs to: an IPv4 address, or the /64 of an IPv6 address (Q3-03). */
@@ -67,6 +73,10 @@ export class PublicLimits {
     LIMITS.uploadsPerAddress.limit,
     LIMITS.uploadsPerAddress.windowMs,
   );
+  readonly #uploadBytes = new RateLimiter(
+    LIMITS.uploadBytesPerAddress.limit,
+    LIMITS.uploadBytesPerAddress.windowMs,
+  );
   readonly #suspicious = new RateLimiter(
     LIMITS.suspiciousPerAddress.limit,
     LIMITS.suspiciousPerAddress.windowMs,
@@ -84,6 +94,16 @@ export class PublicLimits {
 
   takeUpload(address: string): boolean {
     return this.#uploads.take(clientKey(address));
+  }
+
+  /** The bytes this client may still upload (SEC-M3-02). Counts nothing. */
+  uploadBytesLeft(address: string): number {
+    return Math.max(0, this.#uploadBytes.limit - this.#uploadBytes.used(clientKey(address)));
+  }
+
+  /** Counts the bytes of a kept upload: a refused one counts none (Q3-04). */
+  keptUploadBytes(address: string, bytes: number): void {
+    this.#uploadBytes.take(clientKey(address), bytes);
   }
 
   /** Counts an act of a script: the trap, a submit too fast, a failed proof, a token not valid. */
