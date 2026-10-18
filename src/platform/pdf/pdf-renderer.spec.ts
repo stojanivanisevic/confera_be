@@ -12,7 +12,7 @@ import { embeddedFontPrograms, linesOf, rawFontNames, readPdf } from './testing/
  *   š č ć ž đ, Cyrillic and the letters that need the fallback font;
  * - the fonts are embedded;
  * - a character that no font has stops the render with a message;
- * - a render takes under 5 seconds (NFR-PERF-03).
+ * - a render ends in bounded time (the 5 seconds of NFR-PERF-03 are judged in test/timing).
  *
  * The gate of that last criterion, the first document of a process included, is
  * test/timing/pdf-cold-start.spec.ts: fresh processes of plain Node, which is what a
@@ -21,11 +21,14 @@ import { embeddedFontPrograms, linesOf, rawFontNames, readPdf } from './testing/
  * files. Measured on the development laptop, a table of 200 rows takes 0.1 s in plain
  * Node, 0.25 s when this file runs alone, 0.5 to 3 s when the whole unit tier runs on all
  * processors, and the first document of this file came close to 5 seconds, and twice
- * beyond, while browser tests of the frontend ran on the same machine. So the time of
- * the first document is reported here and judged there.
+ * beyond, while browser tests of the frontend ran on the same machine. So the times are
+ * reported here and judged there: the next documents and the table of 200 rows too, which
+ * took 6.3 to 7.2 s here on a loaded machine in the blank-slate run of 0.3.0 and failed
+ * `check` (README, section 8). Here only a bound that a hang could not meet.
  */
 
-const LIMIT_MS = 5000;
+/** Not the gate of NFR-PERF-03 (that is test/timing): a guard against a hang. */
+const GUARD_MS = 30_000;
 
 describe('PDF generation with pdfmake and embedded fonts', () => {
   jest.setTimeout(120_000);
@@ -104,18 +107,16 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
       }
     });
 
-    it(`renders in under ${String(LIMIT_MS / 1000)} seconds`, async () => {
+    it('renders five times in bounded time, each time reported', async () => {
       const times: number[] = [];
       for (let index = 0; index < 5; index += 1) {
         const started = performance.now();
         await renderer.render(BILINGUAL_SAMPLE);
         times.push(performance.now() - started);
       }
-      // Every one of the five must meet the limit: the slowest counts (ruling of the test
-      // engineer in the verification of 0.1.0). The first document of a process is not
-      // judged here but in test/timing (see above), where a cold start is a real one;
-      // here its time is reported.
-      expect(Math.max(...times)).toBeLessThan(LIMIT_MS);
+      // The 5 seconds, the slowest of five counting (ruling of the test engineer in the
+      // verification of 0.1.0), are judged in test/timing (see above); here a guard only.
+      expect(Math.max(...times)).toBeLessThan(GUARD_MS);
       // Kept in the test output as the numbers of the spike.
       process.stdout.write(
         `PDF spike, inside Jest: first document ${firstDocumentMs.toFixed(0)} ms (of which library and fonts ${warmUpMs.toFixed(0)} ms), then ${times
@@ -135,7 +136,7 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
     // Far more than a proforma or an invoice will hold: 200 lines on seven pages.
     const ROWS = 200;
 
-    it(`with a table of ${String(ROWS)} rows renders in under 5 seconds and reads back complete`, async () => {
+    it(`with a table of ${String(ROWS)} rows renders in bounded time and reads back complete`, async () => {
       const rows = Array.from({ length: ROWS }, (_unused, index) => [
         `Stavka ${String(index + 1)}: šđčćž ŠĐČĆŽ`,
         `Item ${String(index + 1)}`,
@@ -154,7 +155,8 @@ describe('PDF generation with pdfmake and embedded fonts', () => {
         ],
       });
       const elapsed = performance.now() - started;
-      expect(elapsed).toBeLessThan(LIMIT_MS);
+      // The 5 seconds are judged in test/timing (rows200Ms of pdf-cold-start.spec.ts).
+      expect(elapsed).toBeLessThan(GUARD_MS);
 
       const content = await readPdf(pdf);
       expect(content.pages.length).toBeGreaterThan(4);

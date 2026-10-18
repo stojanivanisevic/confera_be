@@ -52,9 +52,11 @@ secret.
 - Windows (PowerShell or cmd): `copy .env.example .env`
 - macOS, Linux, Git Bash: `cp .env.example .env`
 
-If another checkout of `confera_be` on this machine (a clone, a git worktree) runs its
-stack, give this one ports of its own now: `corepack pnpm stack:ports` (after step 2). See
-"One stack per checkout" below.
+**Only if** another checkout of `confera_be` on this machine (another clone, a git worktree,
+a copy under `_tmp`) has its stack up, or will have it up while this one runs, give this
+one ports of its own: `corepack pnpm stack:ports`, after step 2 and before step 4. On the
+only checkout of the machine skip it: the ports of `.env.example` are right. `stack:up`
+refuses a port that another stack holds, and says so. See "One stack per checkout" below.
 
 **Step 2. Install the dependencies.** The install never changes the lockfile, and it
 generates the Prisma client at the end.
@@ -121,15 +123,17 @@ The log is JSON lines and ends with `"msg":"api.started"`. In a second terminal:
 | ------------------------------------ | --------------------------------------------- |
 | <http://localhost:3001/health>       | `{"status":"ok"}`                             |
 | <http://localhost:3001/health/ready> | `{"status":"ok"}` (the database answers)      |
-| <http://localhost:3001/api/v1/meta>  | `{"name":"confera-api","version":"0.1.0"}`    |
+| <http://localhost:3001/api/v1/meta>  | `{"name":"confera-api","version":"…"}`        |
 | <http://127.0.0.1:3001/api/v1/meta>  | **404** `not_found`. That is right: section 5 |
+
+`version` is the version of this checkout, the `version` of `package.json`.
 
 Stop the API with Ctrl+C.
 
 **Step 7. Run the tests that need the database.** They build the application, create a
 database of their own (`confera_integration_test`) with the same two commands as step 5,
-and leave your development database alone. `test:int` takes about five minutes and
-`test:e2e` about five more (with the stack of this version: Mailpit greets at once).
+and leave your development database alone. `test:int` takes about 12 minutes (0.3.0, on
+the development laptop, alone and in the blank-slate run alike).
 
 ```
 corepack pnpm test:int
@@ -139,7 +143,8 @@ It ends with `Tests: ... passed` and no failure.
 
 **Step 8. Run the end-to-end tests.** They start the real application on a database of
 their own (`confera_e2e_test`), created with the same two commands as step 5, and send
-HTTP requests to it. They also talk to the mail catcher. About one minute.
+HTTP requests to it. They also talk to the mail catcher. About 21 to 23 minutes (0.3.0, on
+the development laptop).
 
 ```
 corepack pnpm test:e2e
@@ -213,7 +218,7 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
 | `corepack pnpm stack:wipe`                                    | Stops the stack of this checkout and removes its database volume.                                                                                                                                                                                                    |
 | `corepack pnpm stack:ports`                                   | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                                                                                         |
 | `corepack pnpm stack:info`                                    | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                                                                                               |
-| `corepack pnpm stubs`                                         | Starts the stub slot (stand-ins for outside services; empty in 0.1.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                                                                                          |
+| `corepack pnpm stubs`                                         | Starts the stub slot (stand-ins for outside services; empty until 0.5.0) on <http://127.0.0.1:4010>. Only on `STAGE=local`, `dev` or `test`. Stop with Ctrl+C.                                                                                                       |
 | `corepack pnpm seed:e2e`                                      | Writes the invented organisations and people of the end-to-end tests into the development database, each person with the invented password of `test/e2e/seed/e2e-seed.json`, and the default email templates. It refuses to run unless `STAGE` is `local` or `test`. |
 | `corepack pnpm seed:production`                               | Writes the organisation "UdEkoM Balkans", its default email templates and the five conferences as drafts. No user, no password, no price. Safe to repeat; never changes what an admin edited.                                                                        |
 | `corepack pnpm first-admin --email <address> --name "<name>"` | Invites the first admin: an invited person with the admin role and an invitation link valid for 72 hours, **printed once to the terminal** and kept nowhere else. Refused once the organisation has an active admin.                                                 |
@@ -718,15 +723,16 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
   listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine. (On a checkout with
   ports of its own: `CONFERA_MAIL_WEB_PORT` and `CONFERA_MAIL_SMTP_PORT` of `.env`.)
 - **The stub slot** is where the stand-ins for outside services run: the PayPal stub
-  arrives with 0.7.0, the fixture rate provider with 0.5.0. In 0.1.0 it is empty:
+  arrives with 0.7.0, the fixture rate provider with 0.5.0. Until then it is empty:
   `GET http://127.0.0.1:4010/health` answers `{"status":"ok","stubs":[]}` and everything
   else 404. It listens on 127.0.0.1 only and refuses to start unless `STAGE` is `local`,
   `dev` or `test`. Another port: `STUBS_PORT` in `.env`.
 - **`seed:e2e`** writes what `test/e2e/seed/e2e-seed.json` holds: two invented
   organisations with an admin and a reviewer each, on `example.test`, with fixed ids, and in
   the first one a conference open for submissions whose abstract form is published under the
-  address **`e2eprobnaforma01`** (listed site `http://localhost:4000`, the harness of
-  `confera_fe`; the frame list honours an `http` site on `STAGE=local` only),
+  address **`e2eprobnaforma01`**: the form that the embedded test page of `confera_fe`
+  frames (listed site `http://localhost:4000`, the harness of `confera_fe`; the frame list
+  honours an `http` site on `STAGE=local` only),
   each active with the invented password `invented-Jasen-Kula-Reka-42` (for the sign-in
   tests of the web application), and the default email templates. It is safe to run again. **seed:e2e refuses to
   run unless `STAGE` is exactly `local` or `test`** (exit code 78), before it opens a
@@ -748,12 +754,12 @@ corepack pnpm api:check --sibling     the contract vendored there is the one of 
 - Git Bash, macOS, Linux: `CONFERA_E2E_API_ORIGIN=http://127.0.0.1:3001 corepack pnpm e2e`
 
 Add `--project=real-api` for the short form (about two minutes). **Start the API first**
-and leave it running: in 0.1.0 the run of `confera_fe` builds and starts its own three
-servers (about 19 s) before it asks <http://127.0.0.1:3001/health/ready>; when the API is
+and leave it running: the run of `confera_fe` builds and starts its own servers (about
+19 s) before it asks <http://127.0.0.1:3001/health/ready>; when the API is
 not there it then stops, with its message and a stack trace. The API's part is only to
 be up and ready: `/health/ready` answers `{"status":"ok"}` when it is. What the run tests,
 and what the variable changes, is in the README of `confera_fe` (section 6, "Against the
-real API"). The stub slot (`pnpm stubs`) is not needed for it in 0.1.0.
+real API"). The stub slot (`pnpm stubs`) is not needed for it while it is empty.
 
 Stop everything with Ctrl+C in the two terminals and `corepack pnpm stack:down`.
 
