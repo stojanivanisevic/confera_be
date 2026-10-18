@@ -219,7 +219,11 @@ describe('mail servers, the worker and the mail log', () => {
         to: 'mila@a.example.test',
       });
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ result: 'refused', reason: 'address_not_allowed' });
+      expect(response.body).toEqual({
+        result: 'refused',
+        reason: 'address_not_allowed',
+        cause: null,
+      });
     });
 
     it('does not delete a server that a conference uses', async () => {
@@ -547,6 +551,18 @@ describe('mail servers, the worker and the mail log', () => {
         items: { id: string; name: string }[];
       };
       const fallback = servers.items.find((item) => item.name === 'Rezerva');
+      // The server sent its rate in the last minute: a test message waits like any other
+      // (M2-ISS-12) ...
+      const early = await as(
+        e2e,
+        adminA,
+        'post',
+        `/api/v1/mail-servers/${fallback?.id ?? ''}/test-message`,
+      ).send({ to: 'proba.servera@a.example.test' });
+      expect(early.status).toBe(429);
+      expect(early.body).toEqual(expect.objectContaining({ code: 'send_rate_reached' }));
+      // ... and goes once that minute is over.
+      await inA("UPDATE mail_log SET sent_at = sent_at - interval '2 minutes'");
       const response = await as(
         e2e,
         adminA,
@@ -556,7 +572,7 @@ describe('mail servers, the worker and the mail log', () => {
         to: 'proba.servera@a.example.test',
         language: 'sr',
       });
-      expect(response.body).toEqual({ result: 'sent', reason: null });
+      expect(response.body).toEqual({ result: 'sent', reason: null, cause: null });
       expect(await mailpitMessagesTo('proba.servera@a.example.test')).toHaveLength(1);
       const primary = servers.items.find((item) => item.name === 'Mailpit');
       const failed = await as(
@@ -567,7 +583,28 @@ describe('mail servers, the worker and the mail log', () => {
       ).send({
         to: 'proba.servera@a.example.test',
       });
-      expect(failed.body).toEqual({ result: 'failed', reason: null });
+      expect(failed.body).toEqual({ result: 'failed', reason: null, cause: 'connection_failed' });
+    });
+
+    it('caps the test messages of an organisation at 10 an hour (M3-ISS-02, SEC-M2-05)', async () => {
+      const servers = (await as(e2e, adminA, 'get', '/api/v1/mail-servers')).body as {
+        items: { id: string; name: string }[];
+      };
+      const fallback = servers.items.find((item) => item.name === 'Rezerva');
+      await inA(
+        `INSERT INTO mail_outbox (organisation_id, unique_key, kind, recipient_address, status)
+         SELECT $1, 'test_message:planted:' || n, 'test_message', 'proba@a.example.test', 'sent'
+         FROM generate_series(1, 10) AS n`,
+        [organisationA],
+      );
+      const refused = await as(
+        e2e,
+        adminA,
+        'post',
+        `/api/v1/mail-servers/${fallback?.id ?? ''}/test-message`,
+      ).send({ to: 'proba.servera@a.example.test' });
+      expect(refused.status).toBe(429);
+      expect(refused.body).toEqual(expect.objectContaining({ code: 'test_message_limit' }));
     });
   });
 });

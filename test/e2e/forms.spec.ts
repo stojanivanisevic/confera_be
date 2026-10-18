@@ -843,18 +843,38 @@ describe('forms and intake (M3)', () => {
           heldBy: { count: 4, limit: 3, windowHours: 1 },
         }),
       );
+      // One of them is discarded (M3-ISS-14): never sent, never released, with an audit entry.
+      const heldIds = (held.body as { items: { id: string }[] }).items.map((item) => item.id);
+      const discarded = await as(e2e, admin, 'post', '/api/v1/held-mail/discard').send({
+        ids: [heldIds[0]],
+      });
+      expect(discarded.status).toBe(200);
+      expect(discarded.body).toEqual({ discarded: 1 });
+      const again = await as(e2e, admin, 'post', '/api/v1/held-mail/discard').send({
+        ids: [heldIds[0]],
+      });
+      expect(again.body).toEqual({ discarded: 0 });
       const released = await as(e2e, admin, 'post', '/api/v1/held-mail/release').send({
         all: true,
         formId: form.formId,
       });
-      expect(released.body).toEqual({ released: 3 });
-      const after = await inOrganisation<{ status: string }>(
+      expect(released.body).toEqual({ released: 2 });
+      const after = await inOrganisation<{
+        id: string;
+        status: string;
+        discarded_by: string | null;
+      }>(
         owner,
         orgA(),
-        "SELECT status FROM mail_outbox WHERE kind = 'submission_confirmation' AND form_id = $1",
+        "SELECT id, status, discarded_by FROM mail_outbox WHERE kind = 'submission_confirmation' AND form_id = $1",
         [form.formId],
       );
-      expect(after.every((row) => row.status === 'queued')).toBe(true);
+      expect(after.filter((row) => row.status === 'queued')).toHaveLength(5);
+      expect(after.find((row) => row.id === heldIds[0])).toEqual(
+        expect.objectContaining({ status: 'discarded', discarded_by: actors.a.admin.id }),
+      );
+      const audit = await as(e2e, admin, 'get', '/api/v1/audit?action=held_mail.discarded');
+      expect(audit.body).toEqual(expect.objectContaining({ total: 1 }));
       expect((await as(e2e, adminB, 'get', '/api/v1/held-mail')).body).toEqual(
         expect.objectContaining({ total: 0 }),
       );

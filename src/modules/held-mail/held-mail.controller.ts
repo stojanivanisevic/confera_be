@@ -8,6 +8,8 @@ import type { Access } from '../access/access';
 import { CurrentAccess, Permission } from '../access/access.decorators';
 import { AuditRecorder } from '../audit/audit-recorder';
 import {
+  DiscardedDto,
+  DiscardHeldMailDto,
   HELD_REASONS,
   HeldMailPageDto,
   HeldMailQueryDto,
@@ -119,6 +121,34 @@ export class HeldMailService {
     });
   }
 
+  /** Discards held emails (M3-ISS-14): a state of their own, with who and when, and an audit entry. */
+  async discard(actor: Access, input: DiscardHeldMailDto): Promise<DiscardedDto> {
+    if ((input.ids === undefined) === (input.all !== true)) {
+      throw new ProblemException(400, VALIDATION_FAILED, [{ path: 'ids', code: 'idsOrAll' }]);
+    }
+    return this.database.transaction(async (tx) => {
+      const discarded = await tx.mailMessage.updateMany({
+        where: {
+          status: 'held',
+          ...(input.ids === undefined ? {} : { id: { in: input.ids } }),
+          ...(input.formId === undefined ? {} : { formId: input.formId }),
+        },
+        data: { status: 'discarded', discardedAt: new Date(), discardedBy: actor.userId },
+      });
+      if (discarded.count > 0) {
+        await this.audit.record(tx, {
+          organisationId: actor.organisationId,
+          actorUserId: actor.userId,
+          action: 'held_mail.discarded',
+          subjectType: 'held_mail',
+          subjectId: input.formId ?? null,
+          detail: { count: discarded.count },
+        });
+      }
+      return { discarded: discarded.count };
+    });
+  }
+
   async setBreaker(actor: Access, input: OrganisationBreakerDto): Promise<HeldMailPageDto> {
     await this.database.transaction(async (tx) => {
       const before = await tx.organisation.findFirstOrThrow({
@@ -172,6 +202,20 @@ export class HeldMailController {
     @Body() body: ReleaseHeldMailDto,
   ): Promise<ReleasedDto> {
     return this.held.release(access, body);
+  }
+
+  /**
+   * Discards held emails (M3-ISS-14): they are never sent. The web application asks for a
+   * confirmation first. Only `held` emails are touched; the count says how many.
+   */
+  @Post('discard')
+  @Permission('held_mail.manage')
+  @HttpCode(200)
+  discardHeldMail(
+    @CurrentAccess() access: Access,
+    @Body() body: DiscardHeldMailDto,
+  ): Promise<DiscardedDto> {
+    return this.held.discard(access, body);
   }
 
   /** The send breaker of the organisation (ADR-08; P: 30 an hour, 200 a day). */

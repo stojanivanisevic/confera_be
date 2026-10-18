@@ -128,6 +128,7 @@
                 "form.published",
                 "form.breaker_changed",
                 "held_mail.released",
+                "held_mail.discarded",
                 "organisation.breaker_changed"
               ]
             }
@@ -1160,6 +1161,51 @@
         }
       }
     },
+    "/api/v1/held-mail/discard": {
+      "post": {
+        "operationId": "discardHeldMail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardHeldMailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscardedDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Discards held emails (M3-ISS-14): they are never sent. The web application asks for a\nconfirmation first. Only `held` emails are touched; the count says how many.",
+        "tags": [
+          "HeldMail"
+        ],
+        "x-confera-access": {
+          "permission": "held_mail.manage"
+        }
+      }
+    },
     "/api/v1/held-mail/release": {
       "post": {
         "operationId": "releaseHeldMail",
@@ -1891,7 +1937,7 @@
             }
           }
         },
-        "summary": "Name and version of the API.",
+        "summary": "Name and version of the API, and which instance it is (the staging banner, ADR-27).",
         "tags": [
           "Meta"
         ],
@@ -3675,6 +3721,38 @@
           "history"
         ]
       },
+      "DiscardHeldMailDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "all": {
+            "type": "boolean"
+          },
+          "formId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "DiscardedDto": {
+        "type": "object",
+        "properties": {
+          "discarded": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "discarded"
+        ]
+      },
       "EmailChangeLinkDto": {
         "type": "object",
         "properties": {
@@ -4247,6 +4325,10 @@
             "nullable": true,
             "description": "A code, never the server's words."
           },
+          "diverted": {
+            "type": "boolean",
+            "description": "True when the attempt went to the mail catcher of the staging server and not to the\nconfigured server (ADR-27, ST-50); `recipient` is still the original recipient."
+          },
           "sentAt": {
             "type": "string"
           },
@@ -4275,6 +4357,7 @@
           "serverName",
           "attempt",
           "errorCode",
+          "diverted",
           "sentAt",
           "subject",
           "bodyHtml",
@@ -4354,6 +4437,10 @@
             "nullable": true,
             "description": "A code, never the server's words."
           },
+          "diverted": {
+            "type": "boolean",
+            "description": "True when the attempt went to the mail catcher of the staging server and not to the\nconfigured server (ADR-27, ST-50); `recipient` is still the original recipient."
+          },
           "sentAt": {
             "type": "string"
           }
@@ -4370,6 +4457,7 @@
           "serverName",
           "attempt",
           "errorCode",
+          "diverted",
           "sentAt"
         ]
       },
@@ -4534,6 +4622,15 @@
       "Meta": {
         "type": "object",
         "properties": {
+          "instance": {
+            "nullable": true,
+            "description": "`staging` on the staging server (every screen shows the staging banner, ADR-27),\n`production` on production, null on a developer machine.",
+            "enum": [
+              "production",
+              "staging"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string",
             "description": "Name of the service."
@@ -4544,6 +4641,7 @@
           }
         },
         "required": [
+          "instance",
           "name",
           "version"
         ]
@@ -5565,6 +5663,18 @@
             ],
             "type": "string"
           },
+          "cause": {
+            "nullable": true,
+            "description": "With `failed`, what kind of failure it was (M2-ISS-14, UXUI-M2-11), as a code and never\nthe server's words: `connection_failed` (no connection, or none in time),\n`certificate_refused`, `authentication_failed`, `recipient_refused` or `send_failed`.",
+            "enum": [
+              "connection_failed",
+              "certificate_refused",
+              "authentication_failed",
+              "recipient_refused",
+              "send_failed"
+            ],
+            "type": "string"
+          },
           "reason": {
             "type": "string",
             "nullable": true,
@@ -5573,6 +5683,7 @@
         },
         "required": [
           "result",
+          "cause",
           "reason"
         ]
       },

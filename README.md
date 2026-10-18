@@ -373,8 +373,23 @@ the two equal. The OpenAPI document carries the declaration of every operation
   certificate verified. `none` exists for Mailpit and is refused unless `STAGE` is
   `local`, `dev` or `test`. On `prod` a target may not be a loopback, private or
   container-network address (checked again on every address the name resolves to), and
-  only the ports 25, 465, 587 and 2525 are allowed. The test message answers `sent`,
-  `failed` or `refused` with the rule, never the server's words.
+  only the ports 25, 465, 587 and 2525 are allowed; documentation ranges, 6to4 addresses
+  of a refused IPv4 address and local-use NAT64 are refused too (M2-ISS-19). The test
+  message answers `sent`, `failed` with a coarse `cause` (`connection_failed`,
+  `certificate_refused`, `authentication_failed`, `recipient_refused`, `send_failed`;
+  M2-ISS-14) or `refused` with the rule, never the server's words. An organisation sends at
+  most 10 test messages an hour (429 `test_message_limit`, M3-ISS-02), and a test message
+  counts against the send rate of its server (429 `send_rate_reached`). A sealed password
+  opens only with its full 16-byte GCM tag (M2-ISS-20).
+- **Staging mail redirect** (ADR-27, ST-50): with `INSTANCE=staging`, `STAGING_MAIL_CATCHER`
+  (`host:port` of the catcher) is required, and production and every developer stage refuse
+  it. Every message then goes to the catcher only, in clear and without a login: the rules
+  of the configured server are still checked, but it is neither resolved nor reached; the
+  envelope and the `To` address are `catcher@staging.invalid` (the original recipient is
+  the display name and the header `X-Confera-Original-Recipient`), the subject starts with
+  `[STAGING]`, and the mail log keeps the original recipient with `diverted: true`.
+  `GET /api/v1/meta` says `instance` (`staging`, `production`, or null on a developer
+  machine) for the staging banner of the web application.
 - **Templates** (ADR-12) are documents of a closed format, not HTML:
   `src/modules/templates/document.ts` checks them, `render.ts` makes HTML and plain text
   and escapes every value. The catalogue says which placeholders each type may use; a
@@ -427,8 +442,8 @@ the two equal. The OpenAPI document carries the declaration of every operation
   is stored, it works for one submit (409 `form_token_used`), and its uploads are bound to it
   (as many as the version has file fields, plus two). A repeat with the same idempotency key
   returns the first result (409 `idempotency_key_reused` with other answers). `confera_hp` is
-  the trap field, a name no autofill fills (SEC-M3-07; its 0.3.0 name `website` is still read
-  until the page sends the new one): filled, or a submit within 3 s of the token, is answered
+  the trap field, a name no autofill fills (SEC-M3-07; the 0.3.0 alias `website` is gone since
+  0.4.0, M3-ISS-19): filled, or a submit within 3 s of the token, is answered
   with a fake success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
   (expired), 409 `form_token_used` or 403 `proof_of_work_failed`, the page asks for a new token
   with `{ "previousFormToken": "<the refused one>" }`. A renewal of a token of the same form
@@ -463,8 +478,9 @@ the two equal. The OpenAPI document carries the declaration of every operation
   is `held` (`heldReason`, and `heldBy`: the `count`, `limit` and `windowHours` that held it);
   every active admin gets one notice an hour per form;
   `GET /api/v1/held-mail` lists them, `POST /api/v1/held-mail/release` (`{ ids }` or
-  `{ all: true, formId? }`) queues them again. A held email can be released, not discarded
-  (M3-ISS-14, 0.4.0).
+  `{ all: true, formId? }`) queues them again; `POST /api/v1/held-mail/discard` (the same body)
+  discards them: state `discarded`, with who and when, an audit entry `held_mail.discarded`,
+  never sent and never released (M3-ISS-14).
 - **Deadlines** (FR-DL-01 to 03, M3-BE-05): `PUT /api/v1/conferences/{id}/deadlines/{kind}`
   (`abstract_submission`, `fee_payment`, `full_paper`), a day that ends at the end of that day
   in the conference's time zone (`src/modules/deadlines/deadline-time.ts`, also on the days

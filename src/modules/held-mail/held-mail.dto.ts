@@ -94,6 +94,17 @@ export class ReleasedDto {
   released!: number;
 }
 
+/**
+ * Discards the held emails named, or every one (of a form, when `formId` is given): for a
+ * flood the office does not want to go out (M3-ISS-14, UX3-06). A discarded email is never
+ * sent and cannot be released; it stays listed on its submission as `discarded`.
+ */
+export class DiscardHeldMailDto extends ReleaseHeldMailDto {}
+
+export class DiscardedDto {
+  discarded!: number;
+}
+
 export class OrganisationBreakerDto {
   @IsInt()
   @Min(1)

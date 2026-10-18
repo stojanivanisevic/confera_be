@@ -9,8 +9,28 @@ import type { Access } from '../access/access';
 import { AuditRecorder, type FieldChange } from '../audit/audit-recorder';
 import { MailQueue } from '../mail/mail-queue';
 import { MailSender } from '../mail/mail-sender';
+import type { DeliveryError } from '../mail/mail-transport';
 import { SecretBox } from '../mail/secret-box';
 import { targetProblem, type TlsMode } from './mail-server-policy';
+import { TEST_FAILURE_CAUSES } from './mail-servers.dto';
+
+/** Test messages an organisation may send in an hour (M3-ISS-02, SEC-M2-05; P). */
+export const TEST_MESSAGES_PER_HOUR = 10;
+
+/** The cause of a failed test message, coarse on purpose: a timeout is no connection. */
+function causeOf(error: DeliveryError | undefined): (typeof TEST_FAILURE_CAUSES)[number] {
+  switch (error) {
+    case 'timeout':
+    case 'connection_failed':
+      return 'connection_failed';
+    case 'certificate_refused':
+    case 'authentication_failed':
+    case 'recipient_refused':
+      return error;
+    default:
+      return 'send_failed';
+  }
+}
 import type {
   CreateMailServerDto,
   MailServerDto,
@@ -227,6 +247,25 @@ export class MailServersService {
     language: 'en' | 'sr',
   ): Promise<TestMessageResultDto> {
     const server = await this.database.transaction((tx) => this.load(tx, id));
+    // A cap of the organisation's test messages (M3-ISS-02, SEC-M2-05), and the send rate of
+    // the server, which a test message counts against like any other (M2-ISS-12).
+    const now = Date.now();
+    const [tests, sentThisMinute] = await this.database.transaction((tx) =>
+      Promise.all([
+        tx.mailMessage.count({
+          where: { kind: 'test_message', createdAt: { gt: new Date(now - 60 * 60_000) } },
+        }),
+        tx.mailLogEntry.count({
+          where: { mailServerId: id, sentAt: { gt: new Date(now - 60_000) } },
+        }),
+      ]),
+    );
+    if (tests >= TEST_MESSAGES_PER_HOUR) {
+      throw new ProblemException(429, 'test_message_limit');
+    }
+    if (sentThisMinute >= server.sendRatePerMinute) {
+      throw new ProblemException(429, 'send_rate_reached');
+    }
     const problem = targetProblem(
       { host: server.host, port: server.port, tlsMode: server.tlsMode as TlsMode },
       this.config.stage,
@@ -235,12 +274,12 @@ export class MailServersService {
       problem === null ? await this.sender.sendTest(id, to, language, actor.userId) : null;
     const result: TestMessageResultDto =
       problem !== null
-        ? { result: 'refused', reason: problem }
+        ? { result: 'refused', reason: problem, cause: null }
         : outcome?.ok === true
-          ? { result: 'sent', reason: null }
+          ? { result: 'sent', reason: null, cause: null }
           : outcome?.error === 'address_not_allowed' || outcome?.error === 'tls_required'
-            ? { result: 'refused', reason: outcome.error }
-            : { result: 'failed', reason: null };
+            ? { result: 'refused', reason: outcome.error, cause: null }
+            : { result: 'failed', reason: null, cause: causeOf(outcome?.error) };
     await this.database.transaction((tx) =>
       this.audit.record(tx, {
         organisationId: actor.organisationId,

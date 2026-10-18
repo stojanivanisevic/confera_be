@@ -43,6 +43,7 @@ export const AUDIT_ACTIONS = [
   'form.published',
   'form.breaker_changed',
   'held_mail.released',
+  'held_mail.discarded',
   'organisation.breaker_changed',
 ] as const;
 

@@ -530,12 +530,6 @@
             ],
             "type": "string"
           },
-          "website": {
-            "type": "string",
-            "description": "The trap under its 0.3.0 name, read until the page sends `confera_hp`; then removed.",
-            "maxLength": 1000,
-            "deprecated": true
-          },
           "answers": {
             "type": "object",
             "additionalProperties": true

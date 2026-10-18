@@ -200,6 +200,15 @@ export class TestMessageDto {
   language?: 'en' | 'sr';
 }
 
+/** The causes a failed test message names (M2-ISS-14). A timeout counts as no connection. */
+export const TEST_FAILURE_CAUSES = [
+  'connection_failed',
+  'certificate_refused',
+  'authentication_failed',
+  'recipient_refused',
+  'send_failed',
+] as const;
+
 /**
  * The result of a test message (ADR-11): generic. `refused` names a rule of Confera that
  * stopped it before any connection; a failure of the server is only `failed`, with no
@@ -211,4 +220,11 @@ export class TestMessageResultDto {
   result!: 'sent' | 'failed' | 'refused';
   /** With `refused`: tls_required, port_not_allowed or address_not_allowed. */
   reason!: string | null;
+  /**
+   * With `failed`, what kind of failure it was (M2-ISS-14, UXUI-M2-11), as a code and never
+   * the server's words: `connection_failed` (no connection, or none in time),
+   * `certificate_refused`, `authentication_failed`, `recipient_refused` or `send_failed`.
+   */
+  @ApiProperty({ enum: TEST_FAILURE_CAUSES, nullable: true })
+  cause!: (typeof TEST_FAILURE_CAUSES)[number] | null;
 }
