@@ -1,0 +1,175 @@
+#!/bin/bash
+# The deploy script of a Confera server (M4-BE-08; ADR-27). ST-63.
+#
+#   confera-deploy be  sha256:<64 hex>    the API and worker image of confera_be (and its jobs image)
+#   confera-deploy web sha256:<64 hex>    the web image of confera_fe
+#
+# Installed as /usr/local/sbin/confera-deploy (root:root, 0700). On STAGING the pipeline reaches
+# it only through the forced command (confera-deploy-gate) and sudo; on PRODUCTION the operator
+# runs it by hand with the digest that staging ran (ADR-27, rule 5). It takes an image digest and
+# nothing else: the repository of each target is fixed in /etc/confera/deploy.conf, which root
+# owns. A tag, a repository, an option or a second digest is refused before anything runs.
+#
+# What it does, in this order, and nothing more:
+#   1. pull the image by digest (be: also the jobs image the API image names in its label
+#      org.udekom.confera.jobs-image, itself a digest of the fixed jobs repository);
+#   2. be: run the migration job with the new jobs image; a failed migration ends here, with
+#      the running version untouched;
+#   3. write the new digest into images.env (the previous file is kept as images.env.previous);
+#   4. restart the services of the target and wait until their health checks pass;
+#   5. smoke test: be: the API's readiness (it reaches the database); web: the web application
+#      answers;
+#   6. on a failure in 4 or 5: put images.env.previous back and restart the previous version.
+#
+# Exit codes: 0 deployed; 64 refused (usage); 65 the image is not what it must be; 75 another
+# deploy runs; 78 the configuration of this script is missing or unsafe; 1 the deploy failed
+# (rolled back where it had started).
+set -euo pipefail
+umask 077
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
+
+readonly CONF=/etc/confera/deploy.conf
+readonly DIGEST_RE='^sha256:[0-9a-f]{64}$'
+readonly JOBS_LABEL=org.udekom.confera.jobs-image
+
+say() { printf 'confera-deploy: %s\n' "$*"; }
+refuse() {
+  printf 'confera-deploy: refused: %s\n' "$1" >&2
+  exit "${2:-64}"
+}
+
+# ---- 0. The request: a target and a digest, nothing else ------------------------------------
+[ "$#" -eq 2 ] || refuse "usage: confera-deploy be|web sha256:<64 hex digits>"
+target=$1
+digest=$2
+case "$target" in
+  be | web) ;;
+  *) refuse "unknown target; usage: confera-deploy be|web sha256:<64 hex digits>" ;;
+esac
+[[ "$digest" =~ $DIGEST_RE ]] || refuse "not an image digest (sha256: and 64 lower-case hex digits)"
+
+# ---- The configuration: root's own file, read as data -----------------------------------------
+[ -f "$CONF" ] || refuse "$CONF is missing" 78
+conf_owner=$(stat -c '%u' "$CONF")
+conf_mode=$(stat -c '%a' "$CONF")
+[ "$conf_owner" = 0 ] || refuse "$CONF must be owned by root" 78
+case "$conf_mode" in
+  600 | 640 | 644) ;;
+  *) refuse "$CONF must not be writable by anyone but root (mode $conf_mode)" 78 ;;
+esac
+
+declare -A setting=()
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in '' | '#'*) continue ;; esac
+  [[ "$line" =~ ^([A-Z_]+)=([A-Za-z0-9._/:-]*)$ ]] || refuse "$CONF: a line is not NAME=value" 78
+  setting[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+done <"$CONF"
+
+need() {
+  local value=${setting[$1]-}
+  [ -n "$value" ] || refuse "$CONF: $1 is not set" 78
+  printf '%s' "$value"
+}
+root=$(need CONFERA_ROOT)
+project=$(need CONFERA_PROJECT)
+be_repository=$(need CONFERA_BE_REPOSITORY)
+jobs_repository=$(need CONFERA_BE_JOBS_REPOSITORY)
+web_repository=$(need CONFERA_WEB_REPOSITORY)
+wait_seconds=${setting[CONFERA_WAIT_SECONDS]:-240}
+[[ "$wait_seconds" =~ ^[0-9]+$ ]] || refuse "$CONF: CONFERA_WAIT_SECONDS is not a number" 78
+
+readonly images="$root/images.env"
+readonly previous="$root/images.env.previous"
+compose=(docker compose --project-name "$project"
+  --env-file "$root/compose.env" --env-file "$images"
+  --file "$root/deploy/compose.yml")
+
+# ---- One deploy at a time ---------------------------------------------------------------------
+exec 9>/run/lock/confera-deploy.lock
+flock --nonblock 9 || refuse "another deploy is running" 75
+
+say "target $target, digest $digest"
+
+# Sets NAME=value in images.env through a new file that replaces it in one rename.
+write_images() {
+  local name=$1 value=$2 next="$images.next"
+  if [ -f "$images" ]; then
+    grep -v "^$name=" "$images" >"$next" || true
+  else
+    : >"$next"
+  fi
+  printf '%s=%s\n' "$name" "$value" >>"$next"
+  chmod 0644 "$next"
+  mv -f "$next" "$images"
+}
+
+rollback() {
+  say "FAILED: $1"
+  if [ -f "$previous" ]; then
+    say "putting the previous version back"
+    cp -f "$previous" "$images"
+    "${compose[@]}" up --detach --no-deps --wait --wait-timeout "$wait_seconds" "${services[@]}" ||
+      say "the previous version did not come back healthy either: the operator must look now"
+  fi
+  exit 1
+}
+
+# ---- 1. Pull by digest ------------------------------------------------------------------------
+case "$target" in
+  be)
+    image="$be_repository@$digest"
+    services=(api worker)
+    ;;
+  web)
+    image="$web_repository@$digest"
+    services=(web)
+    ;;
+esac
+say "pulling $image"
+docker pull --quiet "$image" >/dev/null
+
+if [ "$target" = be ]; then
+  jobs_image=$(docker image inspect --format "{{ index .Config.Labels \"$JOBS_LABEL\" }}" "$image")
+  jobs_re="^${jobs_repository//./\\.}@sha256:[0-9a-f]{64}$"
+  [[ "$jobs_image" =~ $jobs_re ]] ||
+    refuse "the image does not name a jobs image of $jobs_repository by digest ($JOBS_LABEL)" 65
+  say "pulling $jobs_image"
+  docker pull --quiet "$jobs_image" >/dev/null
+fi
+
+# ---- 2. Migrate (be) ----------------------------------------------------------------------------
+[ -f "$images" ] && cp -f "$images" "$previous"
+if [ "$target" = be ]; then
+  write_images CONFERA_JOBS_IMAGE "$jobs_image"
+  say "migrating the database"
+  if ! "${compose[@]}" run --rm --no-TTY migrate; then
+    say "FAILED: the migration; nothing was restarted"
+    [ -f "$previous" ] && cp -f "$previous" "$images"
+    exit 1
+  fi
+fi
+
+# ---- 3. and 4. The new digest, restart, health ------------------------------------------------
+case "$target" in
+  be) write_images CONFERA_API_IMAGE "$image" ;;
+  web) write_images CONFERA_WEB_IMAGE "$image" ;;
+esac
+say "restarting ${services[*]}"
+"${compose[@]}" up --detach --no-deps --wait --wait-timeout "$wait_seconds" "${services[@]}" ||
+  rollback "the new version did not become healthy"
+
+# ---- 5. Smoke test ----------------------------------------------------------------------------
+case "$target" in
+  be)
+    smoke="fetch('http://127.0.0.1:3001/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+    "${compose[@]}" exec --no-TTY api node -e "$smoke" || rollback "the API is not ready (database)"
+    ;;
+  web)
+    smoke="fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))"
+    "${compose[@]}" exec --no-TTY web node -e "$smoke" || rollback "the web application does not answer"
+    ;;
+esac
+
+say "deployed $image"

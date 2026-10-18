@@ -1,0 +1,128 @@
+# The production images of confera_be (M4-BE-07, M4-BE-08; ADR-27, rules 2 and 3).
+#
+# Runs on every push to develop (a staging candidate), on every version tag, and by hand.
+#
+#   build    runs project code (install, build) and the image checks. It holds NO credential:
+#            the token can read the repository, and nothing else. The images leave it as OCI
+#            archives, with their digests.
+#   publish  runs NO project code (no checkout): it copies the two archives to the registry
+#            unchanged, so the digests stay the ones the build printed, and checks that they did.
+#            Its token may write packages, and nothing else.
+#
+# Neither job can reach a server. A staging deploy is .github/workflows/deploy-staging.yml, started
+# by hand with the digest this workflow writes into its summary.
+name: image
+
+on:
+  push:
+    branches: [develop]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/stojanivanisevic
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      jobs-digest: ${{ steps.build.outputs.jobs-digest }}
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-node v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+      - name: A builder that writes OCI archives (BuildKit v0.33.1, by digest)
+        run: >
+          docker buildx create --name confera --driver docker-container --use
+          --driver-opt image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+      - name: Build the jobs and runtime images
+        id: build
+        run: |
+          bash deploy/ci/build-images.sh "$RUNNER_TEMP/images" "$GITHUB_SHA"
+          # shellcheck disable=SC1091
+          . "$RUNNER_TEMP/images/digests.env"
+          echo "digest=$CONFERA_BE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "jobs-digest=$CONFERA_BE_JOBS_DIGEST" >> "$GITHUB_OUTPUT"
+      - name: ST-02 and ST-04 on the images and the resolved compose file
+        run: node deploy/checks/topology.mjs --images-only --no-build
+      # actions/upload-artifact v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: confera-be-images
+          path: |
+            ${{ runner.temp }}/images/jobs.tar
+            ${{ runner.temp }}/images/runtime.tar
+          retention-days: 3
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    # Nothing is published before Gate 4a: the repository variable IMAGE_PUBLISH_ENABLED is set to
+    # true there. Until then the build job still builds and checks every image.
+    if: vars.IMAGE_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      packages: write
+    steps:
+      # actions/download-artifact v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: confera-be-images
+          path: ${{ runner.temp }}/images
+      - name: Copy the archives to the registry, digests unchanged
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+          JOBS_DIGEST: ${{ needs.build.outputs.jobs-digest }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$JOBS_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf '%s' "$TOKEN" | skopeo login ghcr.io --username "$ACTOR" --password-stdin
+          tags=("sha-$GITHUB_SHA")
+          if [ "$REF_TYPE" = tag ]; then tags+=("$REF_NAME"); fi
+          push() {
+            local archive=$1 repository=$2 expected=$3 tag actual
+            for tag in "${tags[@]}"; do
+              skopeo copy --quiet --preserve-digests "oci-archive:$RUNNER_TEMP/images/$archive" "docker://$REGISTRY/$repository:$tag"
+            done
+            actual=$(skopeo inspect --format '{{.Digest}}' "docker://$REGISTRY/$repository@$expected")
+            [ "$actual" = "$expected" ] || { echo "the registry holds $actual, not $expected" >&2; exit 1; }
+          }
+          push jobs.tar confera-be-jobs "$JOBS_DIGEST"
+          push runtime.tar confera-be "$DIGEST"
+          skopeo logout ghcr.io
+      - name: Summary
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          JOBS_DIGEST: ${{ needs.build.outputs.jobs-digest }}
+        run: |
+          {
+            echo "### confera-be $GITHUB_SHA"
+            echo
+            echo "| Image | Digest |"
+            echo "|---|---|"
+            echo "| \`$REGISTRY/confera-be\` (API and worker) | \`$DIGEST\` |"
+            echo "| \`$REGISTRY/confera-be-jobs\` (named by the API image) | \`$JOBS_DIGEST\` |"
+            echo
+            echo "To deploy to staging: run the workflow **deploy-staging** with the digest \`$DIGEST\`."
+          } >> "$GITHUB_STEP_SUMMARY"

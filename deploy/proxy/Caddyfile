@@ -1,0 +1,123 @@
+# The reverse proxy of a Confera server (ADR-02, ADR-26, ADR-28; M4-BE-07, M3-ISS-06).
+#
+# Caddy ends TLS (certificates from Let's Encrypt, renewed by Caddy itself, without the Docker
+# socket) and routes by host name and path:
+#
+#   admin host   /api/v1/*     -> api:3001   (straight to the API)
+#                everything    -> web:3000   (the admin and auth pages)
+#   public host  /public/v1/*  -> api:3001   (straight to the API: uploads of up to 50 MB never pass
+#                                             through the web application, whose framework keeps
+#                                             only the first 10 MB of a body; M3-ISS-06)
+#                everything    -> web:3000   (hosted form, frame, secure-link pages)
+#   any other host name: no certificate, no answer.
+#
+# What the proxy adds and what it does not:
+# - It overwrites X-Forwarded-For with the address it sees: no proxy in front of it is trusted
+#   (no `trusted_proxies`), so whatever a client sent is dropped. The API trusts exactly this
+#   one hop (src/common/http/client-address.ts; ST-25 proves it on the staging server).
+# - It passes the browser's Host header through unchanged (Caddy's default): the API and the
+#   web application read the surface from it (ADR-02).
+# - It adds HSTS and nothing else of the security headers: the web application and the API set
+#   their own, by kind of page (ADR-28). In particular it adds no frame policy.
+# - Bodies: 51 MB (53 477 376 bytes) on the upload route only (the largest file a form may take, FR-FILE-01, plus
+#   the multipart envelope); 1 MB everywhere else. The API has its own, smaller caps.
+# - It listens on 8080 and 8443 inside its container, as a user without any capability;
+#   deploy/compose.yml publishes them as 80 and 443.
+#
+# The settings come from the proxy's environment (deploy/compose.env.example). The access gate
+# of a staging server is deploy/proxy/gate-staging.caddy, imported into both sites; a production
+# server imports gate-production.caddy, which adds nothing.
+{
+	admin off
+	http_port 8080
+	https_port 8443
+	# HTTP is answered by the site below, which only redirects (the default redirect would name port 8443).
+	auto_https disable_redirects
+	email {$CONFERA_ACME_EMAIL}
+	servers {
+		protocols h1 h2
+		# Plain-text access log on stdout: method, path pattern and status come from Caddy's
+		# JSON log; tokens never travel in a query of Confera (ST-55 checks the log in 1.0.0).
+	}
+}
+
+(confera_common) {
+	# The gate of a staging server, or nothing (production).
+	import /etc/caddy/gate.caddy
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+		-Via
+	}
+}
+
+# body_limit <bytes>: a body above <bytes> is refused with 413. A declared Content-Length above it
+# is refused at once, before anything is forwarded (an upstream that answers before it reads the
+# body would otherwise never see the limit); a body without one is cut off when it passes <bytes>.
+(body_limit) {
+	@too_large_{args[0]} expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > {args[0]}`
+	respond @too_large_{args[0]} 413
+	request_body {
+		max_size {args[0]}
+	}
+}
+
+(to_api) {
+	reverse_proxy api:3001 {
+		header_up -X-Forwarded-Host
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 120s
+		}
+	}
+}
+
+(to_web) {
+	reverse_proxy web:3000 {
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+}
+
+http:// {
+	redir https://{host}{uri} 308
+}
+
+{$CONFERA_ADMIN_HOST} {
+	import confera_common
+
+	handle /api/v1/* {
+		import body_limit 1048576
+		import to_api
+	}
+	handle {
+		import body_limit 1048576
+		import to_web
+	}
+}
+
+{$CONFERA_PUBLIC_HOST} {
+	import confera_common
+
+	# The upload route of a form (POST /public/v1/forms/{slug}/uploads): the only route that
+	# takes a large body. Each handle sets its own limit, so the two never nest.
+	@upload {
+		method POST
+		path_regexp upload ^/public/v1/forms/[^/]+/uploads$
+	}
+	handle @upload {
+		import body_limit 53477376
+		import to_api
+	}
+	handle /public/v1/* {
+		import body_limit 1048576
+		import to_api
+	}
+	handle {
+		import body_limit 1048576
+		import to_web
+	}
+}

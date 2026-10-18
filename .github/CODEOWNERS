@@ -1,0 +1,7 @@
+# Changes to the pipeline, the images and the server files need Stojan's review (ADR-27, rule 6).
+# GitHub enforces it only with the branch protection "Require review from Code Owners" on develop
+# and main: a Gate 4a item (README, "Production image and pipeline").
+/.github/       @stojanivanisevic
+/deploy/        @stojanivanisevic
+/Dockerfile     @stojanivanisevic
+/.dockerignore  @stojanivanisevic

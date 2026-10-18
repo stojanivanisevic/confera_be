@@ -1,0 +1,18 @@
+# /etc/confera/deploy.conf: the settings of the deploy script (deploy/server/confera-deploy).
+# Owned by root, mode 0644. NAME=value lines only; the script reads them as data, never runs them.
+# It holds no secret.
+
+# Where compose.env, images.env, config/, secrets/ and deploy/ (a copy of this repository's
+# deploy/ folder, put there by the operator) live.
+CONFERA_ROOT=/srv/confera
+
+# The Compose project name of the server.
+CONFERA_PROJECT=confera
+
+# The image repositories. A deploy key can name a digest, never a repository: these are fixed.
+CONFERA_BE_REPOSITORY=ghcr.io/stojanivanisevic/confera-be
+CONFERA_BE_JOBS_REPOSITORY=ghcr.io/stojanivanisevic/confera-be-jobs
+CONFERA_WEB_REPOSITORY=ghcr.io/stojanivanisevic/confera-web
+
+# How long a restarted service may take to become healthy, in seconds.
+CONFERA_WAIT_SECONDS=240

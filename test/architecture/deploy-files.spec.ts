@@ -27,6 +27,13 @@ const DOCKERFILE = /^Dockerfile[^/]*$|\.dockerfile$/i;
 /** The development stack of the developer machine. Every other compose file is a server's. */
 const DEVELOPMENT_COMPOSE = 'docker-compose.yml';
 
+/**
+ * The one file of a server that may NAME a credential of the jobs: the entrypoint of the images
+ * turns each secret file under /run/secrets into the variable the application reads. It may do so
+ * only in a mapping line (`migration_database_url) echo MIGRATION_DATABASE_URL ;;`).
+ */
+const SECRET_FILE_MAPPER = 'deploy/image/entrypoint.sh';
+
 function walk(directory: string): string[] {
   if (!existsSync(directory)) {
     return [];
@@ -61,7 +68,12 @@ function serverFileProblems({ name, text }: ScannedFile): string[] {
     problems.push(`${name}: holds the development key ${key}`);
   }
   for (const variable of TOOL_ONLY_VARIABLES) {
-    if (new RegExp(`\\b${variable}\\b`).test(text)) {
+    const lines = text.split(/\r?\n/).filter((line) => new RegExp(`\\b${variable}\\b`).test(line));
+    // The entrypoint of the images names them to map a secret FILE onto its variable; a line of
+    // that one shape, in that one file, holds no value (M4-BE-07, ADR-26).
+    const mapping = (line: string): boolean =>
+      name === SECRET_FILE_MAPPER && new RegExp(`^\\s*[a-z_]+\\) echo ${variable} ;;$`).test(line);
+    if (lines.some((line) => !mapping(line))) {
       problems.push(`${name}: holds ${variable}, a credential of the migration job`);
     }
   }
@@ -110,6 +122,10 @@ describe('compose files, Dockerfiles and deploy/ (ST-04, govcore matrix row 3)',
       ['a development stage', 'STAGE=local'],
       ['a development stage in a compose mapping', '      STAGE: "dev"'],
       ['the owner address', 'MIGRATION_DATABASE_URL='],
+      [
+        'a secret-file mapping outside the entrypoint',
+        '    migration_database_url) echo MIGRATION_DATABASE_URL ;;',
+      ],
       ['the superuser password', '      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}'],
       ['a placeholder password of the local stack', 'DATABASE_URL=x:local-only-app@db'],
       [
@@ -118,6 +134,18 @@ describe('compose files, Dockerfiles and deploy/ (ST-04, govcore matrix row 3)',
       ],
     ])('in a file of a server: %s', (_name, text) => {
       expect(serverFileProblems({ name: 'compose.yml', text })).toHaveLength(1);
+    });
+
+    it('lets the entrypoint name a job credential in a mapping line, and in nothing else', () => {
+      const mapping = '    migration_database_url) echo MIGRATION_DATABASE_URL ;;';
+      expect(serverFileProblems({ name: SECRET_FILE_MAPPER, text: mapping })).toEqual([]);
+      for (const text of [
+        'MIGRATION_DATABASE_URL=x',
+        'export MIGRATION_DATABASE_URL',
+        'echo $POSTGRES_PASSWORD',
+      ]) {
+        expect(serverFileProblems({ name: SECRET_FILE_MAPPER, text })).toHaveLength(1);
+      }
     });
 
     it('and accepts what a file of a server looks like', () => {
