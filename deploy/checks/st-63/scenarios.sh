@@ -10,7 +10,11 @@
 #   - the key of one repository cannot deploy the other repository's image;
 #   - the deploy user can run nothing as root but the deploy script, which checks again;
 #   - the deploy script refuses an image that names no jobs image of the fixed repository,
-#     an unsafe configuration, and leaves the running version alone on a failed migration.
+#     an unsafe configuration, and leaves the running version alone on a failed migration;
+#   - before every migration it dumps the database (custom format, root 0600) and reads the dump
+#     back with pg_restore --list; a failed, empty or unreadable dump, or a disk fuller than the
+#     limit, stops it before the migration with nothing changed (SEC-M4I-02);
+#   - a new version that does not become healthy is rolled back to the previous digest.
 # Prints one line per check and ends with exit code 0 only if every check passed.
 set -uo pipefail
 
@@ -36,6 +40,15 @@ su tester -c "ssh-keygen -q -t ed25519 -N '' -f /home/tester/own"
 install -d -o tester -g tester -m 0700 /home/tester/.ssh
 install -o tester -g tester -m 0600 /home/tester/own.pub /home/tester/.ssh/authorized_keys
 printf 'ghcr.io/stojanivanisevic/confera-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
+# The jobs image holds three migrations, and the database has applied the same three.
+printf '%s\n' 20261013070000_tenancy_foundation 20261014120000_access_and_audit 20261015090000_mail_and_conferences \
+  >/etc/fake-docker/image-migrations
+cp /etc/fake-docker/image-migrations /etc/fake-docker/applied-migrations
+# Keys for root and for a user outside confera-ssh: sshd must refuse both.
+install -d -m 0700 /root/.ssh
+install -m 0600 /home/tester/own.pub /root/.ssh/authorized_keys
+install -d -o outsider -g outsider -m 0700 /home/outsider/.ssh
+install -o outsider -g outsider -m 0600 /home/tester/own.pub /home/outsider/.ssh/authorized_keys
 : >"$LOG"
 chmod 0644 "$LOG"
 /usr/sbin/sshd -E /var/log/sshd.log
@@ -81,10 +94,35 @@ if grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv
 else
   not_ok "be: images.env is $(cat /srv/confera/images.env 2>&1)"
 fi
+line_of() { grep -n -m 1 -e "$1" "$LOG" | cut -d: -f1; }
+dump_line=$(line_of ' exec --no-TTY postgres pg_dump --username postgres --dbname confera --format custom')
+list_line=$(line_of ' exec --no-TTY postgres pg_restore --list')
+migrate_line=$(line_of ' run --rm --no-TTY migrate$')
+if [ -n "$dump_line" ] && [ -n "$list_line" ] && [ -n "$migrate_line" ] &&
+  [ "$dump_line" -lt "$list_line" ] && [ "$list_line" -lt "$migrate_line" ]; then
+  ok "be: dumps the database (pg_dump -Fc) and reads the dump back (pg_restore --list) before the migration"
+else
+  not_ok "be: dump $dump_line, check $list_line, migration $migrate_line: $(cat "$LOG")"
+fi
+dumps=(/srv/confera/backups/pre-deploy-*Z-aaaaaaaaaaaa.dump)
+if [ "${#dumps[@]}" -eq 1 ] && [ -s "${dumps[0]}" ] && [ "$(stat -c '%U %a' "${dumps[0]}")" = "root 600" ] &&
+  [ "$(stat -c '%U %a' /srv/confera/backups)" = "root 700" ] && ! ls /srv/confera/backups/*.partial >/dev/null 2>&1; then
+  ok "be: the dump is backups/pre-deploy-<UTC>-<12 hex>.dump, root 0600, in a root 0700 folder"
+else
+  not_ok "be: dumps ${dumps[*]}: $(ls -la /srv/confera/backups 2>&1)"
+fi
+[[ "$out" == *"backup /srv/confera/backups/pre-deploy-"*".dump"* ]] && ok "be: the output names the dump" ||
+  not_ok "be: the dump is not named in the output: $out"
 if grep -Eq 'confera-web|--privileged|-v |--volume|/bin/sh|bash' "$LOG"; then
   not_ok "be: docker was asked for something else: $(cat "$LOG")"
 else
-  ok "be: docker was asked for nothing but pull, inspect and compose"
+  ok "be: docker was asked for nothing but pull, inspect, compose and the migration list"
+fi
+if grep -qx "run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --entrypoint ls ghcr.io/stojanivanisevic/confera-be-jobs@$JOBS_DIGEST /app/prisma/migrations" "$LOG" &&
+  grep -q " exec --no-TTY postgres psql .*_prisma_migrations" "$LOG"; then
+  ok "be: compares the jobs image's migrations (no network, read-only) with _prisma_migrations"
+else
+  not_ok "be: no comparison of the migrations: $(cat "$LOG")"
 fi
 
 : >"$LOG"
@@ -96,6 +134,8 @@ if [ "$code" -eq 0 ] && grep -qx "pull --quiet ghcr.io/stojanivanisevic/confera-
 else
   not_ok "web key + digest: exit $code; $out; $(cat "$LOG")"
 fi
+grep -q ' pg_dump \| migrate$' "$LOG" && not_ok "web: dumped or migrated: $(cat "$LOG")" ||
+  ok "web: no dump and no migration (the web target has no database)"
 
 # ---- Anything but a digest is refused, and nothing reaches docker ------------------------------
 hex64=$(printf 'c%.0s' {1..64})
@@ -196,6 +236,24 @@ out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own tester@127.0.0.1 'echo shell-
 [[ "$out" == *"shell-opens"* ]] && ok "control: the same server opens a shell for an ordinary key" ||
   not_ok "control: an ordinary key got no shell either; the checks above prove nothing: $out"
 
+# ---- The hardening drop-in (sshd-confera-hardening.conf) --------------------------------------
+out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own root@127.0.0.1 'echo shell-opens'" 2>&1)
+[[ "$out" != *"shell-opens"* && "$out" == *"Permission denied"* ]] &&
+  ok "sshd: root cannot log in, even with a valid key" || not_ok "root login: $out"
+out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own outsider@127.0.0.1 'echo shell-opens'" 2>&1)
+[[ "$out" != *"shell-opens"* && "$out" == *"Permission denied"* ]] &&
+  ok "sshd: a user outside the group confera-ssh cannot log in, even with a valid key" ||
+  not_ok "outsider login: $out"
+out=$(as_tester "ssh $SSH_OPTS -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no tester@127.0.0.1 true" 2>&1)
+[[ "$out" == *"Permission denied (publickey)"* ]] &&
+  ok "sshd: no password or keyboard-interactive login; the server offers publickey only" ||
+  not_ok "password login: $out"
+settings=$(sshd -T 2>/dev/null)
+for expected in "permitrootlogin no" "passwordauthentication no" "kbdinteractiveauthentication no" \
+  "allowgroups confera-ssh" "x11forwarding no" "allowtcpforwarding no" "permituserenvironment no"; do
+  grep -qx "$expected" <<<"$settings" && ok "sshd -T: $expected" || not_ok "sshd -T has no line \"$expected\""
+done
+
 # ---- The deploy users can run nothing but the deploy script as root ---------------------------
 out=$(su confera-deploy-be -c "sudo --non-interactive /bin/sh -c id" 2>&1)
 [[ "$out" != *"uid=0"* ]] && ok "sudo: no shell as root for the deploy user" || not_ok "sudo /bin/sh: $out"
@@ -231,6 +289,176 @@ rm -f /etc/fake-docker/fail-migrate
 [ "$code" -eq 1 ] && ! grep -q ' up ' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env &&
   ok "a failed migration restarts nothing and leaves images.env as it was" ||
   not_ok "failed migration: exit $code: $out; $(cat "$LOG")"
+
+grep -q '^confera-deploy: the database as it was before the migration: /srv/confera/backups/pre-deploy-' <<<"$out" &&
+  ok "a failed migration names the dump taken before it" || not_ok "failed migration, no dump named: $out"
+
+# ---- The backup before the migration (SEC-M4I-02) ----------------------------------------------
+for failure in fail-dump empty-dump bad-dump; do
+  cp /srv/confera/images.env /tmp/images.before
+  count_before=$(find /srv/confera/backups -name '*.dump' | wc -l)
+  touch "/etc/fake-docker/$failure"
+  : >"$LOG"
+  out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf 'e%.0s' {1..64})" 2>&1)
+  code=$?
+  rm -f "/etc/fake-docker/$failure"
+  if [ "$code" -eq 74 ] && ! grep -q ' migrate$' "$LOG" && ! grep -q ' up ' "$LOG" &&
+    cmp -s /tmp/images.before /srv/confera/images.env && [[ "$out" == *"backup before the migration failed"* ]] &&
+    [ "$(find /srv/confera/backups -name '*.dump' | wc -l)" -eq "$count_before" ] &&
+    [ -z "$(find /srv/confera/backups -name '*.partial')" ]; then
+    ok "$failure: stops before the migration (exit 74), keeps no file, images.env unchanged"
+  else
+    not_ok "$failure: exit $code: $out; $(cat "$LOG")"
+  fi
+done
+
+cp /etc/confera/deploy.conf /tmp/deploy.conf
+sed -i 's/^CONFERA_DISK_MAX_PERCENT=.*/CONFERA_DISK_MAX_PERCENT=0/' /etc/confera/deploy.conf
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+code=$?
+cp /tmp/deploy.conf /etc/confera/deploy.conf
+[ "$code" -eq 74 ] && [ "$(calls)" -eq 0 ] && [[ "$out" == *"% full"* ]] &&
+  ok "a disk fuller than CONFERA_DISK_MAX_PERCENT stops a be deploy before anything runs (exit 74)" ||
+  not_ok "full disk: exit $code calls $(calls): $out"
+
+# ---- Rollback to the previous digest -----------------------------------------------------------
+cp /srv/confera/images.env /tmp/images.before
+touch /etc/fake-docker/fail-up-once
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf 'f%.0s' {1..64})" 2>&1)
+code=$?
+rm -f /etc/fake-docker/fail-up-once
+ups=$(grep -c ' up --detach --no-deps --wait ' "$LOG")
+if [ "$code" -eq 1 ] && [ "$ups" -eq 2 ] && cmp -s /tmp/images.before /srv/confera/images.env &&
+  [[ "$out" == *"putting the previous version back"* ]] &&
+  [[ "$out" == *"the database as it was before this deploy's migration: /srv/confera/backups/pre-deploy-"* ]]; then
+  ok "a new version that is not healthy: images.env.previous is put back and restarted; the dump is named"
+else
+  not_ok "rollback: exit $code, $ups restarts: $out; $(cat /srv/confera/images.env)"
+fi
+
+# ---- Migrations never run backwards ----------------------------------------------------------------
+# The database has applied a migration the image does not hold: the image is older.
+cp /srv/confera/images.env /tmp/images.before
+cp /etc/fake-docker/applied-migrations /tmp/applied.before
+echo 20261016090000_one_default_mail_server >>/etc/fake-docker/applied-migrations
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf '9%.0s' {1..64})" 2>&1)
+code=$?
+cp /tmp/applied.before /etc/fake-docker/applied-migrations
+if [ "$code" -eq 65 ] && ! grep -q ' pg_dump \| migrate$\| up ' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env &&
+  [[ "$out" == *"older than the database"*"20261016090000_one_default_mail_server"*"confera-deploy rollback be"* ]]; then
+  ok "an image older than the database is refused (exit 65) before the dump, the migration and any restart"
+else
+  not_ok "older image: exit $code: $out; $(cat "$LOG")"
+fi
+# A database that was never migrated (the first deploy) has no _prisma_migrations: allowed.
+touch /etc/fake-docker/no-migrations-table
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+code=$?
+rm -f /etc/fake-docker/no-migrations-table
+[ "$code" -eq 0 ] && grep -q ' run --rm --no-TTY migrate$' "$LOG" &&
+  ok "a database without _prisma_migrations (first deploy) is migrated" || not_ok "first deploy: exit $code: $out"
+
+# ---- Rollback by the operator: one version back, no migration ------------------------------------
+DIGEST2="sha256:$(printf '2%.0s' {1..64})"
+rm -f /srv/confera/images.be.previous
+out=$(/usr/local/sbin/confera-deploy be "$DIGEST2" 2>&1)
+code=$?
+[ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.be.previous &&
+  [ "$(stat -c '%U %a' /srv/confera/images.be.previous)" = "root 644" ] &&
+  ok "a deploy records the target's version before it in images.be.previous" ||
+  not_ok "images.be.previous after a deploy: exit $code: $out; $(cat /srv/confera/images.be.previous 2>&1)"
+web_before=$(grep '^CONFERA_WEB_IMAGE=' /srv/confera/images.env)
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+if [ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.env &&
+  [ "$(grep '^CONFERA_WEB_IMAGE=' /srv/confera/images.env)" = "$web_before" ] &&
+  ! grep -q ' migrate$\| pg_dump \|^pull \|^run ' "$LOG" &&
+  grep -q ' up --detach --no-deps --wait --wait-timeout 240 api worker$' "$LOG" &&
+  grep -q ' exec --no-TTY api node -e ' "$LOG"; then
+  ok "rollback be: back to the previous digest, api and worker restarted and smoke-tested, NO migration, no pull, web untouched"
+else
+  not_ok "rollback be: exit $code: $out; $(cat "$LOG"); $(cat /srv/confera/images.env)"
+fi
+grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST2" /srv/confera/images.be.previous &&
+  ok "after a rollback, images.be.previous holds the version rolled back from" ||
+  not_ok "images.be.previous after the rollback: $(cat /srv/confera/images.be.previous)"
+cp /srv/confera/images.env /tmp/images.before
+touch /etc/fake-docker/fail-up-once
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+rm -f /etc/fake-docker/fail-up-once
+[ "$code" -eq 1 ] && cmp -s /tmp/images.before /srv/confera/images.env &&
+  ok "a rollback whose version is not healthy puts the current version back (exit 1)" ||
+  not_ok "failed rollback: exit $code: $out; $(cat /srv/confera/images.env)"
+out=$(/usr/local/sbin/confera-deploy rollback web 2>&1)
+code=$?
+[ -f /srv/confera/images.web.previous ] && not_ok "web has a previous version unexpectedly" ||
+  { [ "$code" -eq 64 ] && [[ "$out" == *"no previous version of web"* ]] &&
+    ok "rollback without a recorded previous version is refused (exit 64)" || not_ok "rollback web: exit $code: $out"; }
+printf 'CONFERA_API_IMAGE=ghcr.io/somebody-else/confera-be@%s\nCONFERA_JOBS_IMAGE=ghcr.io/stojanivanisevic/confera-be-jobs@%s\n' \
+  "$DIGEST" "$JOBS_DIGEST" >/tmp/foreign.previous
+cp /srv/confera/images.be.previous /tmp/be.previous
+cp /tmp/foreign.previous /srv/confera/images.be.previous
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+cp /tmp/be.previous /srv/confera/images.be.previous
+[ "$code" -eq 78 ] && [ "$(calls)" -eq 0 ] && ok "rollback refuses a recorded image of another repository" ||
+  not_ok "foreign rollback: exit $code: $out"
+: >"$LOG"
+out=$(su confera-deploy-be -c "sudo --non-interactive /usr/local/sbin/confera-deploy rollback be" 2>&1)
+[ "$(calls)" -eq 0 ] && [[ "$out" != *"rolled back"* ]] &&
+  ok "the deploy user cannot start a rollback (sudo allows <target> sha256:... only)" || not_ok "deploy user rollback: $out"
+: >"$LOG"
+out=$(send be "rollback" 2>&1 </dev/null)
+[ "$?" -eq 64 ] && [ "$(calls)" -eq 0 ] && ok "a deploy key cannot start a rollback" || not_ok "key rollback: $out"
+
+# ---- The nightly backup (confera-backup) ----------------------------------------------------------
+touch -d '8 days ago' /srv/confera/backups/pre-deploy-20260101T000000Z-000000000000.dump \
+  /srv/confera/backups/nightly-20260101T000000Z.dump
+touch -d '2 days ago' /srv/confera/backups/nightly-20260102T000000Z.dump
+: >"$LOG"
+out=$(/usr/local/sbin/confera-backup 2>&1)
+code=$?
+nightly=(/srv/confera/backups/nightly-*Z.dump)
+files=(/srv/confera/backups/files-*Z.tar)
+if [ "$code" -eq 0 ] && [[ "$out" == *"backup ok"* ]] && [ "${#files[@]}" -eq 1 ] && [ -s "${files[0]}" ] &&
+  [ "$(stat -c '%U %a' "${files[0]}")" = "root 600" ] && [ "$(stat -c '%U %a' "${nightly[-1]}")" = "root 600" ] &&
+  grep -q ' exec --no-TTY postgres pg_dump --username postgres --dbname confera --format custom' "$LOG" &&
+  grep -q ' exec --no-TTY postgres pg_restore --list' "$LOG" &&
+  grep -q '^run --rm --network none --read-only --cap-drop ALL .*source=confera_files,target=/files,readonly --entrypoint tar ' "$LOG"; then
+  ok "backup: a checked dump and a tar of the file volume (read-only, no network), both root 0600"
+else
+  not_ok "backup: exit $code: $out; $(ls -la /srv/confera/backups); $(cat "$LOG")"
+fi
+[ ! -e /srv/confera/backups/pre-deploy-20260101T000000Z-000000000000.dump ] &&
+  [ ! -e /srv/confera/backups/nightly-20260101T000000Z.dump ] && [ -e /srv/confera/backups/nightly-20260102T000000Z.dump ] &&
+  [[ "$out" == *"removing /srv/confera/backups/nightly-20260101T000000Z.dump"* ]] &&
+  ok "backup: files older than 7 days are removed and named; younger ones stay" ||
+  not_ok "prune: $out; $(ls -la /srv/confera/backups)"
+count_before=$(find /srv/confera/backups -type f | wc -l)
+touch -d '8 days ago' /srv/confera/backups/nightly-20260102T000000Z.dump
+touch /etc/fake-docker/bad-dump
+out=$(/usr/local/sbin/confera-backup 2>&1)
+code=$?
+rm -f /etc/fake-docker/bad-dump
+[ "$code" -eq 1 ] && [ "$(find /srv/confera/backups -type f | wc -l)" -eq "$count_before" ] &&
+  [ -e /srv/confera/backups/nightly-20260102T000000Z.dump ] &&
+  ok "backup: an unreadable dump fails (exit 1), keeps no file and prunes nothing" ||
+  not_ok "bad backup: exit $code: $out; $(ls -la /srv/confera/backups)"
+exec 9>/run/lock/confera-deploy.lock
+flock 9
+: >"$LOG"
+out=$(timeout 5 /usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+code=$?
+exec 9>&-
+[ "$code" -eq 75 ] && [ "$(calls)" -eq 0 ] && ok "a deploy does not start while the backup holds the lock" ||
+  not_ok "lock shared with the backup: exit $code: $out"
 
 chmod 0666 /etc/confera/deploy.conf
 out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
