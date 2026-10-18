@@ -21,7 +21,6 @@ import type { AppConfig } from '../../config/config';
 import { attachmentHeader, asciiFileName, safeFileName } from './file-names';
 import { detectFileType, MAX_ELEMENT_CHARS, MAX_PARTS_READ } from './file-type';
 import type { AppLogger } from '../../common/logging/app-logger';
-import type { SystemResolvers } from '../../platform/prisma/system/resolvers';
 import type { TenantDatabase } from '../../platform/prisma/tenant-database';
 import type { TenantContext } from '../../platform/tenancy/tenant-context';
 import type { MailQueue } from '../mail/mail-queue';
@@ -538,7 +537,10 @@ describe('the antivirus (M3-BE-08, ST-38)', () => {
     const worker = new FilesWorker(
       { jobs: { intervalSeconds: 0 } } as AppConfig,
       {} as VirusScanner,
-      { organisationsWithUsers: () => Promise.resolve(['org-a']) } as unknown as SystemResolvers,
+      // A double of the resolvers, typed through the worker: the spec does not import them (ADR-05).
+      {
+        organisationsWithUsers: () => Promise.resolve(['org-a']),
+      } as unknown as ConstructorParameters<typeof FilesWorker>[2],
       { run: (_id: string, work: () => Promise<void>) => work() } as unknown as TenantContext,
       database as unknown as TenantDatabase,
       {
