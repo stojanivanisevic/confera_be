@@ -73,6 +73,9 @@ jobs:
 
   publish:
     needs: build
+    # Nothing is published before Gate 4a: the repository variable IMAGE_PUBLISH_ENABLED is set to
+    # true there. Until then the build job still builds and checks every image.
+    if: vars.IMAGE_PUBLISH_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:

@@ -1220,13 +1220,18 @@ a later release): a rollback restores the image, never the schema. One deploy ru
 Every third-party action is pinned by commit hash (its version in a comment), every image by
 digest (BuildKit v0.33.1 included). The default token is read-only.
 
-| Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                             |
-| `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (no checkout, so no project code; may write packages): copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. |
-| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Needs the environment `staging` (protection rule) and refuses until its variable `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command.                                                                                                                                             |
+| Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                                                                                                                  |
+| `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (only once the repository variable `IMAGE_PUBLISH_ENABLED` is `true`, set at Gate 4a; no checkout, so no project code; may write packages): copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. |
+| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Needs the environment `staging` (protection rule) and refuses until its variable `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command.                                                                                                                                                                                                                                  |
 
 `.github/CODEOWNERS` names Stojan for `.github/`, `deploy/`, `Dockerfile` and `.dockerignore`.
+
+**Actions minutes** (a private repository has a monthly allowance; rough estimates, not yet
+measured on GitHub): one `ci` run costs about 30 runner minutes (`pnpm check` about 15, the
+database tests about 10, ST-63 about 3, the three jobs run side by side); one `image` run about
+15 (build and checks about 12, publish about 3).
 
 ### The checks on this machine (Docker)
 
@@ -1267,6 +1272,8 @@ On GitHub, in each repository:
       deployments from `develop` only; its secret `STAGING_DEPLOY_KEY` (the private key of this
       repository's deploy user, nothing else) and its variables `STAGING_SSH_HOST`,
       `STAGING_SSH_KNOWN_HOSTS` (the server's host key line) and `STAGING_DEPLOY_ENABLED=true`.
+- [ ] The repository variable `IMAGE_PUBLISH_ENABLED=true` in both repositories: until then `image.yml`
+      builds and checks the images but publishes nothing.
 - [ ] The packages `confera-be`, `confera-be-jobs` and `confera-web` private; the server pulls
       with a read-only token of its own.
 - [ ] The event that starts a staging deploy named in the reduced runbook (here: by hand, with
