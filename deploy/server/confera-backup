@@ -1,0 +1,128 @@
+#!/bin/bash
+# The nightly backup of a Confera server (ADR-26, ADR-27; SEC-M4I-01, SEC-M4I-09). ST-63.
+#
+#   confera-backup          (no argument; run by confera-backup.timer, or by the operator)
+#
+# Installed as /usr/local/sbin/confera-backup (root:root, 0700). Reads the same root-owned
+# /etc/confera/deploy.conf as confera-deploy, the same way (as data), and takes the same lock, so a
+# backup and a deploy never run side by side (it waits up to 30 minutes for a running deploy).
+#
+# What it does, in this order:
+#   1. refuse when the file system of <root>/backups is fuller than CONFERA_DISK_MAX_PERCENT;
+#   2. pg_dump of CONFERA_DATABASE, custom format, as the superuser inside the postgres container,
+#      into <root>/backups/nightly-<UTC time>.dump (root, 0600); read back with pg_restore --list;
+#   3. a tar of the file volume (<project>_files), read-only, from a container without network,
+#      into <root>/backups/files-<UTC time>.tar (root, 0600); read back with tar --list;
+#   4. only when both are good: remove nightly-*, files-* and pre-deploy-* files (the dumps of
+#      confera-deploy) older than CONFERA_BACKUP_KEEP_DAYS (7 by default), naming each one.
+# A file is kept only once it has been read back; a failed step leaves no half-written file.
+#
+# The dumps are NOT encrypted: on staging the data is invented, and the folder is root's alone.
+# Never restore a production dump on staging. Off-site, append-only backups of production are
+# Gate 4 (M10-BE-01).
+#
+# Exit codes: 0 backup ok; 1 a step failed; 74 the disk is too full; 75 a deploy holds the lock
+# for more than 30 minutes; 78 the configuration is missing or unsafe.
+set -euo pipefail
+umask 077
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
+
+readonly CONF=/etc/confera/deploy.conf
+say() { printf 'confera-backup: %s\n' "$*"; }
+fail() {
+  printf 'confera-backup: FAILED: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+[ "$#" -eq 0 ] || fail "usage: confera-backup (no argument)" 64
+
+# ---- The configuration: root's own file, read as data (as confera-deploy reads it) ------------
+[ -f "$CONF" ] || fail "$CONF is missing" 78
+[ "$(stat -c '%u' "$CONF")" = 0 ] || fail "$CONF must be owned by root" 78
+case "$(stat -c '%a' "$CONF")" in
+  600 | 640 | 644) ;;
+  *) fail "$CONF must not be writable by anyone but root" 78 ;;
+esac
+declare -A setting=()
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in '' | '#'*) continue ;; esac
+  [[ "$line" =~ ^([A-Z_]+)=([A-Za-z0-9._/:-]*)$ ]] || fail "$CONF: a line is not NAME=value" 78
+  setting[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+done <"$CONF"
+need() {
+  local value=${setting[$1]-}
+  [ -n "$value" ] || fail "$CONF: $1 is not set" 78
+  printf '%s' "$value"
+}
+root=$(need CONFERA_ROOT)
+project=$(need CONFERA_PROJECT)
+instance=$(need CONFERA_INSTANCE)
+be_repository=$(need CONFERA_BE_REPOSITORY)
+database=$(need CONFERA_DATABASE)
+[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || fail "$CONF: CONFERA_DATABASE is not a database name" 78
+[[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "$CONF: CONFERA_PROJECT is not a project name" 78
+disk_max=${setting[CONFERA_DISK_MAX_PERCENT]:-85}
+[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || fail "$CONF: CONFERA_DISK_MAX_PERCENT is not a number below 100" 78
+keep_days=${setting[CONFERA_BACKUP_KEEP_DAYS]:-7}
+[[ "$keep_days" =~ ^[1-9][0-9]{0,2}$ ]] || fail "$CONF: CONFERA_BACKUP_KEEP_DAYS is not a number of days" 78
+case "$instance" in
+  staging | production) ;;
+  *) fail "$CONF: CONFERA_INSTANCE must be staging or production" 78 ;;
+esac
+
+readonly images="$root/images.env"
+readonly backups="$root/backups"
+grep -qx "CONFERA_INSTANCE=$instance" "$root/compose.env" ||
+  fail "$root/compose.env does not say CONFERA_INSTANCE=$instance, as $CONF does" 78
+compose=(docker compose --project-name "$project"
+  --env-file "$root/compose.env" --env-file "$images"
+  --file "$root/deploy/compose.yml")
+[ "$instance" = staging ] && compose+=(--file "$root/deploy/compose.staging.yml")
+
+# The API image (it has tar) by digest, from images.env, for the tar of the file volume.
+api_image=$(grep -m 1 '^CONFERA_API_IMAGE=' "$images" | cut -d= -f2-) || true
+api_re="^${be_repository//./\.}@sha256:[0-9a-f]{64}$"
+[[ "$api_image" =~ $api_re ]] || fail "$images names no API image of $be_repository by digest" 78
+
+# ---- The lock of confera-deploy --------------------------------------------------------------------
+exec 9>/run/lock/confera-deploy.lock
+flock --wait 1800 9 || fail "a deploy has held the lock for 30 minutes" 75
+
+# ---- 1. Room ------------------------------------------------------------------------------------
+install -d -m 0700 -o root -g root "$backups"
+[ "$(stat -c '%u %a' "$backups")" = "0 700" ] || fail "$backups must be root's, mode 0700" 78
+used=$(df --output=pcent "$backups" | tail -n 1 | tr -dc '0-9')
+[[ "$used" =~ ^[0-9]+$ ]] || fail "cannot read how full the disk of $backups is" 74
+[ "$used" -le "$disk_max" ] || fail "the disk of $backups is ${used} % full (more than ${disk_max} %)" 74
+
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+dump="$backups/nightly-$stamp.dump"
+tarball="$backups/files-$stamp.tar"
+cleanup() { rm -f "$dump.partial" "$tarball.partial"; }
+trap cleanup EXIT
+
+# ---- 2. The database ------------------------------------------------------------------------------
+"${compose[@]}" exec --no-TTY postgres pg_dump --username postgres --dbname "$database" \
+  --format custom --no-password >"$dump.partial" || fail "pg_dump"
+[ -s "$dump.partial" ] || fail "the dump is empty"
+listing=$("${compose[@]}" exec --no-TTY postgres pg_restore --list <"$dump.partial") ||
+  fail "pg_restore --list cannot read the dump"
+[[ "$listing" == *"Format: CUSTOM"* ]] || fail "pg_restore --list does not show a custom-format archive"
+
+# ---- 3. The file volume ---------------------------------------------------------------------------
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --user 1000:1000 --mount "type=volume,source=${project}_files,target=/files,readonly" \
+  --entrypoint tar "$api_image" -C /files -cf - . >"$tarball.partial" || fail "the tar of the file volume"
+tar --list --file "$tarball.partial" >/dev/null || fail "tar --list cannot read the tar of the file volume"
+
+chmod 0600 "$dump.partial" "$tarball.partial"
+mv -f "$dump.partial" "$dump"
+mv -f "$tarball.partial" "$tarball"
+say "wrote $dump and $tarball (both read back)"
+
+# ---- 4. Prune, only after a good backup -----------------------------------------------------------
+find "$backups" -maxdepth 1 -type f \
+  \( -name 'nightly-*.dump' -o -name 'files-*.tar' -o -name 'pre-deploy-*.dump' \) \
+  -mmin "+$((keep_days * 1440))" -printf 'confera-backup: removing %p (older than '"$keep_days"' days)\n' -delete
+say "backup ok"
