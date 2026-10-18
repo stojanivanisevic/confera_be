@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { FilesModule } from '../files/files.module';
 import { MailSender } from './mail-sender';
 import { MailTransport } from './mail-transport';
 import { MailWorker } from './mail-worker';
@@ -11,6 +12,8 @@ import { SecretBox } from './secret-box';
  */
 @Global()
 @Module({
+  // The private storage: the images of a message are read from it when it is sent.
+  imports: [FilesModule],
   providers: [SecretBox, MailTransport, MailSender, MailWorker],
   exports: [SecretBox, MailTransport, MailSender, MailWorker],
 })

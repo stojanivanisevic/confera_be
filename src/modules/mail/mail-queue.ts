@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
+import { AppLogger } from '../../common/logging/app-logger';
+import { composeMessage } from './mail-composer';
 
 /**
  * The mail outbox, as far as 0.2.0 part A needs it (ADR-13): a message is queued in the
@@ -29,6 +31,14 @@ export const MAIL_KINDS = [
    * text, the reference and the title only. Counted by the send breaker (ADR-08).
    */
   'submission_confirmation',
+  /** The status emails (FR-MAIL-05): one per status change, to the corresponding author. */
+  'submission_opened',
+  'submission_returned',
+  'submission_resumed',
+  'submission_accepted',
+  'submission_rejected',
+  'submission_withdrawn',
+  'submission_reopened',
 ] as const;
 
 export type MailKind = (typeof MAIL_KINDS)[number];
@@ -72,6 +82,8 @@ export interface Hold {
 }
 
 export interface QueuedMessage {
+  /** The id of the row, when the caller needs to name it before it exists (a status change). */
+  readonly id?: string;
   readonly organisationId: string;
   readonly kind: MailKind;
   readonly recipientUserId?: string | null;
@@ -95,8 +107,16 @@ export interface QueuedMessage {
 
 @Injectable()
 export class MailQueue {
-  async enqueue(tx: Prisma.TransactionClient, message: QueuedMessage): Promise<void> {
-    await tx.mailMessage.upsert({
+  constructor(private readonly logger: AppLogger) {}
+
+  /**
+   * Queues a message in the caller's transaction, once per unique key, and renders it now
+   * (ADR-13, M2-ISS-05): the stored text is what is sent. A message whose type has no
+   * template yet, or whose template does not render, is rendered when it is sent; the
+   * change that queued it never fails for its email.
+   */
+  async enqueue(tx: Prisma.TransactionClient, message: QueuedMessage): Promise<{ id: string }> {
+    const row = await tx.mailMessage.upsert({
       where: {
         organisationId_uniqueKey: {
           organisationId: message.organisationId,
@@ -105,6 +125,7 @@ export class MailQueue {
       },
       update: {},
       create: {
+        ...(message.id === undefined ? {} : { id: message.id }),
         organisationId: message.organisationId,
         uniqueKey: message.uniqueKey,
         kind: message.kind,
@@ -122,6 +143,40 @@ export class MailQueue {
         heldCount: message.held?.count ?? null,
         heldLimit: message.held?.limit ?? null,
         heldWindowHours: message.held?.windowHours ?? null,
+      },
+    });
+    if (row.renderedSubject === null && (row.status === 'queued' || row.status === 'held')) {
+      await this.render(tx, row);
+    }
+    return { id: row.id };
+  }
+
+  private async render(
+    tx: Prisma.TransactionClient,
+    row: Prisma.MailMessageGetPayload<object>,
+  ): Promise<void> {
+    let composed: Awaited<ReturnType<typeof composeMessage>>;
+    try {
+      // Reads only, then renders in memory: a template that fails leaves the transaction intact.
+      composed = await composeMessage(tx, row);
+    } catch (error) {
+      this.logger.warn('mail.render_deferred', {
+        kind: row.kind,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+      return;
+    }
+    if (composed === null) {
+      return;
+    }
+    await tx.mailMessage.update({
+      where: { id: row.id },
+      data: {
+        renderedSubject: composed.subject,
+        renderedHtml: composed.html,
+        renderedText: composed.text,
+        templateServerId: composed.templateServerId,
+        imageIds: [...composed.imageIds],
       },
     });
   }

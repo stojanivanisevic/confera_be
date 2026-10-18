@@ -3,7 +3,7 @@ import { catalogueOf } from '../templates/placeholders';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repoRoot } from '../../../test/support/run-node';
-import { CONFIRMATION_TITLE_LENGTH, confirmationTitle } from './mail-sender';
+import { CONFIRMATION_TITLE_LENGTH, confirmationTitle } from './mail-composer';
 
 /**
  * ST-35 (M3-BE-06, FR-FORM-15 as amended by SA-13): the confirmation of a submission carries

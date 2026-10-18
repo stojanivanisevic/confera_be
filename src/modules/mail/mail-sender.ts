@@ -5,27 +5,24 @@ import { APP_CONFIG } from '../../config/config.module';
 import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import { TenantContext } from '../../platform/tenancy/tenant-context';
-import { LINK_LIFETIME_MS, type LinkPurpose, SecureLinks } from '../links/secure-links';
+import { FileStorage } from '../files/storage';
+import { type LinkPurpose, SecureLinks } from '../links/secure-links';
 import { chooseServers } from '../mail-servers/mail-server-policy';
-import {
-  catalogueOf,
-  isTemplateType,
-  type Language,
-  type TemplateType,
-} from '../templates/placeholders';
-import { type Rendered, renderTemplate } from '../templates/render';
-import { hasUrl } from '../forms/rules';
-import { type DeliveryError, MailTransport } from './mail-transport';
+import type { Language } from '../templates/placeholders';
+import { type Rendered, RenderError } from '../templates/render';
+import { composeMessage, contentIdOf, LINK_SENTINEL, withLink } from './mail-composer';
+import { type DeliveryError, type InlineImage, MailTransport } from './mail-transport';
 import { SecretBox } from './secret-box';
 
 /**
- * Renders and sends one message of the outbox (ADR-13, FR-SMTP-02, FR-SMTP-04):
+ * Sends one message of the outbox (ADR-13, FR-SMTP-02, FR-SMTP-04):
  *
- * - the template of its type: of its conference in its language, of its conference in
- *   English, of the organisation in its language, of the organisation in English;
+ * - the content composed when it was queued (mail-composer.ts, M2-ISS-05), or, for a
+ *   message that had no template then, composed now by the same rules;
  * - the servers in the order of FR-SMTP-02, the fallback after a failure, each attempt in
  *   the mail log;
  * - its secure link made now, at send time, and never stored: the log shows `[link]`;
+ * - its images as inline parts, read from the private storage now (M4-BE-06);
  * - the log keeps the subject and body only while the organisation's setting says so.
  *
  * Runs inside the organisation of the message (the worker enters it).
@@ -52,6 +49,9 @@ const WAIT_MS: Readonly<Record<WaitReason, number>> = {
   rate_limited: 15_000,
 };
 
+/** The images of one message may weigh this much together (ADR-12, P: 1 MB). */
+export const MESSAGE_IMAGES_LIMIT_BYTES = 1024 * 1024;
+
 export type WaitReason = 'no_template' | 'no_mail_server' | 'rate_limited';
 
 export type SendOutcome =
@@ -59,105 +59,16 @@ export type SendOutcome =
   | { readonly status: 'queued' | 'failed'; readonly error: DeliveryError }
   | { readonly status: 'waiting'; readonly reason: WaitReason };
 
-/** What the change of a security notice is called in the message. */
-const CHANGE_TEXT: Readonly<Record<string, Readonly<Record<Language, string>>>> = {
-  user_invited: { en: 'a user was invited', sr: 'pozvan je korisnik' },
-  user_changed: { en: 'a user was changed', sr: 'izmenjen je korisnik' },
-  user_role_changed: { en: 'the role of a user was changed', sr: 'promenjena je uloga korisnika' },
-  user_deactivated: { en: 'a user was deactivated', sr: 'korisnik je deaktiviran' },
-  user_reactivated: { en: 'a user was reactivated', sr: 'korisnik je ponovo aktiviran' },
-  user_removed: { en: 'a user was removed', sr: 'korisnik je uklonjen' },
-  user_sessions_ended: {
-    en: 'the sessions of a user were ended',
-    sr: 'prekinute su sesije korisnika',
-  },
-  own_password_changed: { en: 'a user changed their password', sr: 'korisnik je promenio lozinku' },
-  password_reset: { en: 'a password was reset', sr: 'lozinka je resetovana' },
-  own_email_change_requested: {
-    en: 'a user asked to change their email address',
-    sr: 'korisnik je zatražio promenu adrese e-pošte',
-  },
-  organisation_payment_details_changed: {
-    en: 'the payment details of the organisation were changed',
-    sr: 'promenjeni su podaci za plaćanje organizacije',
-  },
-  new_device_sign_in: { en: 'a sign-in from a new device', sr: 'prijava sa novog uređaja' },
-  mail_server_created: { en: 'a mail server was added', sr: 'dodat je server za poštu' },
-  mail_server_changed: { en: 'a mail server was changed', sr: 'izmenjen je server za poštu' },
-  mail_server_deleted: { en: 'a mail server was deleted', sr: 'obrisan je server za poštu' },
-  mail_held: {
-    en: 'the send breaker holds confirmation emails of a form; release them in the list of held emails',
-    sr: 'prekidač slanja zadržava potvrde jednog obrasca; pustite ih u spisku zadržanih poruka',
-  },
-  upload_quota_reached: {
-    en: 'the space for uploaded files that are not yet attached is full; uploads are refused',
-    sr: 'prostor za otpremljene datoteke koje još nisu priložene je pun; otpremanje se odbija',
-  },
-  virus_scan_pending: {
-    en: 'files wait for their virus scan because the antivirus does not answer',
-    sr: 'datoteke čekaju proveru na viruse jer antivirus ne odgovara',
-  },
-};
-
-/** The longest title a confirmation shows (FR-FORM-15: cut to its length). */
-export const CONFIRMATION_TITLE_LENGTH = 200;
-
-/**
- * A `label.tld` token (SEC-M3-03, M3-ISS-03): mail programs make a link of a bare domain
- * (`evil.com`, `x.com:8080/a`), which the form accepts because `ASP.NET` is a word. The
- * confirmation is stricter than the form: a false positive costs only the line of the title.
- */
-const DOMAIN = /(^|[^\p{L}\p{N}@.-])[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)*\.\p{L}{2,}(?![\p{L}\p{N}])/u;
-
-/**
- * The title as a confirmation shows it (FR-FORM-15, SA-13, ST-35): one line, no control or
- * invisible character, cut to its length; and none at all when it holds an address or a bare
- * domain, which a mail program would make a link of (the form refuses an address; this holds
- * for a row planted past it).
- */
-export function confirmationTitle(title: string | null): string | null {
-  if (title === null) {
-    return null;
-  }
-  const line = title
-    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim();
-  if (line === '' || hasUrl(line)) {
-    return null;
-  }
-  let cut = '';
-  let count = 0;
-  for (const character of line) {
-    if (count === CONFIRMATION_TITLE_LENGTH) {
-      cut = `${cut.trimEnd()}…`;
-      break;
-    }
-    cut += character;
-    count += 1;
-  }
-  // Judged on what the mail would show: at most 201 characters, so the match stays cheap.
-  return DOMAIN.test(cut) ? null : cut;
-}
-
-function lifetimeText(ms: number, language: Language): string {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return language === 'sr' ? `${String(hours)} sata` : `${String(hours)} hours`;
-  }
-  return language === 'sr' ? `${String(minutes)} minuta` : `${String(minutes)} minutes`;
-}
-
 type MessageRow = Prisma.MailMessageGetPayload<object>;
 type ServerRow = Prisma.MailServerGetPayload<object>;
 
 interface Prepared {
-  readonly type: TemplateType;
   readonly language: Language;
-  readonly stored: { subject: unknown; body: unknown; mailServerId: string | null };
-  readonly values: Record<string, string>;
-  readonly conditions: Set<string>;
+  /** The rendering with the link mark still in it. */
+  readonly rendered: Rendered;
+  readonly templateServerId: string | null;
+  readonly conferenceServerId: string | null;
+  readonly imageIds: readonly string[];
   readonly servers: ServerRow[];
   readonly logContent: boolean;
 }
@@ -171,6 +82,7 @@ export class MailSender {
     private readonly links: SecureLinks,
     private readonly box: SecretBox,
     private readonly transport: MailTransport,
+    private readonly storage: FileStorage,
   ) {}
 
   /** Sends a message the worker has claimed (status `sending`), and settles its row. */
@@ -192,7 +104,7 @@ export class MailSender {
       return this.wait(message, prepared.reason, now);
     }
     const chosen = chooseServers(prepared.servers, {
-      templateServerId: prepared.stored.mailServerId,
+      templateServerId: prepared.templateServerId,
       conferenceServerId: prepared.conferenceServerId,
     });
     if (chosen.length === 0) {
@@ -209,20 +121,24 @@ export class MailSender {
     }
 
     const link = await this.mintLink(message, now);
-    const input = { values: prepared.values, conditions: prepared.conditions };
-    const rendered = renderTemplate(prepared.stored, catalogueOf(prepared.type), {
-      ...input,
-      link,
-    });
-    const logged = renderTemplate(prepared.stored, catalogueOf(prepared.type), {
-      ...input,
-      link: link === undefined ? undefined : LINK_MARK,
-    });
+    if (link === undefined && prepared.rendered.html.includes(LINK_SENTINEL)) {
+      throw new RenderError('missing_link');
+    }
+    const images = await this.imagesOf(prepared.imageIds);
+    const rendered = withLink(prepared.rendered, link ?? '');
+    const logged = withLink(prepared.rendered, LINK_MARK);
 
     const attempt = message.attempts + 1;
     let error: DeliveryError = 'send_failed';
     for (const server of servers) {
-      const result = await this.deliverAndLog(message, server, rendered, logged, attempt, prepared);
+      const result = await this.deliverAndLog(
+        message,
+        server,
+        { ...rendered, images },
+        logged,
+        attempt,
+        prepared,
+      );
       if (result.ok) {
         await this.database.db.mailMessage.update({
           where: { id: message.id },
@@ -232,6 +148,10 @@ export class MailSender {
             attempts: attempt,
             lastErrorCode: null,
             claimedAt: null,
+            // Without content in the log the outbox keeps none either (FR-SMTP-04).
+            ...(prepared.logContent
+              ? {}
+              : { renderedSubject: null, renderedHtml: null, renderedText: null }),
           },
         });
         return { status: 'sent', serverId: server.id };
@@ -256,7 +176,7 @@ export class MailSender {
 
   /**
    * The test message of a mail server (FR-SMTP-01): sent at once through that one server,
-   * logged like any message. The caller has checked the target's rules.
+   * logged like any message. The caller has checked the target's rules, the cap and the rate.
    */
   async sendTest(
     serverId: string,
@@ -287,11 +207,16 @@ export class MailSender {
       });
       return { ok: false, error: 'send_failed' };
     }
-    const rendered = renderTemplate(prepared.stored, catalogueOf('test_message'), {
-      values: prepared.values,
-      conditions: prepared.conditions,
-    });
-    const result = await this.deliverAndLog(message, server, rendered, rendered, 1, prepared);
+    const images = await this.imagesOf(prepared.imageIds);
+    const rendered = withLink(prepared.rendered, '');
+    const result = await this.deliverAndLog(
+      message,
+      server,
+      { ...rendered, images },
+      rendered,
+      1,
+      prepared,
+    );
     await this.database.db.mailMessage.update({
       where: { id: message.id },
       data: result.ok
@@ -336,22 +261,44 @@ export class MailSender {
     return null;
   }
 
-  private async prepare(
-    message: MessageRow,
-  ): Promise<(Prepared & { conferenceServerId: string | null }) | { reason: WaitReason }> {
-    if (!isTemplateType(message.kind)) {
-      return { reason: 'no_template' };
-    }
-    const type = message.kind;
-    const language: Language = message.language === 'sr' ? 'sr' : 'en';
+  /** The content of a message (stored when it was queued, or composed now) and its servers. */
+  private async prepare(message: MessageRow): Promise<Prepared | { reason: WaitReason }> {
     return this.database.transaction(async (tx) => {
-      const template = await this.findTemplate(tx, type, language, message.conferenceId);
-      if (template === null) {
+      let content: {
+        rendered: Rendered;
+        templateServerId: string | null;
+        imageIds: readonly string[];
+      } | null = null;
+      if (
+        message.renderedSubject !== null &&
+        message.renderedHtml !== null &&
+        message.renderedText !== null
+      ) {
+        content = {
+          rendered: {
+            subject: message.renderedSubject,
+            html: message.renderedHtml,
+            text: message.renderedText,
+          },
+          templateServerId: message.templateServerId,
+          imageIds: message.imageIds,
+        };
+      } else {
+        const composed = await composeMessage(tx, message);
+        if (composed !== null) {
+          content = {
+            rendered: composed,
+            templateServerId: composed.templateServerId,
+            imageIds: composed.imageIds,
+          };
+        }
+      }
+      if (content === null) {
         return { reason: 'no_template' as const };
       }
       const organisation = await tx.organisation.findUniqueOrThrow({
         where: { id: message.organisationId },
-        select: { name: true, mailLogContent: true },
+        select: { mailLogContent: true },
       });
       const conference =
         message.conferenceId === null
@@ -363,148 +310,49 @@ export class MailSender {
       const servers = await tx.mailServer.findMany({
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
-      const { values, conditions } = await this.valuesOf(
-        tx,
-        message,
-        type,
-        language,
-        organisation.name,
-      );
+      const language: Language = message.language === 'sr' ? 'sr' : 'en';
       return {
-        type,
         language,
-        stored: {
-          subject: template.subject,
-          body: template.body,
-          mailServerId: template.mailServerId,
-        },
-        values,
-        conditions,
+        ...content,
+        conferenceServerId: conference?.mailServerId ?? null,
         servers,
         logContent: organisation.mailLogContent,
-        conferenceServerId: conference?.mailServerId ?? null,
       };
     });
   }
 
-  private async findTemplate(
-    tx: Prisma.TransactionClient,
-    type: TemplateType,
-    language: Language,
-    conferenceId: string | null,
-  ) {
-    const order: { conferenceId: string | null; language: Language }[] = [];
-    if (conferenceId !== null) {
-      order.push({ conferenceId, language }, { conferenceId, language: 'en' });
+  /**
+   * The images of a message as inline parts (ADR-12, M4-BE-06): read from the private
+   * storage now, never addressed from outside. An image that is no longer clean, or gone,
+   * is left out; together they stay under 1 MB.
+   */
+  private async imagesOf(ids: readonly string[]): Promise<InlineImage[]> {
+    if (ids.length === 0) {
+      return [];
     }
-    order.push({ conferenceId: null, language }, { conferenceId: null, language: 'en' });
-    for (const where of order) {
-      const template = await tx.mailTemplate.findFirst({
-        where: { type, language: where.language, conferenceId: where.conferenceId },
-        select: { subject: true, body: true, mailServerId: true },
+    const files = await this.database.db.storedFile.findMany({
+      where: { id: { in: [...ids] }, kind: 'email_image', scanState: 'clean' },
+      select: { id: true, storageKey: true, detectedType: true, sizeBytes: true },
+    });
+    const images: InlineImage[] = [];
+    let total = 0;
+    for (const file of files) {
+      total += file.sizeBytes;
+      if (total > MESSAGE_IMAGES_LIMIT_BYTES) {
+        break;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of this.storage.read(file.storageKey)) {
+        chunks.push(chunk as Buffer);
+      }
+      images.push({
+        cid: contentIdOf(file.id),
+        filename: `image-${String(images.length + 1)}.${file.detectedType === 'jpeg' ? 'jpg' : 'png'}`,
+        contentType: `image/${file.detectedType}`,
+        content: Buffer.concat(chunks),
       });
-      if (template !== null) {
-        return template;
-      }
     }
-    return null;
-  }
-
-  /** The placeholder values of a message: names looked up now, never stored in the outbox. */
-  private async valuesOf(
-    tx: Prisma.TransactionClient,
-    message: MessageRow,
-    type: TemplateType,
-    language: Language,
-    organisationName: string,
-  ): Promise<{ values: Record<string, string>; conditions: Set<string> }> {
-    const parameters = (message.parameters ?? {}) as Record<string, unknown>;
-    const nameOf = async (id: unknown): Promise<string | null> => {
-      if (typeof id !== 'string') {
-        return null;
-      }
-      const user = await tx.user.findUnique({ where: { id }, select: { displayName: true } });
-      return user?.displayName ?? null;
-    };
-    const recipientName = (await nameOf(message.recipientUserId)) ?? message.recipientAddress;
-    const values: Record<string, string> = { recipientName, organisationName };
-    const conditions = new Set<string>();
-    if (message.linkPurpose !== null) {
-      values.expiresIn = lifetimeText(
-        LINK_LIFETIME_MS[message.linkPurpose as LinkPurpose],
-        language,
-      );
-    }
-    switch (type) {
-      case 'invitation':
-        values.inviterName = (await nameOf(parameters.invitedBy)) ?? organisationName;
-        break;
-      case 'email_change_confirmation':
-        values.newEmail = message.recipientAddress;
-        break;
-      case 'email_change_notice': {
-        // The new address is the recipient of the confirmation queued with this notice.
-        const sibling = await tx.mailMessage.findFirst({
-          where: {
-            uniqueKey: message.uniqueKey.replace(
-              /^email_change_notice:/,
-              'email_change_confirmation:',
-            ),
-          },
-          select: { recipientAddress: true },
-        });
-        values.newEmail = sibling?.recipientAddress ?? '';
-        break;
-      }
-      case 'security_notice': {
-        const change = typeof parameters.change === 'string' ? parameters.change : '';
-        values.change = CHANGE_TEXT[change]?.[language] ?? change;
-        const actor = await nameOf(parameters.actorUserId);
-        const subject = await nameOf(parameters.subjectUserId);
-        values.actorName = actor ?? '';
-        values.subjectName = subject ?? '';
-        if (actor !== null) {
-          conditions.add('hasActor');
-        }
-        if (subject !== null) {
-          conditions.add('hasSubject');
-        }
-        break;
-      }
-      case 'submission_confirmation': {
-        const submission =
-          typeof parameters.submissionId === 'string'
-            ? await tx.submission.findUnique({
-                where: { id: parameters.submissionId },
-                select: { reference: true, title: true, conference: { select: { name: true } } },
-              })
-            : null;
-        values.reference = submission?.reference ?? '';
-        values.conferenceName = submission?.conference.name ?? '';
-        const title = confirmationTitle(submission?.title ?? null);
-        values.title = title ?? '';
-        if (title !== null) {
-          conditions.add('hasTitle');
-        }
-        // The address is the author's own text: it never becomes a name in the message.
-        values.recipientName = '';
-        break;
-      }
-      case 'test_message': {
-        const server =
-          typeof parameters.serverId === 'string'
-            ? await tx.mailServer.findUnique({
-                where: { id: parameters.serverId },
-                select: { name: true },
-              })
-            : null;
-        values.serverName = server?.name ?? '';
-        break;
-      }
-      default:
-        break;
-    }
-    return { values, conditions };
+    return images;
   }
 
   /** Whether the server has sent its rate in the last minute (counted from the log). */
@@ -539,10 +387,10 @@ export class MailSender {
   private async deliverAndLog(
     message: MessageRow,
     server: ServerRow,
-    rendered: Rendered,
+    rendered: Rendered & { images: readonly InlineImage[] },
     logged: Rendered,
     attempt: number,
-    prepared: Pick<Prepared, 'language' | 'logContent'>,
+    prepared: Pick<Prepared, 'language' | 'logContent' | 'imageIds'>,
   ): Promise<{ ok: true } | { ok: false; error: DeliveryError }> {
     let password: string | null = null;
     if (server.passwordSealed !== null) {
@@ -580,6 +428,8 @@ export class MailSender {
         subject: prepared.logContent ? logged.subject : null,
         bodyHtml: prepared.logContent ? logged.html : null,
         bodyText: prepared.logContent ? logged.text : null,
+        // The body and the ids of its images, not their bytes (ADR-13).
+        imageIds: prepared.logContent ? [...prepared.imageIds] : [],
         diverted: this.transport.diverted,
       },
     });
