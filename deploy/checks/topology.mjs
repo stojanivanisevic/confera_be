@@ -22,6 +22,19 @@
 //   M3-ISS-06  the proxy sends /public/v1 straight to the API: a 20 MB upload reaches the API, a
 //          body above 51 MB and a large body on another route are refused by the proxy; /api/v1 is
 //          answered by the API on the admin host only; the staging gate asks for its password.
+//   SEC-M4I-02  the deploy script's dump (pg_dump -Fc in the postgres container, pg_restore --list)
+//          works on the real Postgres image;
+//   SEC-M4I-05  the staging override (compose.staging.yml): Mailpit, hardened, on backend and the
+//          internal network catcher; the API and the worker are given STAGING_MAIL_CATCHER; the
+//          web container cannot reach it; the proxy serves it on the mail host behind the
+//          catcher's own credentials, which the gate's do not replace;
+//   SEC-M4I-06  the gate's phase-2 exceptions in gate-staging.caddy equal README section 15's list
+//          (and the file's own comment), and against the running proxy: phase 1 gates every
+//          path; with CONFERA_GATE_PUBLIC_PATHS=open exactly the listed paths open, on the
+//          public host only; the production proxy configuration has no gate and no mail host;
+//   SEC-M4I-07  the secrets folder is root:root 0700 and each file root:root 0444, as on a
+//          server: uid 1000 and gid 999 of the "host" cannot read a file; inside a container each
+//          given file is root's, 0444, and read-only.
 //
 // Everything it creates is named confera-m4-infra* and removed at the end (unless --keep).
 // Log: .artifacts/deploy-checks/topology.log. Needs Docker and about 3 GB of memory (1 GB without ClamAV).
@@ -55,6 +68,10 @@ const JOBS_IMAGE = `${CHECK_PREFIX}-jobs:check`;
 const WEB_IMAGE = option('--web-image', `${CHECK_PREFIX}-web:check`);
 const ADMIN_HOST = 'admin.confera-check.localhost';
 const PUBLIC_HOST = 'forms.confera-check.localhost';
+const MAIL_HOST = 'mail.confera-check.localhost';
+// The secret files must be root's, as on a server. Docker Desktop (Windows, macOS) shares host
+// folders without Unix owners, so there they live in the Docker VM's /tmp; on Linux, in work/.
+const onDockerDesktop = process.platform === 'win32' || process.platform === 'darwin';
 const DEVELOPMENT_KEY_PREFIX = ['DEV', ''].join('_');
 const withClamav = !flag('--without-clamav');
 // The images and the resolved configuration only, without starting anything (the pipeline: it
@@ -65,6 +82,51 @@ const log = createLog('topology');
 const results = createResults(log);
 const { check } = results;
 const work = path.join(artifactsDir, 'topology');
+const secretsParent = onDockerDesktop ? `/tmp/${PROJECT}-topology` : work;
+const secretsDir = `${secretsParent}/secrets`;
+
+/** Runs sh in a throwaway container (root by default) with `parent` mounted at /p, no network. */
+function asHost(parent, script, { user = '0:0', input } = {}) {
+  return docker(
+    [
+      'run',
+      '--rm',
+      ...(input === undefined ? [] : ['-i']),
+      '--network',
+      'none',
+      '--user',
+      user,
+      '--volume',
+      `${parent}:/p`,
+      '--entrypoint',
+      'sh',
+      proxyImage(),
+      '-c',
+      script,
+    ],
+    { input },
+  );
+}
+
+function removeSecrets() {
+  if (onDockerDesktop)
+    docker([
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      '--user',
+      '0:0',
+      '--volume',
+      '/tmp:/t',
+      '--entrypoint',
+      'rm',
+      proxyImage(),
+      '-rf',
+      `/t/${PROJECT}-topology`,
+    ]);
+  else if (existsSync(work)) asHost(work, 'rm -rf /p/secrets');
+}
 
 function freePort() {
   return new Promise((resolve) => {
@@ -87,9 +149,9 @@ function databaseAddress(role, password) {
 
 // ---- The server's files, as an operator would write them -------------------------------------
 async function prepare() {
+  removeSecrets();
   rmSync(work, { recursive: true, force: true });
-  for (const dir of ['config', 'secrets', 'proxy-data'])
-    mkdirSync(path.join(work, dir), { recursive: true });
+  for (const dir of ['config', 'proxy-data']) mkdirSync(path.join(work, dir), { recursive: true });
   const ports = { http: await freePort(), https: await freePort() };
   const origin = (host) => `https://${host}:${String(ports.https)}`;
 
@@ -101,25 +163,48 @@ async function prepare() {
     system_database_url: databaseAddress('confera_system', roles.system),
     data_key: secret(32),
   };
-  for (const [name, value] of Object.entries(files))
-    writeFileSync(path.join(work, 'secrets', name), `${value}\n`);
+  // As README section 15 says: the folder root:root 0700, each file root:root 0444, one value.
+  const made = asHost(
+    secretsParent,
+    [
+      'set -e',
+      'install -d -m 0700 -o 0 -g 0 /p/secrets',
+      "while IFS='=' read -r name value; do",
+      '  [ -n "$name" ] || continue',
+      '  printf %s "$value" >"/p/secrets/$name"',
+      '  chown 0:0 "/p/secrets/$name"',
+      '  chmod 0444 "/p/secrets/$name"',
+      'done',
+    ].join('\n'),
+    {
+      input: `${Object.entries(files)
+        .map(([name, value]) => `${name}=${value}`)
+        .join('\n')}\n`,
+    },
+  );
+  if (made.code !== 0) throw new Error(`the secret files were not made: ${made.stderr}`);
 
   const gateUser = 'gate';
   const gateWord = secret(18);
+  const catcherUser = 'catcher';
+  const catcherWord = secret(18);
   // bcrypt cost 10: the gate checks the password on every request, on the proxy's one CPU.
-  const hash = dockerOk([
-    'run',
-    '--rm',
-    '--network',
-    'none',
-    proxyImage(),
-    'caddy',
-    'hash-password',
-    '--bcrypt-cost',
-    '10',
-    '--plaintext',
-    gateWord,
-  ]).trim();
+  const hashOf = (word) =>
+    dockerOk([
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      proxyImage(),
+      'caddy',
+      'hash-password',
+      '--bcrypt-cost',
+      '10',
+      '--plaintext',
+      word,
+    ]).trim();
+  const hash = hashOf(gateWord);
+  const catcherHash = hashOf(catcherWord);
   // For a look by hand after --keep; the folder is removed otherwise, and .artifacts/ is never in git.
   writeFileSync(path.join(work, 'gate-word'), `${gateWord}\n`);
 
@@ -130,8 +215,9 @@ async function prepare() {
       ['CONFERA_INSTANCE', 'staging'],
       ['CONFERA_ADMIN_HOST', ADMIN_HOST],
       ['CONFERA_PUBLIC_HOST', PUBLIC_HOST],
+      ['CONFERA_MAIL_HOST', MAIL_HOST],
       ['CONFERA_CONFIG_DIR', path.join(work, 'config')],
-      ['CONFERA_SECRETS_DIR', path.join(work, 'secrets')],
+      ['CONFERA_SECRETS_DIR', secretsDir],
       ['CONFERA_PROXY_DATA_DIR', path.join(work, 'proxy-data')],
       ['CONFERA_HTTP_PORT', String(ports.http)],
       ['CONFERA_HTTPS_PORT', String(ports.https)],
@@ -158,16 +244,22 @@ async function prepare() {
       .replace(/^CONFERA_ADMIN_ORIGIN=$/m, `CONFERA_ADMIN_ORIGIN=${origin(ADMIN_HOST)}`)
       .replace(/^CONFERA_PUBLIC_ORIGIN=$/m, `CONFERA_PUBLIC_ORIGIN=${origin(PUBLIC_HOST)}`),
   );
-  writeFileSync(
-    path.join(work, 'config', 'proxy.env'),
-    template('proxy.env.example')
-      .replace(/^CONFERA_ACME_EMAIL=$/m, 'CONFERA_ACME_EMAIL=ops@example.org')
-      .replace(/^CONFERA_GATE_USER=$/m, `CONFERA_GATE_USER=${gateUser}`)
-      .replace(/^CONFERA_GATE_PASSWORD_HASH=$/m, `CONFERA_GATE_PASSWORD_HASH='${hash}'`),
-  );
+  const proxyEnv = template('proxy.env.example')
+    .replace(/^CONFERA_ACME_EMAIL=$/m, 'CONFERA_ACME_EMAIL=ops@example.org')
+    .replace(/^CONFERA_GATE_USER=$/m, `CONFERA_GATE_USER=${gateUser}`)
+    .replace(/^CONFERA_GATE_PASSWORD_HASH=$/m, `CONFERA_GATE_PASSWORD_HASH='${hash}'`)
+    .replace(/^CONFERA_CATCHER_USER=$/m, `CONFERA_CATCHER_USER=${catcherUser}`)
+    .replace(
+      /^CONFERA_CATCHER_PASSWORD_HASH=$/m,
+      `CONFERA_CATCHER_PASSWORD_HASH='${catcherHash}'`,
+    );
+  writeFileSync(path.join(work, 'config', 'proxy.env'), proxyEnv);
+  const basic = (user, word) => `Basic ${Buffer.from(`${user}:${word}`).toString('base64')}`;
   return {
     ports,
-    gate: `Basic ${Buffer.from(`${gateUser}:${gateWord}`).toString('base64')}`,
+    gate: basic(gateUser, gateWord),
+    catcher: basic(catcherUser, catcherWord),
+    proxyEnv,
     files,
   };
 }
@@ -187,6 +279,9 @@ const composeArgs = () => [
   path.join(work, 'images.env'),
   '--file',
   path.join(repoRoot, 'deploy', 'compose.yml'),
+  // A staging instance, as the deploy script runs it there.
+  '--file',
+  path.join(repoRoot, 'deploy', 'compose.staging.yml'),
 ];
 const compose = (more, options) => docker([...composeArgs(), ...more], options);
 
@@ -272,6 +367,137 @@ req.write(head);
 }
 
 // ---- The checks -------------------------------------------------------------------------------
+
+/** The phase-2 exceptions of the gate, from the matcher, the file's comment and README section 15. */
+function gateLists() {
+  const gate = readFileSync(path.join(repoRoot, 'deploy', 'proxy', 'gate-staging.caddy'), 'utf8');
+  const matcher = /^@gated \{[\s\S]*?^\s+path ([^\n]+)$/m.exec(gate)?.[1].trim().split(/\s+/) ?? [];
+  const comment = [...gate.matchAll(/^#\s{5}(\/\S*)\s{2,}\S/gm)].map((match) => match[1]);
+  const readme = readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
+  const line = readme.split('\n').find((text) => text.startsWith('**Gate exceptions**')) ?? '';
+  const documented = [...line.matchAll(/`(\/[^`]*)`/g)].map((match) => match[1]);
+  return { matcher, comment, documented };
+}
+
+function checkGateList() {
+  const { matcher, comment, documented } = gateLists();
+  const same = (a, b) => a.length > 0 && [...a].sort().join(' ') === [...b].sort().join(' ');
+  check(
+    'SEC-M4I-06: the gate exceptions of gate-staging.caddy equal README section 15 ("Gate exceptions")',
+    same(matcher, documented),
+    `caddy: ${matcher.join(' ')} | README: ${documented.join(' ')}`,
+  );
+  check(
+    "SEC-M4I-06: gate-staging.caddy's own comment lists the same exceptions",
+    same(matcher, comment),
+    `matcher: ${matcher.join(' ')} | comment: ${comment.join(' ')}`,
+  );
+  check(
+    'SEC-M4I-06: the exceptions include the pages\' scripts (/_next/static/*)',
+    matcher.includes('/_next/static/*'),
+  );
+}
+
+/** `caddy adapt` of the proxy's configuration as an instance mounts it; returns the JSON text. */
+function adaptProxy(instance, open = false) {
+  const file = (name) => path.join(repoRoot, 'deploy', 'proxy', name);
+  const mount = (source, target) => [
+    '--mount',
+    `type=bind,source=${source},target=${target},readonly`,
+  ];
+  const env = {
+    CONFERA_ADMIN_HOST: ADMIN_HOST,
+    CONFERA_PUBLIC_HOST: PUBLIC_HOST,
+    CONFERA_MAIL_HOST: MAIL_HOST,
+    CONFERA_ACME_EMAIL: 'ops@example.org',
+    CONFERA_GATE_USER: 'gate',
+    CONFERA_GATE_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
+    CONFERA_CATCHER_USER: 'catcher',
+    CONFERA_CATCHER_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
+    CONFERA_GATE_PUBLIC_PATHS: open ? 'open' : 'closed',
+  };
+  return docker([
+    'run',
+    '--rm',
+    '--network',
+    'none',
+    ...mount(file('Caddyfile'), '/etc/caddy/Caddyfile'),
+    ...mount(file(`gate-${instance}.caddy`), '/etc/caddy/gate.caddy'),
+    ...(instance === 'staging'
+      ? mount(file('mail-staging.caddy'), '/etc/caddy/sites.d/mail-staging.caddy')
+      : []),
+    ...Object.entries(env).flatMap(([name, value]) => ['--env', `${name}=${value}`]),
+    proxyImage(),
+    'caddy',
+    'adapt',
+    '--config',
+    '/etc/caddy/Caddyfile',
+    '--adapter',
+    'caddyfile',
+  ]);
+}
+
+function checkProxyConfigurations() {
+  const production = adaptProxy('production');
+  check(
+    'the production proxy configuration adapts without the staging files',
+    production.code === 0,
+    production.stderr.slice(-600),
+  );
+  check(
+    'production: no access gate and no mail host in the proxy configuration',
+    production.code === 0 &&
+      !production.stdout.includes('"authentication"') &&
+      !production.stdout.includes(MAIL_HOST) &&
+      !production.stdout.includes('mailpit') &&
+      production.stdout.includes(PUBLIC_HOST),
+  );
+  for (const open of [false, true]) {
+    const staging = adaptProxy('staging', open);
+    check(
+      `the staging proxy configuration adapts (gate ${open ? 'phase 2' : 'phase 1'}), with the mail host`,
+      staging.code === 0 &&
+        staging.stdout.includes('"authentication"') &&
+        staging.stdout.includes(MAIL_HOST),
+      staging.stderr.slice(-600),
+    );
+  }
+  check(
+    'SEC-M4I-08: the proxy configuration writes no access log',
+    !/"logs"\s*:/.test(production.stdout) && !/^\s*log(\s|$)/m.test(
+      readFileSync(path.join(repoRoot, 'deploy', 'proxy', 'Caddyfile'), 'utf8'),
+    ),
+  );
+}
+
+/** SEC-M4I-07: the secret files as README section 15 lays them out, seen from the host. */
+function checkSecretsLayout() {
+  const listing = asHost(secretsParent, "stat -c '%n %u:%g %a' /p/secrets /p/secrets/*");
+  const lines = listing.stdout.trim().split('\n');
+  const folder = lines.find((line) => line.startsWith('/p/secrets '));
+  const files = lines.filter((line) => line.startsWith('/p/secrets/'));
+  check(
+    'SEC-M4I-07: the secrets folder is root:root, mode 0700',
+    folder === '/p/secrets 0:0 700',
+    String(folder),
+  );
+  check(
+    'SEC-M4I-07: each of the five secret files is root:root, mode 0444',
+    files.length === 5 && files.every((line) => / 0:0 444$/.test(line)),
+    files.join('; '),
+  );
+  for (const user of ['1000:1000', '999:999', '1000:999']) {
+    const read = asHost(secretsParent, 'cat /p/secrets/data_key /p/secrets/postgres_password', {
+      user,
+    });
+    check(
+      `SEC-M4I-07: an account of the host with uid:gid ${user} cannot read a secret file`,
+      read.code !== 0 && read.stdout === '',
+      read.stderr.trim(),
+    );
+  }
+}
+
 function inspect(name) {
   return JSON.parse(dockerOk(['inspect', name]))[0];
 }
@@ -391,6 +617,7 @@ function checkComposeConfig() {
     worker: ['data_key', 'database_url', 'system_database_url'],
     postgres: ['postgres_password'],
     clamav: [],
+    mailpit: [],
     migrate: ['migration_database_url'],
     provision: [
       'database_url',
@@ -413,7 +640,8 @@ function checkComposeConfig() {
     );
   }
   const expectedNetworks = {
-    proxy: ['edge'],
+    proxy: ['catcher', 'edge'],
+    mailpit: ['backend', 'catcher'],
     web: ['edge'],
     api: ['backend', 'edge'],
     worker: ['backend'],
@@ -430,6 +658,26 @@ function checkComposeConfig() {
       actual.join(),
     );
   }
+  check(
+    'SEC-M4I-05: the network catcher is internal (no route out)',
+    parsed.networks?.catcher?.internal === true,
+  );
+  for (const name of ['api', 'worker'])
+    check(
+      `SEC-M4I-05: ${name} is given STAGING_MAIL_CATCHER=mailpit:1025 by compose.staging.yml`,
+      services[name]?.environment?.STAGING_MAIL_CATCHER === 'mailpit:1025',
+      String(services[name]?.environment?.STAGING_MAIL_CATCHER),
+    );
+  check(
+    'SEC-M4I-05: mailpit is pinned by digest and relays nothing',
+    /^axllent\/mailpit:[^@]+@sha256:[0-9a-f]{64}$/.test(String(services.mailpit?.image)) &&
+      !Object.keys(services.mailpit?.environment ?? {}).some((name) => name.startsWith('MP_SMTP_RELAY')),
+    String(services.mailpit?.image),
+  );
+  check(
+    'SEC-M4I-07: no service adds the group 999 (the secret files need no group)',
+    Object.values(services).every((service) => (service.group_add ?? []).length === 0),
+  );
   for (const [name, service] of Object.entries(services)) {
     const problems = [];
     if (service.read_only !== true) problems.push('not read-only');
@@ -596,6 +844,38 @@ function checkContainers(running) {
     check('the web container cannot reach ClamAV', reach(web, 'clamav', 3310).code !== 0);
   }
   check('the web container cannot reach the worker', reach(web, 'worker', 3001).code !== 0);
+  check(
+    'control: the API reaches the mail catcher (SMTP)',
+    reach(containerOf('api'), 'mailpit', 1025).code === 0,
+  );
+  check(
+    'control: the worker reaches the mail catcher (SMTP)',
+    reach(containerOf('worker'), 'mailpit', 1025).code === 0,
+  );
+  check(
+    'SEC-M4I-05: the web container cannot reach the mail catcher (SMTP or screen)',
+    reach(web, 'mailpit', 1025).code !== 0 && reach(web, 'mailpit', 8025).code !== 0,
+  );
+  for (const service of ['api', 'worker']) {
+    const env = inspect(containerOf(service)).Config.Env ?? [];
+    check(
+      `SEC-M4I-05: ${service} runs with STAGING_MAIL_CATCHER=mailpit:1025`,
+      env.includes('STAGING_MAIL_CATCHER=mailpit:1025'),
+    );
+  }
+
+  // SEC-M4I-07: inside the containers, each given secret file is root's, 0444 and read-only.
+  for (const service of ['api', 'worker', 'postgres']) {
+    const id = containerOf(service);
+    const seen = docker(['exec', id, 'sh', '-c', "stat -c '%n %u:%g %a' /run/secrets/*"]);
+    const lines = seen.stdout.trim().split('\n').filter(Boolean);
+    const write = docker(['exec', id, 'sh', '-c', 'for f in /run/secrets/*; do printf x >>"$f" && exit 0; done; exit 1']);
+    check(
+      `SEC-M4I-07: ${service}'s secret files are root:root 0444 and cannot be written`,
+      lines.length > 0 && lines.every((line) => / 0:0 444$/.test(line)) && write.code !== 0,
+      `${lines.join('; ')} ${seen.stderr}`,
+    );
+  }
   const webEnv = docker(['exec', web, 'env']).stdout;
   check(
     'the environment of the web process holds no database address and no key',
@@ -603,7 +883,7 @@ function checkContainers(running) {
   );
 }
 
-async function checkProxy(ports, gate) {
+async function checkProxy(ports, gate, catcher, proxyEnv) {
   const auth = { authorization: gate };
   const ungated = await call(ports, { host: ADMIN_HOST, pathname: '/sign-in' });
   check(
@@ -719,6 +999,39 @@ async function checkProxy(ports, gate) {
     JSON.stringify(toWeb),
   );
 
+  // SEC-M4I-05: the catcher's screen, on its own host, behind its own credentials.
+  const mailBare = await call(ports, { host: MAIL_HOST, pathname: '/' });
+  const mailGate = await call(ports, { host: MAIL_HOST, pathname: '/', headers: auth });
+  const mail = await call(ports, { host: MAIL_HOST, pathname: '/', headers: { authorization: catcher } });
+  const mailApi = await call(ports, { host: MAIL_HOST, pathname: '/api/v1/messages' });
+  check(
+    'SEC-M4I-05: the mail host asks for credentials on every path (401)',
+    mailBare.status === 401 && mailApi.status === 401,
+    `${String(mailBare.status)} ${String(mailApi.status)}`,
+  );
+  check(
+    "SEC-M4I-05: the gate's credentials do not open the mail host (401)",
+    mailGate.status === 401,
+    String(mailGate.status),
+  );
+  check(
+    "SEC-M4I-05: the catcher's credentials open Mailpit's screen (200), noindex",
+    mail.status === 200 && String(mail.headers['x-robots-tag']).includes('noindex'),
+    String(mail.status),
+  );
+  const catcherOnAdmin = await call(ports, {
+    host: ADMIN_HOST,
+    pathname: '/sign-in',
+    headers: { authorization: catcher },
+  });
+  check(
+    "SEC-M4I-05: the catcher's credentials do not open the admin host (401)",
+    catcherOnAdmin.status === 401,
+    String(catcherOnAdmin.status),
+  );
+
+  await checkGatePhases(ports, proxyEnv);
+
   const plain = await call(ports, { host: ADMIN_HOST, pathname: '/sign-in', plain: true });
   check(
     'plain HTTP is redirected to HTTPS (308)',
@@ -730,6 +1043,128 @@ async function checkProxy(ports, gate) {
     'another host name gets no answer',
     stranger.status === 0 || stranger.status >= 400,
     String(stranger.status),
+  );
+}
+
+/** SEC-M4I-06 against the running proxy: phase 1 gates everything, phase 2 opens the list only. */
+async function checkGatePhases(ports, proxyEnv) {
+  const { matcher } = gateLists();
+  const sample = (pattern) => (pattern.endsWith('/*') ? `${pattern.slice(0, -1)}check` : pattern);
+  const closedOnes = ['/', '/sign-in', '/f', '/embed', '/public/v1/meta', '/_next/data/x', '/api/v1/meta'];
+  const statuses = async (host, paths) =>
+    Promise.all(paths.map(async (pathname) => [pathname, (await call(ports, { host, pathname })).status]));
+  const phase1 = await statuses(PUBLIC_HOST, matcher.map(sample));
+  check(
+    'SEC-M4I-06 phase 1: every listed path is gated too (401)',
+    phase1.every(([, status]) => status === 401),
+    JSON.stringify(phase1),
+  );
+
+  writeFileSync(
+    path.join(work, 'config', 'proxy.env'),
+    proxyEnv.replace(/^CONFERA_GATE_PUBLIC_PATHS=.*$/m, 'CONFERA_GATE_PUBLIC_PATHS=open'),
+  );
+  const recreated = compose(['up', '--detach', '--no-deps', '--force-recreate', 'proxy']);
+  log.write(recreated.stdout + recreated.stderr);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if ((await call(ports, { host: ADMIN_HOST, pathname: '/' })).status === 401) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const opened = await statuses(PUBLIC_HOST, matcher.map(sample));
+  check(
+    'SEC-M4I-06 phase 2: each listed path answers on the public host without the gate',
+    opened.every(([, status]) => status !== 401 && status !== 0),
+    JSON.stringify(opened),
+  );
+  const icon = await call(ports, { host: PUBLIC_HOST, pathname: '/icon.png' });
+  check('SEC-M4I-06 phase 2: /icon.png is served (200)', icon.status === 200, String(icon.status));
+  const stillClosed = await statuses(PUBLIC_HOST, closedOnes);
+  check(
+    'SEC-M4I-06 phase 2: every other path of the public host is still gated (401)',
+    stillClosed.every(([, status]) => status === 401),
+    JSON.stringify(stillClosed),
+  );
+  const adminClosed = await statuses(ADMIN_HOST, [...matcher.map(sample), ...closedOnes]);
+  check(
+    'SEC-M4I-06 phase 2: the admin host stays gated on every path, the listed ones included (401)',
+    adminClosed.every(([, status]) => status === 401),
+    JSON.stringify(adminClosed),
+  );
+  const mail = await call(ports, { host: MAIL_HOST, pathname: '/' });
+  check('SEC-M4I-06 phase 2: the mail host stays closed (401)', mail.status === 401, String(mail.status));
+
+  writeFileSync(path.join(work, 'config', 'proxy.env'), proxyEnv);
+  log.write(compose(['up', '--detach', '--no-deps', '--force-recreate', 'proxy']).stderr);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if ((await call(ports, { host: PUBLIC_HOST, pathname: '/f/check' })).status === 401) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+/** SEC-M4I-02 and the older-image refusal, on the real images: the deploy script's own commands. */
+function checkDeployCommands() {
+  const dump = compose([
+    'exec',
+    '--no-TTY',
+    'postgres',
+    'sh',
+    '-c',
+    'pg_dump --username postgres --dbname confera --format custom --no-password | pg_restore --list',
+  ]);
+  check(
+    "SEC-M4I-02: the deploy script's pg_dump -Fc runs in the postgres container and pg_restore --list reads it",
+    dump.code === 0 && dump.stdout.includes('Format: CUSTOM') && dump.stdout.includes('_prisma_migrations'),
+    dump.stderr.slice(-400),
+  );
+  const applied = compose([
+    'exec',
+    '--no-TTY',
+    'postgres',
+    'psql',
+    '--username',
+    'postgres',
+    '--dbname',
+    'confera',
+    '--no-psqlrc',
+    '--no-password',
+    '--tuples-only',
+    '--no-align',
+    '--quiet',
+    '--set',
+    'ON_ERROR_STOP=1',
+    '--command',
+    'SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1',
+  ]);
+  const inImage = docker([
+    'run',
+    '--rm',
+    '--network',
+    'none',
+    '--read-only',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
+    '--user',
+    '1000:1000',
+    '--entrypoint',
+    'ls',
+    JOBS_IMAGE,
+    '/app/prisma/migrations',
+  ]);
+  const names = (text) =>
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^[0-9]{14}_[a-z0-9_]+$/.test(line))
+      .sort();
+  check(
+    "the deploy script's migration comparison works on the real images: applied = the jobs image's",
+    applied.code === 0 &&
+      inImage.code === 0 &&
+      names(applied.stdout).length > 0 &&
+      names(applied.stdout).join() === names(inImage.stdout).join(),
+    `${applied.stderr.slice(-300)} ${inImage.stderr.slice(-300)}`,
   );
 }
 
@@ -753,7 +1188,9 @@ async function startAndCheck(prepared) {
     migrate.stderr.slice(-800),
   );
 
-  const services = ['api', 'worker', 'web', 'proxy', ...(withClamav ? ['clamav'] : [])];
+  checkDeployCommands();
+
+  const services = ['mailpit', 'api', 'worker', 'web', 'proxy', ...(withClamav ? ['clamav'] : [])];
   const up = compose([
     'up',
     '--detach',
@@ -770,7 +1207,7 @@ async function startAndCheck(prepared) {
     up.stderr.slice(-1500),
   );
   checkContainers(['postgres', ...services]);
-  await checkProxy(prepared.ports, prepared.gate);
+  await checkProxy(prepared.ports, prepared.gate, prepared.catcher, prepared.proxyEnv);
 }
 
 // ---- Run ----------------------------------------------------------------------------------------
@@ -787,8 +1224,11 @@ try {
     process.stdout.write(`Building ${WEB_IMAGE} from ${fe} ...\n`);
     log.write(dockerOk(['build', '--quiet', '--tag', WEB_IMAGE, '.'], { cwd: fe }));
   }
+  checkGateList();
   checkImages();
+  checkProxyConfigurations();
   const prepared = await prepare();
+  checkSecretsLayout();
   checkComposeConfig();
 
   if (!imagesOnly) await startAndCheck(prepared);
@@ -809,6 +1249,7 @@ try {
       ]);
   }
   if (!flag('--keep')) {
+    removeSecrets();
     rmSync(work, { recursive: true, force: true });
     run('docker', ['image', 'rm', API_IMAGE, JOBS_IMAGE]);
   }
