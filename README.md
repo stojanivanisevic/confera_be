@@ -1246,15 +1246,27 @@ docker build --target jobs -t confera-be-jobs .
 | `deploy/server/confera-deploy`                                                                | the deploy script (root): one target and one digest, nothing else                                               |
 | `deploy/server/confera-deploy-gate`                                                           | the forced command of the deploy keys                                                                           |
 | `deploy/server/sshd-confera-deploy.conf`, `sudoers-confera-deploy`, `authorized_keys.example` | how sshd and sudo are set up for the deploy keys                                                                |
-| `deploy/server/deploy.conf.example`                                                           | the deploy script's settings: the fixed image repositories                                                      |
+| `deploy/server/deploy.conf.example`                                                           | the settings of the deploy and backup scripts: instance, the fixed image repositories, the database             |
+| `deploy/compose.staging.yml`                                                                  | STAGING only: the mail catcher (Mailpit), the network `catcher`, `STAGING_MAIL_CATCHER` for api and worker      |
+| `deploy/proxy/mail-staging.caddy`                                                             | STAGING only: the catcher's screen on its own host, behind its own credentials                                  |
+| `deploy/server/sshd-confera-hardening.conf`                                                   | the SSH server: keys only, no root, only the group `confera-ssh`, no forwarding                                 |
+| `deploy/server/docker-daemon.json`                                                            | Docker's settings: log limits, no new privileges, live restore, no userland proxy                               |
+| `deploy/server/ufw-docker-user.rules`                                                         | the `DOCKER-USER` block: no container reaches a mail port outside the server                                    |
+| `deploy/server/confera-backup`, `confera-backup.service`, `confera-backup.timer`              | the nightly backup (database dump and file volume, checked, 7 days kept) and its systemd timer                  |
 
 What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` proves:
 
 - **Two networks.** `edge`: proxy, web, api. `backend`: api, worker, postgres, clamav and the
   jobs. The web container cannot reach Postgres or ClamAV, by name or by address.
+- **Staging adds the mail catcher** (`deploy/compose.staging.yml`, never named on production):
+  Mailpit, pinned by digest and hardened like the others, relaying nothing, on `backend` (the API
+  and the worker deliver to `mailpit:1025`, set as `STAGING_MAIL_CATCHER` for both) and on a
+  third, internal network `catcher` that it shares with the proxy only. The web container is on
+  neither. The proxy serves its screen on `CONFERA_MAIL_HOST` behind the catcher's own
+  credentials (`CONFERA_CATCHER_USER`, `CONFERA_CATCHER_PASSWORD_HASH`); the gate's do not open it.
 - **Secrets per service.** api and worker: `database_url`, `system_database_url`, `data_key`.
   migrate: `migration_database_url` (the owner role exists only there). postgres:
-  `postgres_password`. provision: the four database ones. web, proxy and clamav: none.
+  `postgres_password`. provision: the four database ones. web, proxy, clamav and mailpit: none.
 - **Every container** runs as a user of its own (web, api, worker and the jobs uid 1000,
   postgres 999, clamav 100, proxy 10002), on a read-only root file system, with every
   capability dropped, no new privileges, and memory, CPU and process limits. The proxy keeps
@@ -1271,7 +1283,17 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
   51 MB (the largest file a form may take, 50 MB, and the envelope); every other route 1 MB. A
   declared `Content-Length` above the limit is refused with 413 before anything is forwarded.
   The proxy overwrites `X-Forwarded-For` (it trusts no proxy in front of it), passes `Host`
-  unchanged, adds HSTS and no other security header, and answers no other host name.
+  unchanged, adds HSTS and no other security header, and answers no other host name. It writes
+  **no access log** (no `log` directive): only Caddy's own events. An access log would hold
+  client addresses (personal data) and needs a retention period first: decided at Gate 4.
+- **The staging gate** (`deploy/proxy/gate-staging.caddy`) asks for the gate's credentials on
+  every path of both hosts (phase 1). Phase 2, the embed trial after M4-QA-03, is
+  `CONFERA_GATE_PUBLIC_PATHS=open` in `proxy.env` and a recreated proxy: then exactly the paths
+  below answer without the gate, on the public host only. The list is kept in
+  `gate-staging.caddy`; `topology.mjs` fails when this line and that file differ, and proves both
+  phases against the running proxy. The runbook copies this line.
+
+**Gate exceptions** (phase 2, public host only): `/f/*` `/embed/*` `/public/v1/forms/*` `/public/v1/csp-reports` `/_next/static/*` `/icon.png`
 
 #### The files on a server
 
@@ -1282,14 +1304,32 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
 | `/srv/confera/images.env`                                                                        | root, 0644             | `CONFERA_API_IMAGE`, `CONFERA_JOBS_IMAGE`, `CONFERA_WEB_IMAGE`, each `repository@sha256:...`; the deploy script writes it (by hand for the first start) |
 | `/srv/confera/config/api.env`, `web.env`                                                         | root, 0644             | from the templates                                                                                                                                      |
 | `/srv/confera/config/proxy.env`                                                                  | root, 0640             | from the template (the gate's hash in single quotes)                                                                                                    |
-| `/srv/confera/secrets/database_url`, `system_database_url`, `data_key`, `migration_database_url` | uid 1000, 0400         | one value each, nothing else                                                                                                                            |
-| `/srv/confera/secrets/postgres_password`                                                         | uid 999, gid 999, 0440 | the superuser's password; `provision` reads it through group 999                                                                                        |
+| `/srv/confera/secrets/`                                                                          | root:root, 0700        | the secret files; no account of the host but root can reach them                                                                                        |
+| `/srv/confera/secrets/database_url`, `system_database_url`, `data_key`, `migration_database_url`, `postgres_password` | root:root, 0444 | one value each, nothing else (no trailing newline needed)                                                                          |
+| `/srv/confera/images.be.previous`, `images.web.previous`                                         | root, 0644             | the target's lines before its last deploy; the deploy script writes them, `confera-deploy rollback` reads them                                          |
+| `/srv/confera/backups/`                                                                          | root:root, 0700        | `pre-deploy-*.dump` (before each migration), `nightly-*.dump`, `files-*.tar`; each root 0600; kept 7 days; NOT encrypted                                |
 | `/srv/confera/proxy-data/`                                                                       | uid 10002, 0700        | the proxy's certificates and ACME account                                                                                                               |
 | `/etc/confera/deploy.conf`                                                                       | root, 0644             | from `deploy/server/deploy.conf.example`                                                                                                                |
+| `/usr/local/sbin/confera-deploy`, `confera-backup`                                               | root, 0700             | from `deploy/server/`                                                                                                                                   |
+| `/usr/local/sbin/confera-deploy-gate`                                                            | root, 0755             | from `deploy/server/`                                                                                                                                   |
+| `/etc/ssh/sshd_config.d/00-confera-hardening.conf`, `50-confera-deploy.conf`                     | root, 0644             | `sshd-confera-hardening.conf`, `sshd-confera-deploy.conf`                                                                                               |
+| `/etc/ssh/confera-deploy/confera-deploy-be.keys`, `confera-deploy-web.keys`                      | root, 0644             | one key line each, as `authorized_keys.example`                                                                                                         |
+| `/etc/sudoers.d/confera-deploy`                                                                  | root, 0440             | `sudoers-confera-deploy`                                                                                                                                |
+| `/etc/docker/daemon.json`                                                                        | root, 0644             | `docker-daemon.json`                                                                                                                                    |
+| end of `/etc/ufw/after.rules` and `/etc/ufw/after6.rules`                                        | as ufw ships them      | the block of `ufw-docker-user.rules`                                                                                                                    |
+| `/etc/systemd/system/confera-backup.service`, `confera-backup.timer`                             | root, 0644             | from `deploy/server/`; `systemctl enable --now confera-backup.timer`                                                                                    |
 
-Compose bind-mounts the secret files read-only, so their owner on the host is the owner the
-container sees. The first start, once the files are in place (`C` stands for
-`docker compose --project-name confera --env-file /srv/confera/compose.env --env-file /srv/confera/images.env --file /srv/confera/deploy/compose.yml`):
+Compose bind-mounts the secret files read-only, so their owner and mode on the host are what the
+container sees. That is why they belong to root and are 0444 inside a root-only folder: dockerd
+(root) mounts them, the service's own user reads them inside its container, and no account of
+the host can read or change them, whichever account happens to have uid 1000 or gid 999 there
+(SEC-M4I-07). Make each one empty first, then write the value into it:
+`sudo install -m 0444 -o root -g root /dev/null /srv/confera/secrets/data_key`, then
+`openssl rand -base64 32 | tr -d '\n' | sudo tee /srv/confera/secrets/data_key >/dev/null`.
+
+The first start, once the files are in place (`C` stands for
+`docker compose --project-name confera --env-file /srv/confera/compose.env --env-file /srv/confera/images.env --file /srv/confera/deploy/compose.yml`,
+on staging followed by `--file /srv/confera/deploy/compose.staging.yml`):
 
 ```
 C up --detach --wait postgres
@@ -1302,12 +1342,32 @@ C up --detach --wait
 
 A deploy is `confera-deploy <be|web> sha256:<64 hex>`. It pulls `<fixed repository>@<digest>`
 (the repositories are in root's `/etc/confera/deploy.conf`, never in the request), for `be`
-also the jobs image the API image names, runs the migration (a failed one restarts nothing),
-writes the digest into `images.env`, restarts the services of the target, waits for their
-health checks and smoke-tests (the API's readiness; the web application answers). If the new
-version does not come up, it puts `images.env.previous` back and restarts the previous version.
-Migrations must therefore stay compatible with the previous version (expand, then contract in
-a later release): a rollback restores the image, never the schema. One deploy runs at a time.
+also the jobs image the API image names. For `be` it then:
+
+1. refuses when the disk of `/srv/confera/backups` is more than 85 % full;
+2. **refuses an image older than the database**: when `_prisma_migrations` lists a migration
+   that the jobs image's `prisma/migrations` does not hold, the image would run on a schema it
+   does not know, and migrations never run backwards. Nothing is changed (exit 65);
+3. **dumps the database before migrating** (`pg_dump -Fc` in the postgres container) into
+   `/srv/confera/backups/pre-deploy-<UTC time>-<12 hex of the digest>.dump` (root, 0600), reads
+   the dump back with `pg_restore --list`, and stops before the migration, with nothing changed,
+   when the dump fails, is empty or does not read back (exit 74). It prints the dump's path;
+4. runs the migration (a failed one restarts nothing and names the dump).
+
+Then, for either target, it writes the digest into `images.env`, restarts the services of the
+target, waits for their health checks and smoke-tests (the API's readiness; the web
+application answers). If the new version does not come up, it puts `images.env.previous` back
+and restarts the previous version. One deploy runs at a time, and never beside the nightly
+backup (both take the same lock).
+
+**Rollback** is `sudo confera-deploy rollback be` (or `web`), by the operator only: the deploy
+keys and the sudo rule pass `<target> sha256:...` and nothing else. It puts back the target's
+version before its last deploy (`images.<target>.previous`), restarts and smoke-tests it, and
+**runs no migration**: the schema stays as it is. That is safe for exactly one version back,
+because migrations stay compatible with the previous version (expand, then contract in a later
+release). Going back further, or undoing a migration, is a restore of the dump the deploy
+printed (a runbook step, after `stat` on the file), never a deploy of an older digest, which
+step 2 refuses.
 
 - **Staging:** the pipeline calls it through SSH. Each repository has its own deploy user and
   key (`confera-deploy-be`, `confera-deploy-web`). sshd forces the command
@@ -1326,8 +1386,20 @@ digest (BuildKit v0.33.1 included). The default token is read-only.
 | Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                                                                                                                  |
-| `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (only once the repository variable `IMAGE_PUBLISH_ENABLED` is `true`, set at Gate 4a; no checkout, so no project code; may write packages): copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. |
-| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Needs the environment `staging` (protection rule) and refuses until its variable `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command.                                                                                                                                                                                                                                  |
+| `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (no checkout, so no project code; may write packages): only when `IMAGE_PUBLISH_ENABLED` is `true` (Gate 4a), the ref is `develop` or a `v*` tag, and the run was started by Stojan (`github.actor` and `github.triggering_actor`); copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. A run that would publish but was started by anyone else fails loudly. |
+| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Deploys only from `develop` and only when Stojan started the run; anyone else's run fails loudly before the environment's secret is loaded. Refuses until `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command. |
+
+**What protects a staging deploy on GitHub Pro.** "Required reviewers" on an environment (an
+approval GitHub enforces before each run) needs GitHub Enterprise for a private repository, so
+this pipeline does not rely on it. What holds instead, each enforced by GitHub or the server:
+(1) the deploy and publish jobs run only when `github.actor` and `github.triggering_actor` are
+both `stojanivanisevic` (a bot or collaborator with Write that dispatches or re-runs them gets a
+failed run and no secret); (2) the environment `staging` allows deployments from `develop` only,
+and the workflow refuses any other ref, so its secret never reaches another branch's workflow
+file; (3) images are published only from `develop` and `v*` tags, and a tag ruleset lets only
+Stojan create, move or delete `v*` tags; (4) the server takes a digest of its fixed repositories
+only. What is NOT enforced, and Stojan does by hand before each run: check that the digest is in
+the summary of an `image` run on `develop`. An approval GitHub itself enforces needs Enterprise.
 
 `.github/CODEOWNERS` names Stojan for `.github/`, `deploy/`, `Dockerfile` and `.dockerignore`.
 
@@ -1342,23 +1414,37 @@ database tests about 10, ST-63 about 3, the three jobs run side by side); one `i
 node deploy/checks/deploy-gate.mjs                         ST-63, the part that needs no server
 node deploy/checks/topology.mjs                            ST-02, ST-04, ST-53, M3-ISS-06 on the real images and compose file
 node deploy/checks/topology.mjs --images-only --no-build   ST-02 and ST-04 only, nothing started (the pipeline)
+node deploy/checks/workflows.mjs [../confera_fe]           who may deploy and publish: the workflows' conditions, no Docker
 ```
 
-- `deploy-gate.mjs` builds an SSH server set up from `deploy/server/` with a stand-in for docker,
-  and proves: a deploy key hands over a digest and the script pulls exactly
+- `workflows.mjs` evaluates the `if` of every deploy and publish job, of this repository and of
+  any other checkout named, for 300 combinations of actor, re-run actor, ref and setting: the job
+  runs only in a run Stojan started, from `develop` (deploy) or `develop` and `v*` tags
+  (publish); wherever it is skipped although asked for, another job fails loudly; and the
+  job's first step, "Refuse anyone but the owner", is run with bash for Stojan and others.
+
+- `deploy-gate.mjs` builds an SSH server set up from `deploy/server/` (the hardening drop-in
+  included; `sshd -t`, `visudo -cf` and `systemd-analyze verify` of the backup units run in its
+  build) with a stand-in for docker, and proves: a deploy key hands over a digest and the script pulls exactly
   `<fixed repository>@<digest>`; 34 malformed requests (tags, repositories, two digests, shell
   syntax, a newline, options, `sftp`, `scp`, `rsync`) are refused with nothing reaching docker;
   the key opens no shell, no terminal and no forward; one repository's key cannot deploy the
   other's image; the deploy user can run nothing else as root; the deploy script refuses a
   foreign or tagged jobs image and an unsafe configuration, and changes nothing on a failed
-  migration.
+  migration; it dumps and reads back the database before every migration and stops on a failed,
+  empty or unreadable dump or a full disk; it refuses an image older than the database; a new
+  version that is not healthy is rolled back; `confera-deploy rollback` goes one version back
+  without migrating, and no deploy key or deploy user can start it; root, users outside
+  `confera-ssh` and passwords cannot log in; `confera-backup` writes a checked dump and tar, root
+  0600, prunes only after a good run, and shares the deploy's lock.
 - `topology.mjs` builds both images (or takes them with `--no-build`), takes the web image
   `confera-m4-infra-web:check` (built from `../confera_fe` when it is missing), and starts
   `deploy/compose.yml` as a staging instance (project `confera-m4-infra`, host names under
   `.localhost`, random secrets in files, free ports): provision, migrate, every service healthy,
   then every guarantee listed above. `--without-clamav` saves about 1.5 GB of memory; `--keep`
   leaves the stack up for a look by hand.
-- Both remove everything they create (names start with `confera-m4-infra`). Logs:
+- Both remove everything they create (names start with `confera-m4-infra`, or with
+  `CONFERA_CHECK_PREFIX` when it is set, for example `confera-gate4a`). Logs:
   `.artifacts/deploy-checks/`. On Windows the large uploads are sent from a container on the
   edge network: WSL's localhost relay stalls large bodies on a published port.
 
@@ -1371,10 +1457,12 @@ On GitHub, in each repository:
       automation tokens that cannot approve or push.
 - [ ] Actions settings: the workflow token read-only by default; Actions may not approve pull
       requests; only actions pinned to a full commit hash allowed.
-- [ ] The environment **`staging`** with a protection rule (Stojan approves each run) and
-      deployments from `develop` only; its secret `STAGING_DEPLOY_KEY` (the private key of this
+- [ ] The environment **`staging`** with deployments from `develop` only (no required
+      reviewers: Pro does not offer them on a private repository; see "What protects a staging
+      deploy on GitHub Pro"); its secret `STAGING_DEPLOY_KEY` (the private key of this
       repository's deploy user, nothing else) and its variables `STAGING_SSH_HOST`,
       `STAGING_SSH_KNOWN_HOSTS` (the server's host key line) and `STAGING_DEPLOY_ENABLED=true`.
+- [ ] A tag ruleset on `v*`: only Stojan may create, update or delete such a tag.
 - [ ] The repository variable `IMAGE_PUBLISH_ENABLED=true` in both repositories: until then `image.yml`
       builds and checks the images but publishes nothing.
 - [ ] The packages `confera-be`, `confera-be-jobs` and `confera-web` private; the server pulls
@@ -1397,5 +1485,9 @@ On the staging server (M4-OPS-01, M4-QA-03), proved there and not here:
 - [ ] ClamAV keeps its signatures current (freshclam as uid 100) on the server's network.
 - [ ] Open for the reduced runbook: request-rate and concurrent-upload limits at the proxy
       (ADR-26). The official Caddy image has no rate-limit module; until it is decided the API's
-      own limits apply. The staging mail catcher (Mailpit behind the gate) is not in the compose
-      file yet.
+      own limits apply.
+- [ ] The mail catcher from outside: `CONFERA_MAIL_HOST` answers 401 without the catcher's
+      credentials and with the gate's; a staging invitation arrives there (ST-50).
+- [ ] After the first reboot: `sudo iptables -S DOCKER-USER` and `sudo ip6tables -S DOCKER-USER`
+      show the mail-port REJECT before RETURN; `systemctl list-timers confera-backup.timer`
+      shows the next run.
