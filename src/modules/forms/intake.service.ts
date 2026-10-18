@@ -339,6 +339,10 @@ export class IntakeService {
       // A repeat of a key that was answered with a fake success gets the same answer (Q3-07).
       const decoy = this.#decoys.get(`${resolved.formId}:${input.idempotencyKey}`);
       if (decoy !== undefined) {
+        // The script again: a repeat of a fake success counts as an act of a script, like the
+        // first. Without this, a page that keeps its key sent the trap three times and only
+        // the first counted, so its next token asked for no proof-of-work (UX review, 0.3.0).
+        this.limits.suspicious(input.address);
         return decoy;
       }
       if (!this.limits.takeSubmit(input.address)) {

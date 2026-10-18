@@ -896,6 +896,27 @@ describe('forms and intake (M3)', () => {
       expect(withIt.status).toBe(201);
     });
 
+    it('a page that sends the trap three times under one key is asked for a proof-of-work too (UX review of 0.3.0)', async () => {
+      const form = await openForm(e2e, admin);
+      const address = freshAddress();
+      const trapped = await tokenFor(e2e, form.slug, address);
+      await ageTokens(owner, orgA());
+      const key = randomUUID();
+      const body = { language: 'en', answers: abstractAnswers(), confera_hp: 'x' };
+      const references = new Set<string>();
+      // The page keeps its key per form instance: Send, Send, Send. The repeats answer the
+      // first fake success, and each is an act of a script as the first was.
+      for (let n = 0; n < 3; n += 1) {
+        const fake = await submit(e2e, form.slug, trapped.formToken, body, { address, key });
+        expect(fake.status).toBe(201);
+        references.add((fake.body as { reference: string }).reference);
+      }
+      expect(references.size).toBe(1);
+      expect((await tokenFor(e2e, form.slug, address)).proofOfWork).not.toBeNull();
+      // Another client is not touched by it.
+      expect((await tokenFor(e2e, form.slug, freshAddress())).proofOfWork).toBeNull();
+    });
+
     it('the breaker of the organisation holds the confirmations of all its forms (ADR-08)', async () => {
       const form = await openForm(e2e, admin);
       const before = await as(e2e, admin, 'get', '/api/v1/held-mail');
