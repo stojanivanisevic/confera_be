@@ -255,13 +255,6 @@ export class SubmitDto {
   @MaxLength(1000)
   confera_hp?: string;
 
-  /** The trap under its 0.3.0 name, read until the page sends `confera_hp`; then removed. */
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  @ApiProperty({ required: false, deprecated: true })
-  website?: string;
-
   /** The counter that answers the token's challenge (a decimal number as text). */
   @IsOptional()
   @IsString()

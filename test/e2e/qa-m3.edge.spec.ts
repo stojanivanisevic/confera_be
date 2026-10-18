@@ -290,7 +290,7 @@ describe('0.3.0 edge probes of the public forms (Q3)', () => {
     const body = {
       language: 'en',
       answers: abstractAnswers(),
-      website: 'https://spam.example.test',
+      confera_hp: 'https://spam.example.test',
     };
     const fake = await submit(e2e, form.slug, trapped.formToken, body, { address, key });
     expect(fake.status).toBe(201);

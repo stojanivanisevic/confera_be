@@ -125,7 +125,7 @@ export class PublicFormsController {
       language: body.language,
       answers: raw,
       // Filled under either name: the trap (SEC-M3-07).
-      trap: `${body.confera_hp ?? ''}${body.website ?? ''}`,
+      trap: body.confera_hp ?? '',
       proofOfWork: body.proofOfWork,
     });
   }
