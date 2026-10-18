@@ -5215,7 +5215,7 @@
           "scanFlag": {
             "type": "string",
             "nullable": true,
-            "description": "`macros`: an old .doc with macros, accepted and flagged for the office (G2-22)."
+            "description": "`macros`: an old .doc with macros, accepted and flagged for the office (G2-22);\n`external_links`: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06)."
           },
           "scannedAt": {
             "type": "string",

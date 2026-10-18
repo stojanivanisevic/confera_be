@@ -481,7 +481,11 @@ the two equal. The OpenAPI document carries the declaration of every operation
   or the relationship of its VBA project. Its inspection is bounded (SEC-M3-01): at most 64
   parts, 2 MB inflated in all and 1 s per file; a ZIP whose entries repeat a name or overlap
   is refused (415), one that needs more counts as holding macros (422), and either upload
-  counts as an act of a script. A file is served only by
+  counts as an act of a script. The parts are read as Word reads them (SEC-M3-06): UTF-8 or
+  UTF-16, character references decoded; a part that is neither counts as macros. The names
+  of an old `.doc` are compared in any casing. A `.docx` whose relationships reach outside it
+  (a remote template, frame or object, a UNC or `file:` target; a plain hyperlink does not
+  count) is kept and flagged `external_links`, like a `.doc` with macros. A file is served only by
   `GET /api/v1/submissions/{id}/files/{fileId}`, as an attachment with `filename*`, and only
   when its scan is clean (409 `scan_pending` or `file_not_clean`).
 - **Antivirus** (M3-BE-08): the files worker (every `JOBS_INTERVAL_SECONDS`) sends every

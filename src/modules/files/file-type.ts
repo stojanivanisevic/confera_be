@@ -9,8 +9,11 @@ import type { FileType } from '../forms/catalogue';
  * - PDF by `%PDF-`, PNG and JPEG by their signatures;
  * - a `.docx` is a ZIP whose central directory names `[Content_Types].xml` and a part under
  *   `word/`; it holds macros when it has a VBA project (`vbaProject.bin`): refused;
+ *   A `.docx` whose relationships reach outside it (a remote template, a UNC path) is
+ *   accepted and flagged `external_links` (SEC-M3-06);
  * - an old `.doc` is a compound file (CFB) with a `WordDocument` stream; it holds macros when
- *   it has a `Macros` or `_VBA_PROJECT_CUR` storage: accepted and flagged for the office.
+ *   it has a `Macros` or `_VBA_PROJECT_CUR` storage, in any casing: accepted and flagged for
+ *   the office.
  *
  * Only directories are read (the end of a ZIP, the directory sectors of a CFB), and of a ZIP
  * the few small parts that name a VBA project, in bounded steps: one budget of inflated bytes,
@@ -27,6 +30,11 @@ export interface DetectedType {
    * as an act of a script.
    */
   readonly crafted?: true;
+  /**
+   * A `.docx` that links to something outside itself that reaches a reader (SEC-M3-06): a
+   * remote template, frame or object, or a UNC or `file:` target. Kept and flagged.
+   */
+  readonly externalLinks?: true;
 }
 
 const UNKNOWN: DetectedType = { type: null, macros: false };
@@ -185,26 +193,106 @@ async function zipPart(
 }
 
 /**
+ * The text of an XML part as Word reads it (SEC-M3-06): UTF-8, or UTF-16 by its byte order
+ * mark or its first `<`, with the character references and the five named entities decoded,
+ * so that `vba&#80;roject` or a part in UTF-16 is matched like plain text. Null when it is
+ * none of these (a NUL is left, as in UTF-32): such a part cannot be judged.
+ */
+export function xmlPartText(bytes: Buffer): string | null {
+  let text: string;
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    text = bytes.subarray(2).toString('utf16le');
+  } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    text = Buffer.from(bytes.subarray(2)).swap16().toString('utf16le');
+  } else if (bytes[0] === 0x3c && bytes[1] === 0x00) {
+    text = bytes.toString('utf16le');
+  } else if (bytes[0] === 0x00 && bytes[1] === 0x3c) {
+    text = Buffer.from(bytes.subarray(0, bytes.length - (bytes.length % 2)))
+      .swap16()
+      .toString('utf16le');
+  } else {
+    const start = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+    text = bytes.subarray(start).toString('utf8');
+  }
+  if (text.includes('\0')) {
+    return null;
+  }
+  const named: Readonly<Record<string, string>> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+  };
+  return text.replace(
+    /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|(amp|lt|gt|quot|apos));/giu,
+    (whole, decimal?: string, hex?: string, name?: string) => {
+      if (name !== undefined) {
+        return named[name.toLowerCase()] ?? whole;
+      }
+      const code = decimal !== undefined ? Number(decimal) : Number.parseInt(hex ?? '', 16);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    },
+  );
+}
+
+/**
+ * Whether a relationship part points outside the document in a way that reaches a reader
+ * (SEC-M3-06): a remote template, frame or object (`TargetMode="External"`, other than a
+ * hyperlink, which the reader must click), or a UNC or `file:` target of any kind, which
+ * Windows may open by itself and hand the user's credentials to.
+ */
+function hasExternalLink(text: string): boolean {
+  for (const element of text.matchAll(/<(?:[\w.-]+:)?Relationship\b([^>]*)>/giu)) {
+    const attributes = new Map<string, string>();
+    for (const attribute of (element[1] ?? '').matchAll(
+      /([\w.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/gu,
+    )) {
+      attributes.set((attribute[1] ?? '').toLowerCase(), attribute[2] ?? attribute[3] ?? '');
+    }
+    const target = (attributes.get('target') ?? '').trim();
+    if (/^(?:\\\\|\/\/|file:)/iu.test(target)) {
+      return true;
+    }
+    if (
+      (attributes.get('targetmode') ?? '').trim().toLowerCase() === 'external' &&
+      !/\/hyperlink$/iu.test((attributes.get('type') ?? '').trim())
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+interface DocxInspection {
+  /** True for a VBA project; `'crafted'` beyond the budget. */
+  readonly macros: boolean | 'crafted';
+  readonly externalLinks: boolean;
+}
+
+/**
  * Whether a `.docx` holds a VBA project (G2-22, Q3-11): Word finds it by its content type
  * and its relationship, whatever the part is called. So a part named like one, a content
  * type of a VBA project or of a macro-enabled document, or a relationship of the type
  * vbaProject each count. A part that cannot be read counts as macros (fail closed), and so
- * does a file whose parts would take more than the budget (SEC-M3-01): `'crafted'`.
+ * does a file whose parts would take more than the budget (SEC-M3-01): `'crafted'`. And
+ * whether it links to something outside itself that reaches a reader (SEC-M3-06).
  */
-async function docxHasMacros(
+async function inspectDocx(
   handle: Handle,
   size: number,
   entries: ZipEntry[],
-): Promise<boolean | 'crafted'> {
+): Promise<DocxInspection> {
   const budget: Budget = {
     bytes: MAX_INFLATED_BYTES,
     parts: MAX_PARTS_READ,
     until: Date.now() + MAX_INSPECTION_MS,
   };
+  let externalLinks = false;
   for (const entry of entries) {
     const lower = entry.name.toLowerCase();
     if (lower.endsWith('vbaproject.bin') || lower.endsWith('vbadata.xml')) {
-      return true;
+      return { macros: true, externalLinks };
     }
     const contentTypes = lower === '[content_types].xml';
     const relationships = lower.endsWith('.rels');
@@ -212,22 +300,23 @@ async function docxHasMacros(
       continue;
     }
     if (budget.parts === 0 || entry.uncompressedSize > budget.bytes || Date.now() > budget.until) {
-      return 'crafted';
+      return { macros: 'crafted', externalLinks };
     }
     budget.parts -= 1;
     const part = await zipPart(handle, size, entry, budget);
-    if (part === null) {
-      return true;
+    const text = part === null ? null : xmlPartText(part);
+    if (text === null) {
+      return { macros: true, externalLinks };
     }
-    const text = part.toString('utf8');
     if (
       (contentTypes && /vbaProject|macroEnabled|vbaData/i.test(text)) ||
       (relationships && /relationships\/(?:vbaProject|wordVbaData)/i.test(text))
     ) {
-      return true;
+      return { macros: true, externalLinks };
     }
+    externalLinks ||= relationships && hasExternalLink(text);
   }
-  return false;
+  return { macros: false, externalLinks };
 }
 
 /** The names in a compound file's directory (CFB, the old Office format); null when it is not one. */
@@ -342,21 +431,23 @@ export async function detectFileType(path: string): Promise<DetectedType> {
       ) {
         return UNKNOWN;
       }
-      const macros = await docxHasMacros(handle, size, entries);
+      const { macros, externalLinks } = await inspectDocx(handle, size, entries);
       // More work than any document needs: refused as holding macros (fail closed), and counted.
-      return macros === 'crafted'
-        ? { type: 'docx', macros: true, crafted: true }
-        : { type: 'docx', macros };
+      if (macros === 'crafted') {
+        return { type: 'docx', macros: true, crafted: true };
+      }
+      return externalLinks ? { type: 'docx', macros, externalLinks } : { type: 'docx', macros };
     }
     if (head.length === 8 && head.equals(CFB)) {
-      const names = await compoundNames(handle, size);
-      if (!names?.includes('WordDocument')) {
+      // The names of a compound file are compared without regard to case (SEC-M3-06).
+      const names = (await compoundNames(handle, size))?.map((name) => name.toLowerCase());
+      if (!names?.includes('worddocument')) {
         return UNKNOWN;
       }
       return {
         type: 'doc',
         macros: names.some(
-          (name) => name === 'Macros' || name === '_VBA_PROJECT_CUR' || name === 'VBA',
+          (name) => name === 'macros' || name === '_vba_project_cur' || name === 'vba',
         ),
       };
     }

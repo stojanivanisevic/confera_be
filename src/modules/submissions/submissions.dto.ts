@@ -76,7 +76,10 @@ export class SubmissionFileDto {
   sizeBytes!: number;
   @ApiProperty({ enum: SCAN_STATES })
   scanState!: (typeof SCAN_STATES)[number];
-  /** `macros`: an old .doc with macros, accepted and flagged for the office (G2-22). */
+  /**
+   * `macros`: an old .doc with macros, accepted and flagged for the office (G2-22);
+   * `external_links`: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06).
+   */
   scanFlag!: string | null;
   /** When the scan ended, or since when it waits. */
   scannedAt!: string | null;

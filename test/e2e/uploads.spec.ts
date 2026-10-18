@@ -5,7 +5,7 @@ import { UploadsService } from '../../src/modules/files/uploads.service';
 import { tokenHash } from '../../src/modules/forms/intake.service';
 import { solveProofOfWork } from '../../src/modules/forms/proof-of-work';
 import { type FakeClamd, startFakeClamd } from '../support/fake-clamd';
-import { docOf, docxOf, EICAR, overlappingZipOf, pdfOf } from '../support/office-files';
+import { docOf, docxOf, EICAR, overlappingZipOf, pdfOf, zipOf } from '../support/office-files';
 import { type Actors, as, createActors, type SignedIn, signIn } from './support/actors';
 import {
   ADMIN_HOST,
@@ -234,6 +234,28 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     // Three such acts: the next token of this client asks for a proof-of-work.
     const next = await tokenFor(e2e, form.slug, address);
     expect(next.proofOfWork).not.toBeNull();
+  });
+
+  it('SEC-M3-06: a .docx with a remote template is kept and flagged external_links for the office', async () => {
+    const address = freshAddress();
+    const { formToken } = await tokenFor(e2e, form.slug, address);
+    const remote = zipOf({
+      '[Content_Types].xml': '<Types/>',
+      'word/document.xml': '<w:document/>',
+      'word/_rels/settings.xml.rels':
+        '<Relationships><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://templates.example.test/t.dotm" TargetMode="External"/></Relationships>',
+    });
+    const uploaded = await upload(form.slug, formToken, remote, 'sablon.docx', { address });
+    expect(uploaded.status).toBe(201);
+    const submission = await submitted(
+      formToken,
+      address,
+      (uploaded.body as { fileId: string }).fileId,
+    );
+    const detail = await as(e2e, admin, 'get', `/api/v1/submissions/${submission}`);
+    expect((detail.body as { files: unknown[] }).files).toEqual([
+      expect.objectContaining({ type: 'docx', scanFlag: 'external_links' }),
+    ]);
   });
 
   it('ST-32: no token, another form’s token, too many uploads, a file of another token, attached twice', async () => {

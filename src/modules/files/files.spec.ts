@@ -89,6 +89,118 @@ describe('the type of a file, from its content', () => {
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
+  describe('the macro check reads parts as Word does (SEC-M3-06)', () => {
+    const VBA_TYPE =
+      '<Types><Override ContentType="application/vnd.ms-office.vbaProject"/></Types>';
+    const withBom = (bom: number[], body: Buffer) => Buffer.concat([Buffer.from(bom), body]);
+
+    it.each([
+      [
+        'content types in UTF-16 LE with a byte order mark',
+        withBom([0xff, 0xfe], Buffer.from(VBA_TYPE, 'utf16le')),
+      ],
+      [
+        'content types in UTF-16 BE with a byte order mark',
+        withBom([0xfe, 0xff], Buffer.from(VBA_TYPE, 'utf16le').swap16()),
+      ],
+      ['content types in UTF-16 LE without one', Buffer.from(VBA_TYPE, 'utf16le')],
+      [
+        'a character reference in the content type',
+        '<Types><Override ContentType="application/vnd.ms-office.vba&#80;roject"/></Types>',
+      ],
+      [
+        'a hexadecimal reference',
+        '<Types><Override ContentType="application/vnd.ms-office.vba&#x50;roject"/></Types>',
+      ],
+    ])('%s, with the VBA part renamed: macros', async (_name, contentTypes) => {
+      const zip = zipOf({
+        '[Content_Types].xml': contentTypes,
+        'word/document.xml': '<w:document/>',
+        'word/harmless.bin': Buffer.alloc(64, 1),
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({ type: 'docx', macros: true });
+    });
+
+    it('a relationship of a VBA project written with a reference: macros', async () => {
+      const zip = zipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/document.xml.rels':
+          '<Relationships><Relationship Type="http://schemas.microsoft.com/office/2006/relationships/vba&#x50;roject" Target="x.bin"/></Relationships>',
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({ type: 'docx', macros: true });
+    });
+
+    it('a part in UTF-32 cannot be judged: macros (fail closed)', async () => {
+      const utf32 = Buffer.alloc(VBA_TYPE.length * 4);
+      Array.from(VBA_TYPE).forEach((character, index) => {
+        utf32.writeUInt32LE(character.codePointAt(0) ?? 0, index * 4);
+      });
+      const zip = zipOf({ '[Content_Types].xml': utf32, 'word/document.xml': '<w:document/>' });
+      await expect(detectFileType(written(zip))).resolves.toEqual({ type: 'docx', macros: true });
+    });
+
+    it.each([
+      ['MACROS', true],
+      ['_vba_project_cur', true],
+      ['Vba', true],
+      ['Data', false],
+    ])(
+      'an old .doc with the storage %j: macros %j (names of a compound file have no case)',
+      async (name, macros) => {
+        await expect(
+          detectFileType(written(compoundFileOf(['WORDDOCUMENT', name]))),
+        ).resolves.toEqual({ type: 'doc', macros });
+      },
+    );
+
+    const relsOf = (relationship: string) =>
+      zipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/settings.xml.rels': `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationship}</Relationships>`,
+      });
+
+    it.each([
+      [
+        'a remote template',
+        '<Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://templates.example.test/t.dotm" TargetMode="External"/>',
+        true,
+      ],
+      [
+        'a remote object, attributes in single quotes and another order',
+        "<Relationship TargetMode='External' Target='http://x.example.test/o' Type='http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject' Id='r2'/>",
+        true,
+      ],
+      [
+        'a UNC path, even as a hyperlink',
+        '<Relationship Id="r3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="\\\\files.example.test\\share\\a.docx" TargetMode="External"/>',
+        true,
+      ],
+      [
+        'a file: target',
+        '<Relationship Id="r4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="file:///C:/a.png"/>',
+        true,
+      ],
+      [
+        'a plain hyperlink, which the reader must click',
+        '<Relationship Id="r5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://www.example.test/" TargetMode="External"/>',
+        false,
+      ],
+      [
+        'a part of the document itself',
+        '<Relationship Id="r6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>',
+        false,
+      ],
+    ])('%s: flagged %j', async (_name, relationship, flagged) => {
+      await expect(detectFileType(written(relsOf(relationship)))).resolves.toEqual(
+        flagged
+          ? { type: 'docx', macros: false, externalLinks: true }
+          : { type: 'docx', macros: false },
+      );
+    });
+  });
+
   describe('the work of the inspection is bounded (SEC-M3-01)', () => {
     it('10 000 records that point at one compressed block are refused in well under a second', async () => {
       const path = written(overlappingZipOf(10_000));

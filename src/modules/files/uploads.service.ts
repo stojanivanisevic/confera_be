@@ -159,7 +159,12 @@ export class UploadsService {
                 detectedType: type,
                 sizeBytes: received.size,
                 sha256: received.sha256,
-                scanFlag: type === 'doc' && detected.macros ? 'macros' : null,
+                scanFlag:
+                  type === 'doc' && detected.macros
+                    ? 'macros'
+                    : detected.externalLinks === true
+                      ? 'external_links'
+                      : null,
                 formTokenId: prepared.tokenId,
                 fieldKey: received.field,
               },

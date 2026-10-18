@@ -716,7 +716,8 @@ model StoredFile {
   sha256         String
   /// pending, clean, infected or not_clean (a limit of the scanner was exceeded).
   scanState      String    @default("pending") @map("scan_state")
-  /// macros: an old .doc that holds macros, accepted and flagged for the office (G2-22).
+  /// macros: an old .doc that holds macros, accepted and flagged for the office (G2-22);
+  /// external_links: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06).
   scanFlag       String?   @map("scan_flag")
   /// What the scanner said, as a code.
   scanDetail     String?   @map("scan_detail")
