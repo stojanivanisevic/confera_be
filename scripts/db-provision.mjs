@@ -15,9 +15,10 @@
 //
 // Role names are fixed, because the committed migrations grant to them by name. Passwords
 // come from the addresses in the environment (.env on a developer machine) and are never
-// printed.
+// printed, nor sent: the server gets their SCRAM-SHA-256 verifier (M1-ISS-14).
 import pg from 'pg';
 import { loadDotEnv } from './lib/process.mjs';
+import { scramVerifier } from './lib/scram.mjs';
 import { DATABASE_VARIABLES, refuseUnlessOwnDatabase } from './lib/stack.mjs';
 
 const ROLES = {
@@ -182,7 +183,7 @@ async function provisionRole(client, role) {
   await client.query(
     `ALTER ROLE ${name} WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION ${
       role.bypass ? 'BYPASSRLS' : 'NOBYPASSRLS'
-    } PASSWORD ${client.escapeLiteral(role.password)}`,
+    } PASSWORD ${client.escapeLiteral(scramVerifier(role.password))}`,
   );
 }
 
