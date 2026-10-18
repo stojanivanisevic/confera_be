@@ -1,5 +1,14 @@
 import { CONDITIONS, LANGUAGES, PLACEHOLDERS, TEMPLATE_TYPES } from '../../templates/placeholders';
-import { DOCUMENT_LIMIT_BYTES, MARKS, MAX_DEPTH, SUBJECT_LIMIT } from '../../templates/document';
+import {
+  ALT_LIMIT,
+  DOCUMENT_LIMIT_BYTES,
+  MARKS,
+  MAX_DEPTH,
+  MAX_IMAGES,
+  SUBJECT_LIMIT,
+} from '../../templates/document';
+import { MULTILINE_PLACEHOLDERS } from '../../templates/placeholders';
+import { RENDERED_LIMIT_BYTES } from '../../templates/render';
 import { REFUSED_VECTORS, RENDERED_VECTORS } from './template-vectors';
 
 /**
@@ -25,14 +34,24 @@ export function templateVectorsDocument(): Record<string, unknown> {
       text: { text: 'string without control characters', marks: MARKS },
       hardBreak: {},
       link: { href: 'https: or mailto: address, or { placeholder: "link" }', children: 'text[]' },
-      placeholder: { key: 'a placeholder of the type' },
+      placeholder: {
+        key: 'a placeholder of the type; a multi-line one keeps its line breaks as <br>',
+      },
+      image: {
+        fileId: 'the id of an email image of the organisation (a UUID); never an address',
+        alt: 'string without control characters or line breaks',
+      },
       subject: { children: '(text | placeholder)[]; one line' },
     },
     limits: {
       documentBytes: DOCUMENT_LIMIT_BYTES,
       depth: MAX_DEPTH,
       subjectCharacters: SUBJECT_LIMIT,
+      images: MAX_IMAGES,
+      altCharacters: ALT_LIMIT,
+      renderedBodyBytes: RENDERED_LIMIT_BYTES,
     },
+    multilinePlaceholders: [...MULTILINE_PLACEHOLDERS],
     types: Object.fromEntries(
       TEMPLATE_TYPES.map((type) => [
         type,

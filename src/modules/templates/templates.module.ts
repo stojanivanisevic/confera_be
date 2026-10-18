@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
-import { TemplatesController } from './templates.controller';
+import { FilesModule } from '../files/files.module';
+import { StatusEmailsController, TemplatesController } from './templates.controller';
+import { TemplatesService } from './templates.service';
 
-/** Email templates, read only in 0.2.0 (ADR-12). */
-@Module({ controllers: [TemplatesController] })
+/** Email templates (ADR-12): read in 0.2.0, managed from 0.4.0 (M4-BE-03). */
+@Module({
+  imports: [FilesModule],
+  controllers: [TemplatesController, StatusEmailsController],
+  providers: [TemplatesService],
+})
 export class TemplatesModule {}

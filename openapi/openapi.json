@@ -129,7 +129,18 @@
                 "form.breaker_changed",
                 "held_mail.released",
                 "held_mail.discarded",
-                "organisation.breaker_changed"
+                "organisation.breaker_changed",
+                "submission.status_changed",
+                "submission.note_added",
+                "submission.edited",
+                "template.created",
+                "template.updated",
+                "template.deleted",
+                "conference.status_emails_changed",
+                "mail_image.uploaded",
+                "mail.resent",
+                "mail_log.retention_changed",
+                "mail_log.purged"
               ]
             }
           },
@@ -668,6 +679,101 @@
         ],
         "x-confera-access": {
           "permission": "conferences.manage"
+        }
+      }
+    },
+    "/api/v1/conferences/{id}/status-emails": {
+      "get": {
+        "operationId": "getStatusEmails",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusEmailsDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "StatusEmails"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      },
+      "put": {
+        "operationId": "setStatusEmails",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusEmailsUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusEmailsDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Switches status emails of the conference off or on. A change of status whose email is\noff sends nothing; its history says \"no email: template off\".",
+        "tags": [
+          "StatusEmails"
+        ],
+        "x-confera-access": {
+          "permission": "templates.manage"
         }
       }
     },
@@ -1358,7 +1464,14 @@
                 "security_notice",
                 "sign_in_brake",
                 "test_message",
-                "submission_confirmation"
+                "submission_confirmation",
+                "submission_opened",
+                "submission_returned",
+                "submission_resumed",
+                "submission_accepted",
+                "submission_rejected",
+                "submission_withdrawn",
+                "submission_reopened"
               ]
             }
           },
@@ -1786,7 +1899,14 @@
                 "security_notice",
                 "sign_in_brake",
                 "test_message",
-                "submission_confirmation"
+                "submission_confirmation",
+                "submission_opened",
+                "submission_returned",
+                "submission_resumed",
+                "submission_accepted",
+                "submission_rejected",
+                "submission_withdrawn",
+                "submission_reopened"
               ]
             }
           },
@@ -1831,6 +1951,49 @@
         "x-confera-access": {
           "permission": "templates.read"
         }
+      },
+      "post": {
+        "operationId": "createMailTemplate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMailTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailTemplateDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A language version of the organisation, or the override of a conference.",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.manage"
+        }
       }
     },
     "/api/v1/mail-templates/catalogue": {
@@ -1860,6 +2023,97 @@
           }
         },
         "summary": "The placeholder catalogue per type: what a template of the type may use.",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
+    "/api/v1/mail-templates/effective": {
+      "get": {
+        "operationId": "listEffectiveTemplates",
+        "parameters": [
+          {
+            "name": "conferenceId",
+            "required": false,
+            "in": "query",
+            "description": "Without it, the organisation's own.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTemplateListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Which template every type and language uses for a conference (or for the organisation),\nby the fallback of ADR-12: conference and language, conference in English, organisation\nand language, organisation in English.",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.read"
+        }
+      }
+    },
+    "/api/v1/mail-templates/preview": {
+      "post": {
+        "operationId": "previewMailTemplate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplatePreviewRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatePreviewDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The sample render of a template as the editor holds it (FR-MAIL-02). Nothing is saved.",
         "tags": [
           "Templates"
         ],
@@ -1908,6 +2162,93 @@
         ],
         "x-confera-access": {
           "permission": "templates.read"
+        }
+      },
+      "put": {
+        "operationId": "updateMailTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMailTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailTemplateDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A change of a template, checked like a new one; 409 `version_conflict` on a stale version.",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.manage"
+        }
+      },
+      "delete": {
+        "operationId": "deleteMailTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Removes the override of a conference: its emails use the organisation's again. The\norganisation's own templates are never removed (409 `organisation_template`).",
+        "tags": [
+          "Templates"
+        ],
+        "x-confera-access": {
+          "permission": "templates.manage"
         }
       }
     },
@@ -2378,6 +2719,82 @@
         "operationId": "listSubmissions",
         "parameters": [
           {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "One status or several, comma-separated: `status=new,open`.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "open",
+                  "returned_for_revision",
+                  "accepted",
+                  "rejected",
+                  "withdrawn"
+                ]
+              }
+            }
+          },
+          {
+            "name": "participationType",
+            "required": false,
+            "in": "query",
+            "description": "One participation type or several, comma-separated (the options of the form's field).",
+            "schema": {
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,40}$"
+              }
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "receivedAt",
+              "type": "string",
+              "enum": [
+                "receivedAt",
+                "reference",
+                "title",
+                "firstAuthor",
+                "institution",
+                "participationType",
+                "status",
+                "conference"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "Default: newest first for `receivedAt`, A to Z for the rest.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Searched in reference, title, the authors' names, emails and institutions, without\ndiacritics both ways (\"Zivkovic\" finds \"Živković\", \"Djordje\" finds \"Đorđe\", Serbian\nCyrillic finds the Latin spelling). Every word must occur.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
             "name": "conferenceId",
             "required": false,
             "in": "query",
@@ -2429,7 +2846,7 @@
             }
           }
         },
-        "summary": "The submissions of the organisation, newest first, a page at a time (FR-SUB-02).",
+        "summary": "The submissions of the organisation, a page at a time (FR-SUB-02, FR-SUB-03): searched\nwithout diacritics, filtered, in one of the fixed orders. Withdrawn ones only on request.",
         "tags": [
           "Submissions"
         ],
@@ -2473,12 +2890,64 @@
             }
           }
         },
-        "summary": "One submission with its data, files, status history and emails (FR-SUB-04).",
+        "summary": "One submission with everything about it (FR-SUB-04). Changes nothing.",
         "tags": [
           "Submissions"
         ],
         "x-confera-access": {
           "permission": "submissions.read"
+        }
+      },
+      "put": {
+        "operationId": "editSubmission",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmissionEditDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A correction of the data on the author's behalf (FR-SUB-06): the answers that change,\nchecked like a submit; the old values are kept as a revision. Sends no email: the\nreturn to processing after a revision is the status change `resume`.",
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.manage"
         }
       }
     },
@@ -2524,6 +2993,168 @@
         ],
         "x-confera-access": {
           "permission": "submissions.read"
+        }
+      }
+    },
+    "/api/v1/submissions/{id}/notes": {
+      "post": {
+        "operationId": "addSubmissionNote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionNoteDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A note of an admin (FR-SUB-07): never shown to authors or reviewers.",
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.manage"
+        }
+      }
+    },
+    "/api/v1/submissions/{id}/status": {
+      "post": {
+        "operationId": "changeSubmissionStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetailDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A change of status by the state table of Spec section 5 (FR-SUB-05): 409\n`transition_refused` for a change the table does not have, `version_conflict` for a\nstale or repeated request, `preview_outdated` when the email is no longer the one shown.\nIts email is queued in the same transaction, unless the conference switched it off.",
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.manage"
+        }
+      }
+    },
+    "/api/v1/submissions/{id}/status/preview": {
+      "post": {
+        "operationId": "previewStatusEmail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusTextsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusEmailPreviewDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Any error, in the one error format of the API (RFC 9457 problem details). An unexpected error carries `code` and `traceId` only.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The email a change of status would send (FR-MAIL-08), rendered by the server with the\nimages embedded, and its hash. Nothing changes and nothing is queued.",
+        "tags": [
+          "Submissions"
+        ],
+        "x-confera-access": {
+          "permission": "submissions.manage"
         }
       }
     },
@@ -3615,6 +4246,64 @@
           "fromName"
         ]
       },
+      "CreateMailTemplateDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "invitation",
+              "password_reset",
+              "email_change_confirmation",
+              "email_change_notice",
+              "security_notice",
+              "sign_in_brake",
+              "test_message",
+              "submission_confirmation",
+              "submission_opened",
+              "submission_returned",
+              "submission_resumed",
+              "submission_accepted",
+              "submission_rejected",
+              "submission_withdrawn",
+              "submission_reopened"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "sr"
+            ]
+          },
+          "subject": {
+            "type": "object",
+            "description": "A subject document (contracts/template-vectors.json); markup in its place is refused.",
+            "additionalProperties": true
+          },
+          "body": {
+            "type": "object",
+            "description": "A body document (contracts/template-vectors.json); markup in its place is refused.",
+            "additionalProperties": true
+          },
+          "conferenceId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "type",
+          "language",
+          "subject",
+          "body"
+        ]
+      },
       "DeadlineChangeDto": {
         "type": "object",
         "properties": {
@@ -3751,6 +4440,52 @@
         },
         "required": [
           "discarded"
+        ]
+      },
+      "EffectiveTemplateDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "description": "`conference`, `conference_en` (its English one), `organisation`, `organisation_en`, or `none`.",
+            "enum": [
+              "conference",
+              "conference_en",
+              "organisation",
+              "organisation_en",
+              "none"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "templateId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "source",
+          "type",
+          "language",
+          "templateId"
+        ]
+      },
+      "EffectiveTemplateListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveTemplateDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "EmailChangeLinkDto": {
@@ -4646,6 +5381,18 @@
           "version"
         ]
       },
+      "NoteDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
       "OrganisationBreakerDto": {
         "type": "object",
         "properties": {
@@ -4829,6 +5576,21 @@
           "eurBankName",
           "paypalPayee",
           "version"
+        ]
+      },
+      "PersonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
         ]
       },
       "Problem": {
@@ -5052,6 +5814,186 @@
           "password"
         ]
       },
+      "StatusChangeDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "enum": [
+              "open",
+              "return",
+              "resume",
+              "accept",
+              "reject",
+              "withdraw",
+              "reopen"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "The internal reason: required to withdraw and to reopen, refused otherwise; never sent.",
+            "maxLength": 2000
+          },
+          "message": {
+            "type": "string",
+            "description": "The text for the author, carried by the email word for word: required to return for\nrevision, allowed to reject, withdraw and reopen, refused otherwise.",
+            "maxLength": 5000
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "previewDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "action",
+          "version"
+        ]
+      },
+      "StatusEmailPreviewDto": {
+        "type": "object",
+        "properties": {
+          "sends": {
+            "type": "boolean",
+            "description": "False when the conference switched this email off (FR-MAIL-07): nothing will be sent."
+          },
+          "to": {
+            "type": "string",
+            "nullable": true
+          },
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "subject": {
+            "type": "string",
+            "nullable": true
+          },
+          "html": {
+            "type": "string",
+            "nullable": true,
+            "description": "The HTML with its images embedded: show it in a sandboxed frame only (ST-28)."
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "previewDigest": {
+            "type": "string",
+            "nullable": true,
+            "description": "Send it back with the change when it carries a `message`."
+          }
+        },
+        "required": [
+          "sends",
+          "to",
+          "language",
+          "subject",
+          "html",
+          "text",
+          "previewDigest"
+        ]
+      },
+      "StatusEmailSwitchDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "submission_opened",
+              "submission_returned",
+              "submission_resumed",
+              "submission_accepted",
+              "submission_rejected",
+              "submission_withdrawn",
+              "submission_reopened"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "enabled"
+        ]
+      },
+      "StatusEmailsDto": {
+        "type": "object",
+        "properties": {
+          "conferenceId": {
+            "type": "string"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusEmailSwitchDto"
+            }
+          },
+          "version": {
+            "type": "number",
+            "description": "The version of the conference."
+          }
+        },
+        "required": [
+          "conferenceId",
+          "types",
+          "version"
+        ]
+      },
+      "StatusEmailsUpdateDto": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusEmailSwitchDto"
+            }
+          },
+          "version": {
+            "type": "number",
+            "description": "The version of the conference.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "types",
+          "version"
+        ]
+      },
+      "StatusTextsDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "enum": [
+              "open",
+              "return",
+              "resume",
+              "accept",
+              "reject",
+              "withdraw",
+              "reopen"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "The internal reason: required to withdraw and to reopen, refused otherwise; never sent.",
+            "maxLength": 2000
+          },
+          "message": {
+            "type": "string",
+            "description": "The text for the author, carried by the email word for word: required to return for\nrevision, allowed to reject, withdraw and reopen, refused otherwise.",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
       "SubmissionAuthorDto": {
         "type": "object",
         "properties": {
@@ -5102,75 +6044,33 @@
       "SubmissionDetailDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string"
-          },
-          "conference": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "code": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "editionYear": {
-                "type": "number",
-                "nullable": true
-              }
-            },
-            "required": [
-              "id",
-              "code",
-              "name",
-              "editionYear"
-            ]
-          },
-          "title": {
-            "type": "string",
-            "nullable": true
-          },
-          "firstAuthor": {
-            "type": "string"
-          },
-          "institution": {
-            "type": "string",
-            "nullable": true
-          },
-          "participationType": {
-            "type": "string",
-            "nullable": true
-          },
           "status": {
+            "description": "The status of Spec section 5.",
+            "enum": [
+              "new",
+              "open",
+              "returned_for_revision",
+              "accepted",
+              "rejected",
+              "withdrawn"
+            ],
             "type": "string"
           },
-          "memberMatch": {
-            "type": "string",
-            "nullable": true,
-            "description": "Not matched yet (0.8.0)."
-          },
-          "billingStatus": {
-            "type": "string",
-            "nullable": true,
-            "description": "No proforma yet (0.6.0)."
-          },
-          "language": {
-            "type": "string"
-          },
-          "authorCount": {
-            "type": "number"
-          },
-          "receivedAt": {
-            "type": "string"
-          },
-          "fileSigns": {
-            "$ref": "#/components/schemas/SubmissionFileSignsDto"
+          "actions": {
+            "type": "array",
+            "description": "The changes of status an admin may make now, in the order of the state table.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "open",
+                "return",
+                "resume",
+                "accept",
+                "reject",
+                "withdraw",
+                "reopen"
+              ]
+            }
           },
           "form": {
             "type": "object",
@@ -5243,9 +6143,103 @@
             "items": {
               "$ref": "#/components/schemas/SubmissionEmailDto"
             }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionNoteDto"
+            }
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionRevisionDto"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "conference": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "editionYear": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "code",
+              "name",
+              "editionYear"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "firstAuthor": {
+            "type": "string"
+          },
+          "institution": {
+            "type": "string",
+            "nullable": true
+          },
+          "participationType": {
+            "type": "string",
+            "nullable": true
+          },
+          "memberMatch": {
+            "type": "string",
+            "nullable": true,
+            "description": "Not matched yet (0.8.0)."
+          },
+          "billingStatus": {
+            "type": "string",
+            "nullable": true,
+            "description": "No proforma yet (0.6.0)."
+          },
+          "language": {
+            "type": "string"
+          },
+          "authorCount": {
+            "type": "number"
+          },
+          "receivedAt": {
+            "type": "string"
+          },
+          "fileSigns": {
+            "$ref": "#/components/schemas/SubmissionFileSignsDto"
+          },
+          "version": {
+            "type": "number",
+            "description": "Raised by every change of status or data: send it with the next change (409 otherwise)."
           }
         },
         "required": [
+          "status",
+          "actions",
+          "form",
+          "answers",
+          "authors",
+          "files",
+          "consent",
+          "statusHistory",
+          "emails",
+          "notes",
+          "revisions",
           "id",
           "reference",
           "conference",
@@ -5253,20 +6247,30 @@
           "firstAuthor",
           "institution",
           "participationType",
-          "status",
           "memberMatch",
           "billingStatus",
           "language",
           "authorCount",
           "receivedAt",
           "fileSigns",
-          "form",
-          "answers",
-          "authors",
-          "files",
-          "consent",
-          "statusHistory",
-          "emails"
+          "version"
+        ]
+      },
+      "SubmissionEditDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "version",
+          "answers"
         ]
       },
       "SubmissionEmailDto": {
@@ -5283,7 +6287,7 @@
           },
           "status": {
             "type": "string",
-            "description": "queued, sending, sent, failed, held, stuck or waiting_for_server."
+            "description": "queued, sending, sent, failed, held, stuck, waiting_for_server or discarded."
           },
           "heldReason": {
             "type": "string",
@@ -5435,6 +6439,29 @@
           "scanPending"
         ]
       },
+      "SubmissionNoteDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "author",
+          "createdAt"
+        ]
+      },
       "SubmissionPageDto": {
         "type": "object",
         "properties": {
@@ -5445,7 +6472,8 @@
             }
           },
           "total": {
-            "type": "number"
+            "type": "number",
+            "description": "All rows that match the search and the filters, on every page."
           },
           "page": {
             "type": "number"
@@ -5461,40 +6489,138 @@
           "pageSize"
         ]
       },
+      "SubmissionRevisionDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number"
+          },
+          "changedAt": {
+            "type": "string"
+          },
+          "changedBy": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "fields": {
+            "description": "The answer keys that changed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "before": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The values of those keys before and after; the first revision's `before` is the original."
+          },
+          "after": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "number",
+          "changedAt",
+          "changedBy",
+          "fields",
+          "before",
+          "after"
+        ]
+      },
       "SubmissionStatusDto": {
         "type": "object",
         "properties": {
           "status": {
+            "enum": [
+              "new",
+              "open",
+              "returned_for_revision",
+              "accepted",
+              "rejected",
+              "withdrawn"
+            ],
             "type": "string"
+          },
+          "fromStatus": {
+            "nullable": true,
+            "enum": [
+              "new",
+              "open",
+              "returned_for_revision",
+              "accepted",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "email": {
+            "description": "`queued`: the email is `emailId`; `template_off`: no email, switched off (FR-MAIL-07); `none`.",
+            "enum": [
+              "queued",
+              "template_off",
+              "none"
+            ],
+            "type": "string"
+          },
+          "transition": {
+            "type": "number",
+            "description": "The row of the state table: 1 (the form), 2, 4 to 9."
           },
           "changedAt": {
             "type": "string"
           },
           "actor": {
+            "nullable": true,
+            "description": "Null for the author's own submit (transition 1).",
             "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "displayName": {
-                "type": "string"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PersonDto"
               }
-            },
-            "required": [
-              "id",
-              "displayName"
             ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "The internal reason of a withdrawal or a reopening: for the admins only, never sent."
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "The text for the author that the email carried (FR-MAIL-08)."
+          },
+          "emailId": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "status",
+          "fromStatus",
+          "email",
+          "transition",
           "changedAt",
-          "actor"
+          "actor",
+          "reason",
+          "message",
+          "emailId"
         ]
       },
       "SubmissionSummaryDto": {
         "type": "object",
         "properties": {
+          "status": {
+            "description": "The status of Spec section 5.",
+            "enum": [
+              "new",
+              "open",
+              "returned_for_revision",
+              "accepted",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -5540,9 +6666,6 @@
             "type": "string",
             "nullable": true
           },
-          "status": {
-            "type": "string"
-          },
           "memberMatch": {
             "type": "string",
             "nullable": true,
@@ -5564,9 +6687,14 @@
           },
           "fileSigns": {
             "$ref": "#/components/schemas/SubmissionFileSignsDto"
+          },
+          "version": {
+            "type": "number",
+            "description": "Raised by every change of status or data: send it with the next change (409 otherwise)."
           }
         },
         "required": [
+          "status",
           "id",
           "reference",
           "conference",
@@ -5574,13 +6702,13 @@
           "firstAuthor",
           "institution",
           "participationType",
-          "status",
           "memberMatch",
           "billingStatus",
           "language",
           "authorCount",
           "receivedAt",
-          "fileSigns"
+          "fileSigns",
+          "version"
         ]
       },
       "TemplateCatalogueDto": {
@@ -5604,11 +6732,93 @@
           "languages"
         ]
       },
+      "TemplatePreviewDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "imagesPending": {
+            "description": "Images of the body not shown yet: their virus scan is not clean (yet).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "subject",
+          "html",
+          "text",
+          "imagesPending"
+        ]
+      },
+      "TemplatePreviewRequestDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "invitation",
+              "password_reset",
+              "email_change_confirmation",
+              "email_change_notice",
+              "security_notice",
+              "sign_in_brake",
+              "test_message",
+              "submission_confirmation",
+              "submission_opened",
+              "submission_returned",
+              "submission_resumed",
+              "submission_accepted",
+              "submission_rejected",
+              "submission_withdrawn",
+              "submission_reopened"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "sr"
+            ]
+          },
+          "subject": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "conferenceId": {
+            "type": "string",
+            "description": "The conference whose name the sample shows; the organisation's otherwise.",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "type",
+          "language",
+          "subject",
+          "body"
+        ]
+      },
       "TemplateTypeDto": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string"
+          },
+          "statusEmail": {
+            "type": "boolean",
+            "description": "A status email (FR-MAIL-03): one per change of status; it can be switched off per conference."
           },
           "placeholders": {
             "type": "array",
@@ -5629,6 +6839,7 @@
         },
         "required": [
           "type",
+          "statusEmail",
           "placeholders",
           "conditions",
           "carriesLink"
@@ -5830,6 +7041,34 @@
           }
         },
         "required": [
+          "version"
+        ]
+      },
+      "UpdateMailTemplateDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "body": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "mailServerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null removes the template's own server; left out, it stays.",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "subject",
+          "body",
           "version"
         ]
       },

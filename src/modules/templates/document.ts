@@ -15,17 +15,23 @@
  *   hardBreak      { type: 'hardBreak' }
  *   link           { type: 'link', href: string | { placeholder: 'link' }, children: Text[] }
  *   placeholder    { type: 'placeholder', key: PlaceholderKey }
+ *   image          { type: 'image', fileId: uuid, alt: string }        (a block, M4-BE-06)
  * A SUBJECT is one line: { type: 'subject', children: (Text | Placeholder)[] }.
- * Nothing else. Images arrive with M4-BE-06 and are refused until then.
+ * Nothing else. An image is an email image of the template's own organisation, named by its
+ * file id: never an address, never data in the document (ADR-12, ST-60); the server checks
+ * that the file exists when the template is saved, and sends it as an inline part.
  *
  * The keys a placeholder or a condition may use come from the catalogue of the
  * template's type (placeholders.ts). A typed link is `https:` or `mailto:` only; a link
  * to the secure link of the message is the address `{ placeholder: 'link' }` of a link
  * node and exists nowhere else. Whatever an admin types, braces included, is text.
  *
- * Limits (P): a document of 200 KB, 8 levels of nesting, a subject of 300 characters.
+ * Limits (P): a document of 200 KB, 8 levels of nesting, a subject of 300 characters,
+ * 5 images, an alternative text of 300 characters.
  */
 export const DOCUMENT_LIMIT_BYTES = 200 * 1024;
+export const MAX_IMAGES = 5;
+export const ALT_LIMIT = 300;
 export const MAX_DEPTH = 8;
 export const SUBJECT_LIMIT = 300;
 
@@ -73,7 +79,12 @@ export interface ConditionalNode {
   readonly key: string;
   readonly children: readonly BlockNode[];
 }
-export type BlockNode = ParagraphNode | HeadingNode | ListNode | ConditionalNode;
+export interface ImageNode {
+  readonly type: 'image';
+  readonly fileId: string;
+  readonly alt: string;
+}
+export type BlockNode = ParagraphNode | HeadingNode | ListNode | ConditionalNode | ImageNode;
 
 export interface DocNode {
   readonly type: 'doc';
@@ -107,7 +118,8 @@ export type DocumentErrorCode =
   | 'link_scheme'
   | 'link_placeholder'
   | 'text_control_character'
-  | 'subject_too_long';
+  | 'subject_too_long'
+  | 'too_many_images';
 
 export interface Catalogue {
   readonly placeholders: ReadonlySet<string>;
@@ -115,6 +127,7 @@ export interface Catalogue {
 }
 
 const SAFE_KEY = /^[a-z][A-Za-z0-9]{0,39}$/;
+const FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // The control characters and the Unicode line separators: never in a text of a template.
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2028\u2029]/u;
@@ -282,6 +295,19 @@ function checkBlock(node: unknown, path: string, catalogue: Catalogue, depth: nu
       });
       return { type: node.type, items };
     }
+    case 'image': {
+      attributes(node, path, ['type', 'fileId', 'alt']);
+      if (typeof node.fileId !== 'string' || !FILE_ID.test(node.fileId)) {
+        throw new DocumentError('wrong_attribute', `${path}.fileId`);
+      }
+      if (typeof node.alt !== 'string' || Array.from(node.alt).length > ALT_LIMIT) {
+        throw new DocumentError('wrong_attribute', `${path}.alt`);
+      }
+      if (CONTROL.test(node.alt) || /[\r\n\t]/.test(node.alt)) {
+        throw new DocumentError('text_control_character', `${path}.alt`);
+      }
+      return { type: 'image', fileId: node.fileId.toLowerCase(), alt: node.alt };
+    }
     case 'conditional': {
       attributes(node, path, ['type', 'key', 'children']);
       const key = checkKey(node.key, `${path}.key`, catalogue.conditions, 'unknown_condition');
@@ -325,7 +351,30 @@ export function checkBody(value: unknown, catalogue: Catalogue): DocNode {
     throw new DocumentError('too_large', '$');
   }
   attributes(value, '$', ['type', 'children']);
-  return { type: 'doc', children: checkBlocks(value.children, '$.children', catalogue, 1) };
+  const body: DocNode = {
+    type: 'doc',
+    children: checkBlocks(value.children, '$.children', catalogue, 1),
+  };
+  if (imagesOf(body).length > MAX_IMAGES) {
+    throw new DocumentError('too_many_images', '$');
+  }
+  return body;
+}
+
+/** The file ids of the images of a checked body, each once, in the order they appear. */
+export function imagesOf(body: DocNode): string[] {
+  const found: string[] = [];
+  const walk = (blocks: readonly BlockNode[]): void => {
+    for (const block of blocks) {
+      if (block.type === 'image') {
+        found.push(block.fileId);
+      } else if (block.type === 'conditional') {
+        walk(block.children);
+      }
+    }
+  };
+  walk(body.children);
+  return [...new Set(found)];
 }
 
 /** Checks a subject: one line of text and placeholders, without any line or control character. */

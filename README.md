@@ -395,8 +395,26 @@ the two equal. The OpenAPI document carries the declaration of every operation
   and escapes every value. The catalogue says which placeholders each type may use; a
   secure link is the address of a link node, never text. `contracts/template-vectors.json`
   holds the format and the vectors the editor of the web application must agree with.
-  The defaults, English and Serbian, are `prisma/seed/default-templates.json`.
-- **The outbox** (ADR-13): a message is queued in the transaction of the change. The
+  The defaults, English and Serbian, are `prisma/seed/default-templates.json`. An image is a
+  block node `{ type: 'image', fileId, alt }` naming an email image of the organisation (at
+  most 5); the `message` placeholder of the status emails keeps its line breaks. After the
+  render an allowlist pass checks the HTML once more (`assertSafeHtml`, M2-ISS-12).
+- **Template management** (M4-BE-03, FR-MAIL-01, 02): `POST /api/v1/mail-templates` (a
+  language version of the organisation, or the override of a conference),
+  `PUT /api/v1/mail-templates/{id}` (with `version`), `DELETE` (a conference override only;
+  the conference falls back), `GET /api/v1/mail-templates/effective?conferenceId=` (which
+  template each type and language uses, by the fallback), and `POST /api/v1/mail-templates/preview`
+  (the server's sample render, images embedded as data, for a sandboxed frame). Saving checks
+  the format and the catalogue (400 with the path and code, e.g. `body.children[0].href`
+  `link_scheme`), that every image is an email image of the organisation (`image_unknown`),
+  and that the body rendered with sample values stays under 100 KB (`too_large`, ST-59).
+  These paths take JSON bodies up to 512 KB; every other path 64 KB. The defaults are seeded
+  per organisation and a conference reaches them through the fallback (M2-ISS-06, decided
+  in 0.4.0); an override exists once an admin edits a template for one conference.
+- **The outbox** (ADR-13): a message is queued in the transaction of the change **and
+  rendered there** (M2-ISS-05): what an admin was shown is what is sent; its secure link is
+  a mark in the stored text, replaced at send time. A message whose type had no template
+  when it was queued is rendered when it is sent. The
   worker (every `MAIL_WORKER_INTERVAL_SECONDS`, default 5; 0 is off) claims each due row
   inside its organisation, chooses the template (conference and language, conference in
   English, organisation and language, organisation in English) and the servers (the
@@ -524,7 +542,44 @@ the two equal. The OpenAPI document carries the declaration of every operation
 - **Submissions** (M3-BE-07): `GET /api/v1/submissions` (paged, newest first, at most 100 a
   page; `fileSigns`: the flags of its files and whether a scan is pending) and
   `GET /api/v1/submissions/{id}` (answers, authors, files with their scan state and, while one
-  cannot be downloaded, `downloadBlocked` and `nextScanAt`; consent, status history, emails).
+  cannot be downloaded, `downloadBlocked` and `nextScanAt`; consent, status history, emails,
+  notes, revisions, and `actions`: the changes of status allowed now).
+- **The table's search and filters** (M4-BE-04, FR-SUB-03): `q` is searched in reference,
+  title and every author's names, email and institution without diacritics both ways
+  ("Zivkovic" finds "Živković", "Djordje" finds "Đorđe", Serbian Cyrillic finds the Latin
+  spelling; `src/modules/submissions/search.ts`), every word must occur, through a trigram
+  index of the column `search_text`. Filters `conferenceId`, `status` and `participationType`
+  (lists comma-separated); without `status` a withdrawn submission is left out. `sort` is one
+  of a fixed map (`receivedAt`, `reference`, `title`, `firstAuthor`, `institution`,
+  `participationType`, `status`, `conference`), `order` `asc` or `desc`, ties broken by the id.
+  With 20,000 submissions a search or filter answers within a second (NFR-PERF-02,
+  `test/e2e/submissions-search.spec.ts`).
+- **Statuses** (M4-BE-01, Spec section 5): `new` (the 0.3.0 `received`), `open`,
+  `returned_for_revision`, `accepted`, `rejected`, `withdrawn`;
+  `POST /api/v1/submissions/{id}/status` with `{ action, version, reason?, message?, previewDigest? }`,
+  the actions `open` (transition 2: a POST the detail screen sends once it is shown, never a
+  side effect of a GET, ST-43), `return`, `resume`, `accept`, `reject`, `withdraw`, `reopen`
+  (`src/modules/submissions/status-machine.ts`). A change the table does not have is 409
+  `transition_refused`; a stale or repeated one 409 `version_conflict` (and no second email).
+  `reason` (withdraw, reopen) is internal and never sent; `message` (required to return,
+  allowed to reject, withdraw and reopen) is the text for the author. Every change is in the
+  history (`transition`, `fromStatus`, who, `email`: `queued`, `template_off` or `none`) and
+  in the audit log.
+- **Status emails** (M4-BE-02, FR-MAIL-03, 05, 07, 08): one template type per transition
+  (`submission_opened`, `_returned`, `_resumed`, `_accepted`, `_rejected`, `_withdrawn`,
+  `_reopened`, plus the confirmation), seeded in both languages. The email is queued in the
+  transaction of the change, rendered there, to the corresponding author in the language of
+  the submission. `POST /api/v1/submissions/{id}/status/preview` renders it without changing
+  anything and returns `previewDigest`; a change with a `message` must send that digest
+  back, and is refused with 409 `preview_outdated` when the email would differ from the one
+  shown. `GET`/`PUT /api/v1/conferences/{id}/status-emails` switch each status email off
+  for a conference: then nothing is sent and the history says `template_off`.
+- **Notes and corrections** (FR-SUB-06, 07): `POST /api/v1/submissions/{id}/notes` (admins
+  only); `PUT /api/v1/submissions/{id}` with `{ version, answers }`: the answers that change,
+  merged and checked by the rules of the form's version like a submit (a file field cannot
+  change, 400 `fileNotEditable`; a withdrawn submission 409 `submission_withdrawn`); the
+  columns, the authors and the search text follow, and a revision keeps the old and the new
+  answers of the changed fields, who and when.
 - **A copy of a conference** (FR-CONF-03) takes its forms as unpublished drafts with their
   configuration.
 

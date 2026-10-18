@@ -51,6 +51,7 @@ describe('the template document format', () => {
             values: vector.input.values,
             conditions: new Set(vector.input.conditions),
             link: vector.input.link,
+            images: new Map(Object.entries(vector.input.images ?? {})),
           },
         );
         expect(rendered).toEqual(vector.expected);

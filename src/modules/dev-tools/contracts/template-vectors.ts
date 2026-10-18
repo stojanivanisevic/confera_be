@@ -10,17 +10,23 @@ import type { DocumentErrorCode } from '../../templates/document';
 export interface RefusedVector {
   readonly name: string;
   readonly kind: 'body' | 'subject';
-  readonly type: 'invitation' | 'security_notice';
+  readonly type: 'invitation' | 'security_notice' | 'submission_returned';
   readonly document: unknown;
   readonly code: DocumentErrorCode;
 }
 
 export interface RenderedVector {
   readonly name: string;
-  readonly type: 'invitation' | 'security_notice';
+  readonly type: 'invitation' | 'security_notice' | 'submission_returned';
   readonly subject: unknown;
   readonly body: unknown;
-  readonly input: { values: Record<string, string>; conditions: string[]; link?: string };
+  readonly input: {
+    values: Record<string, string>;
+    conditions: string[];
+    link?: string;
+    /** The images that may be shown, by file id: what the server found clean in the organisation. */
+    images?: Record<string, { src: string; width: number; height: number }>;
+  };
   readonly expected: { subject: string; html: string; text: string };
 }
 
@@ -30,6 +36,9 @@ const placeholder = (key: string) => ({ type: 'placeholder', key });
 const paragraph = (...children: unknown[]) => ({ type: 'paragraph', children });
 const doc = (...children: unknown[]) => ({ type: 'doc', children });
 const subject = (...children: unknown[]) => ({ type: 'subject', children });
+
+/** The file id of an invented email image. */
+const IMAGE_ID = '0b5c9e2a-6d1f-4a3b-9c8e-1f2a3b4c5d6e';
 
 /** A paragraph nested nine levels deep through conditionals: one more than the limit. */
 function tooDeep(): unknown {
@@ -63,11 +72,64 @@ export const REFUSED_VECTORS: readonly RefusedVector[] = [
     code: 'unknown_node',
   },
   {
-    name: 'an image, until 0.4.0',
+    name: 'an image by a remote address (ST-60)',
     kind: 'body',
     type: 'invitation',
-    document: doc({ type: 'image', fileId: 'x' }),
+    document: doc({ type: 'image', src: 'https://tracker.example.test/pixel.gif', alt: '' }),
+    code: 'unknown_attribute',
+  },
+  {
+    name: 'an image embedded as data in a pasted fragment (ST-60)',
+    kind: 'body',
+    type: 'invitation',
+    document: doc({
+      type: 'image',
+      fileId: IMAGE_ID,
+      alt: '',
+      src: 'data:image/png;base64,iVBORw0KGgo=',
+    }),
+    code: 'unknown_attribute',
+  },
+  {
+    name: 'an image named by something other than a file id',
+    kind: 'body',
+    type: 'invitation',
+    document: doc({ type: 'image', fileId: '../../etc/passwd', alt: '' }),
+    code: 'wrong_attribute',
+  },
+  {
+    name: 'an image inside a paragraph',
+    kind: 'body',
+    type: 'invitation',
+    document: doc(paragraph({ type: 'image', fileId: IMAGE_ID, alt: '' })),
     code: 'unknown_node',
+  },
+  {
+    name: 'an alternative text with a line break',
+    kind: 'body',
+    type: 'invitation',
+    document: doc({ type: 'image', fileId: IMAGE_ID, alt: 'a\nb' }),
+    code: 'text_control_character',
+  },
+  {
+    name: 'six images, one more than the limit',
+    kind: 'body',
+    type: 'invitation',
+    document: doc(
+      ...['1', '2', '3', '4', '5', '6'].map((n) => ({
+        type: 'image',
+        fileId: `${IMAGE_ID.slice(0, -1)}${n}`,
+        alt: '',
+      })),
+    ),
+    code: 'too_many_images',
+  },
+  {
+    name: 'the note of a status email as a condition of another type',
+    kind: 'body',
+    type: 'invitation',
+    document: doc({ type: 'conditional', key: 'hasMessage', children: [] }),
+    code: 'unknown_condition',
   },
   {
     name: 'an unknown attribute',
@@ -333,6 +395,39 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
       subject: 'Notice: user_role_changed',
       html: '<h2>Change at Društvo &amp; Co</h2>\n<p><strong>Bold</strong> and <u><em>italic</em></u><br>next line</p>\n<ul><li>one</li><li>two: user_role_changed</li></ul>\n<ol><li>first</li><li>second</li></ol>\n<p>By Đorđe Žikić</p>\n\n<p><a href="https://admin.confera.test/audit">the audit log</a></p>\n<p><a href="mailto:office@example.test">office@example.test</a></p>',
       text: 'Change at Društvo & Co\n\nBold and italic\nnext line\n\n- one\n- two: user_role_changed\n\n1. first\n2. second\n\nBy Đorđe Žikić\n\nthe audit log <https://admin.confera.test/audit>\n\noffice@example.test <mailto:office@example.test>\n',
+    },
+  },
+  {
+    name: 'a status email: the note of the admin keeps its lines and arrives as text; an image is an inline part; a hostile title is text (ST-44, ST-60)',
+    type: 'submission_returned',
+    subject: subject(text('Your submission '), placeholder('reference'), text(' needs changes')),
+    body: doc(
+      paragraph(text('Dear '), placeholder('authorName'), text(',')),
+      { type: 'image', fileId: IMAGE_ID, alt: 'Logo of the conference' },
+      { type: 'image', fileId: '1b5c9e2a-6d1f-4a3b-9c8e-1f2a3b4c5d6e', alt: 'Not scanned yet' },
+      {
+        type: 'conditional',
+        key: 'hasTitle',
+        children: [paragraph(text('Title: '), placeholder('title'))],
+      },
+      paragraph(placeholder('message')),
+    ),
+    input: {
+      values: {
+        reference: 'IT27-0001',
+        authorName: 'Živana <b>Đorđević</b>',
+        title: '<script>alert(1)</script> & "quotes"',
+        message: 'Line one <i>x</i>\r\nLine two\nLine three',
+      },
+      conditions: ['hasTitle'],
+      images: {
+        [IMAGE_ID]: { src: `cid:${IMAGE_ID}@confera`, width: 600, height: 120 },
+      },
+    },
+    expected: {
+      subject: 'Your submission IT27-0001 needs changes',
+      html: `<p>Dear Živana &lt;b&gt;Đorđević&lt;/b&gt;,</p>\n<p><img src="cid:${IMAGE_ID}@confera" alt="Logo of the conference" width="600" height="120"></p>\n\n<p>Title: &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;</p>\n<p>Line one &lt;i&gt;x&lt;/i&gt;<br>Line two<br>Line three</p>`,
+      text: 'Dear Živana <b>Đorđević</b>,\n\n[Logo of the conference]\n\n[Not scanned yet]\n\nTitle: <script>alert(1)</script> & "quotes"\n\nLine one <i>x</i>\nLine two\nLine three\n',
     },
   },
 ];
