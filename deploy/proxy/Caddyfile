@@ -36,9 +36,12 @@
 	email {$CONFERA_ACME_EMAIL}
 	servers {
 		protocols h1 h2
-		# Plain-text access log on stdout: method, path pattern and status come from Caddy's
-		# JSON log; tokens never travel in a query of Confera (ST-55 checks the log in 1.0.0).
 	}
+	# No access log: there is no `log` directive in any site, so Caddy writes only its own
+	# events (certificates, configuration, errors) to stderr, which Docker keeps (json-file,
+	# 5 x 10 MB). Requests are logged by the API, by route pattern and status. An access log of
+	# the proxy would hold every client's address, which is personal data: turning it on needs a
+	# retention period and is decided before production (Gate 4; SEC-M4I-08).
 }
 
 (confera_common) {
