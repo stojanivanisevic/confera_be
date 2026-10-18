@@ -449,7 +449,8 @@ describe('forms and intake (M3)', () => {
       expect(mails).toHaveLength(1);
       const mail = await mailText(mails[0]?.ID ?? '');
       expect(mail.Subject).toBe(
-        `Vaša prijava ${result.reference} za Probna konferencija ${String(form.editionYear)} (izmišljeno)`,
+        // The conference name stays in the nominative (M3-ISS-13): never declined in a sentence.
+        `Vaša prijava ${result.reference} – konferencija: Probna konferencija ${String(form.editionYear)} (izmišljeno)`,
       );
       expect(mail.Text).toContain('Naslov: <b>Učenje</b> & "nastava" u Šapcu');
       expect(mail.HTML).toContain('&lt;b&gt;Učenje&lt;/b&gt;');

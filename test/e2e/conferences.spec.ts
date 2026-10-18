@@ -191,7 +191,7 @@ describe('conferences and templates', () => {
       original.items.map(({ type, language }) => `${type}/${language}`),
     );
     // Eight types in two languages (the confirmation of a submission came with 0.3.0).
-    expect(copied.items.length).toBe(16);
+    expect(copied.items.length).toBe(30);
     await as(e2e, adminA, 'patch', `/api/v1/conferences/${copyId}`).send({
       venue: 'Kragujevac',
       version: 1,
@@ -226,6 +226,7 @@ describe('conferences and templates', () => {
       expect(catalogue.languages).toEqual(['en', 'sr']);
       expect(catalogue.types.find(({ type }) => type === 'invitation')).toEqual({
         type: 'invitation',
+        statusEmail: false,
         placeholders: ['recipientName', 'organisationName', 'inviterName', 'expiresIn'],
         conditions: [],
         carriesLink: true,
