@@ -347,16 +347,13 @@ export function xmlPartText(bytes: Buffer): string | null {
 const isSpace = (code: number): boolean =>
   code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
 
-/** Where `needle` begins in `text` at `from` or later, or -1: a loop, no call per step. */
+/**
+ * Where `needle` begins in `text` at `from` or later, or -1. The engine's own search: for a
+ * needle of two or three characters it is linear, also over a megabyte of dashes after an
+ * unterminated `<!--`, where a loop with a call per step took 147 ms (M3-ISS-12).
+ */
 function find(text: string, needle: string, from: number): number {
-  const first = needle.charCodeAt(0);
-  const last = text.length - needle.length;
-  for (let at = from; at <= last; at += 1) {
-    if (text.charCodeAt(at) === first && text.startsWith(needle, at)) {
-      return at;
-    }
-  }
-  return -1;
+  return text.indexOf(needle, from);
 }
 
 /**

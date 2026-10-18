@@ -108,6 +108,10 @@ export function adversarialRelationships(): readonly (readonly [string, string])
       ['references that all decode', '&amp;'.repeat(MB / 5)],
       ['many small elements', '<Relationship Target="x"/>'.repeat(MB / 26)],
       ['comments that never close', `<!-- ${"' ".repeat(MB / 2)}`],
+      // M3-ISS-12: an unterminated comment over plain text and over dashes, which match the
+      // first character of its end again and again.
+      ['a comment that never closes over plain text', `<!--${'x'.repeat(MB)}`],
+      ['a comment that never closes over dashes', `<!--${'-'.repeat(MB)}`],
       ['many short declarations', '<!>'.repeat(MB / 3)],
       ['a quote in every tag', '<a "'.repeat(MB / 4)],
     ] as const
