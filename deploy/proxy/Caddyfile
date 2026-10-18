@@ -9,6 +9,8 @@
 #                                             through the web application, whose framework keeps
 #                                             only the first 10 MB of a body; M3-ISS-06)
 #                everything    -> web:3000   (hosted form, frame, secure-link pages)
+#   mail host    everything    -> mailpit:8025 (STAGING only, its own credentials:
+#                                             deploy/proxy/mail-staging.caddy)
 #   any other host name: no certificate, no answer.
 #
 # What the proxy adds and what it does not:
@@ -44,15 +46,18 @@
 	# retention period and is decided before production (Gate 4; SEC-M4I-08).
 }
 
-(confera_common) {
-	# The gate of a staging server, or nothing (production).
-	import /etc/caddy/gate.caddy
-
+(confera_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 		-Via
 	}
+}
+
+(confera_common) {
+	# The gate of a staging server, or nothing (production).
+	import /etc/caddy/gate.caddy
+	import confera_headers
 }
 
 # body_limit <bytes>: a body above <bytes> is refused with 413. A declared Content-Length above it
@@ -124,3 +129,8 @@ http:// {
 		import to_web
 	}
 }
+
+# Sites of one instance only: on staging, deploy/compose.staging.yml mounts the mail catcher's
+# site (deploy/proxy/mail-staging.caddy) here. On production the folder does not exist and the
+# pattern matches nothing (Caddy notes that and goes on).
+import /etc/caddy/sites.d/*.caddy
