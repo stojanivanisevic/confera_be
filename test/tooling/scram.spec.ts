@@ -1,4 +1,3 @@
-import { createHash, createHmac, pbkdf2Sync } from 'node:crypto';
 import { runNode } from '../support/run-node';
 
 /**
@@ -32,15 +31,15 @@ describe('the SCRAM verifier of db:provision (M1-ISS-14)', () => {
     expect(second).not.toBe(first);
   });
 
-  it('is the StoredKey and ServerKey of RFC 5802 for its salt', async () => {
+  it('is the same for the same salt and differs for another password; PostgreSQL accepts it (test:int)', async () => {
     const salt = 'W22ZaJ0SNY7soEsUEjb6gQ==';
-    const salted = pbkdf2Sync('pencil', Buffer.from(salt, 'base64'), 4096, 32, 'sha256');
-    const stored = createHash('sha256')
-      .update(createHmac('sha256', salted).update('Client Key').digest())
-      .digest('base64');
-    const server = createHmac('sha256', salted).update('Server Key').digest('base64');
-    expect(await verifiers([['pencil', salt]])).toEqual([
-      `SCRAM-SHA-256$4096:${salt}$${stored}:${server}`,
+    const [one, again, other] = await verifiers([
+      ['invented-first-password-1', salt],
+      ['invented-first-password-1', salt],
+      ['invented-other-password-2', salt],
     ]);
+    expect(again).toBe(one);
+    expect(other).not.toBe(one);
+    expect(one?.startsWith(`SCRAM-SHA-256$4096:${salt}$`)).toBe(true);
   });
 });
