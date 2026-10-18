@@ -23,6 +23,8 @@ import { TemplatesModule } from './modules/templates/templates.module';
 import { UsersModule } from './modules/users/users.module';
 import { DeadlinesModule } from './modules/deadlines/deadlines.controller';
 import { FilesModule } from './modules/files/files.module';
+import { MailImagesModule } from './modules/files/mail-images.controller';
+import { JobsModule } from './modules/jobs/maintenance-worker';
 import { FormsModule } from './modules/forms/forms.module';
 import { HeldMailModule } from './modules/held-mail/held-mail.controller';
 import { SubmissionsModule } from './modules/submissions/submissions.controller';
@@ -72,6 +74,8 @@ export class AppModule {
         TemplatesModule,
         MailLogModule,
         FilesModule,
+        MailImagesModule,
+        JobsModule,
         FormsModule,
         DeadlinesModule,
         SubmissionsModule,

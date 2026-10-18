@@ -51,12 +51,18 @@ importers:
       fontkit:
         specifier: 2.0.4
         version: 2.0.4
+      jpeg-js:
+        specifier: 0.4.4
+        version: 0.4.4
       nestjs-cls:
         specifier: 7.0.1
         version: 7.0.1(@nestjs/common@12.1.2(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@10.2.2))(@nestjs/core@12.1.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       nodemailer:
         specifier: 10.1.0
         version: 10.1.0
+      omggif:
+        specifier: 1.0.10
+        version: 1.0.10
       pdfmake:
         specifier: 0.3.11
         version: 0.3.11
@@ -66,6 +72,9 @@ importers:
       pino:
         specifier: 10.4.0
         version: 10.4.0
+      pngjs:
+        specifier: 7.0.0
+        version: 7.0.0
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -103,12 +112,18 @@ importers:
       '@types/nodemailer':
         specifier: 8.0.2
         version: 8.0.2
+      '@types/omggif':
+        specifier: 1.0.5
+        version: 1.0.5
       '@types/pdfmake':
         specifier: 0.3.3
         version: 0.3.3
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1
+      '@types/pngjs':
+        specifier: 6.0.5
+        version: 6.0.5
       '@types/supertest':
         specifier: 7.2.1
         version: 7.2.1
@@ -1236,6 +1251,9 @@ packages:
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
 
+  '@types/omggif@1.0.5':
+    resolution: {integrity: sha512-gDQJflz1rOgEcUXkMAl80bDGN46f5mp8GbcM5dyvq+zsFV6YRBRtmNxlJJ5mjY77T7BRkRFzdIBVmK90QYhCxA==}
+
   '@types/pdfkit@0.17.6':
     resolution: {integrity: sha512-tIwzxk2uWKp0Cq9JIluQXJid77lYhF52EsIOwhsMF4iWLA6YneoBR1xVKYYdAysHuepUB0OX4tdwMiUDdGKmig==}
 
@@ -1244,6 +1262,9 @@ packages:
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
+
+  '@types/pngjs@6.0.5':
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
 
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
@@ -2510,6 +2531,9 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
+  jpeg-js@0.4.4:
+    resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
+
   js-md5@0.8.3:
     resolution: {integrity: sha512-qR0HB5uP6wCuRMrWPTrkMaev7MJZwJuuw4fnwAzRgP4J4/F8RwtodOKpGp4XpqsLBFzzgqIO42efFAyz2Et6KQ==}
 
@@ -2756,6 +2780,9 @@ packages:
   ohash@2.0.12:
     resolution: {integrity: sha512-65S/5gk9YSsaRjcyf7Nfa6h/d3E8/1gslpXfI4W7Dxn/oap8IKRuNT5VXkLQ1YFKIEg4apRY4Pj6aiwFzrDdmw==}
 
+  omggif@1.0.10:
+    resolution: {integrity: sha512-LMJTtvgc/nugXj0Vcrrs68Mn2D1r0zf630VNtqtpI1FEO7e+O9FP4gqs9AcnBaSEeoHIPm28u6qgPR0oyEpGSw==}
+
   on-exit-leak-free@2.1.2:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
@@ -2931,6 +2958,10 @@ packages:
 
   png-js@1.1.0:
     resolution: {integrity: sha512-PM/uYGzGdNSzqeOgly68+6wKQDL1SY0a/N+OEa/+br6LnHWOAJB0Npiamnodfq3jd2LS/i2fMeOKSAILjA+m5Q==}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postgres-array@2.0.0:
     resolution: {integrity: sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==}
@@ -4735,6 +4766,8 @@ snapshots:
 
   '@types/normalize-package-data@2.4.4': {}
 
+  '@types/omggif@1.0.5': {}
+
   '@types/pdfkit@0.17.6':
     dependencies:
       '@types/node': 26.6.5
@@ -4749,6 +4782,10 @@ snapshots:
       '@types/node': 26.6.5
       pg-protocol: 1.16.1
       pg-types: 2.2.0
+
+  '@types/pngjs@6.0.5':
+    dependencies:
+      '@types/node': 22.20.5
 
   '@types/qs@6.15.1': {}
 
@@ -6281,6 +6318,8 @@ snapshots:
 
   jiti@2.7.0: {}
 
+  jpeg-js@0.4.4: {}
+
   js-md5@0.8.3: {}
 
   js-tokens@4.0.0: {}
@@ -6470,6 +6509,8 @@ snapshots:
 
   ohash@2.0.12: {}
 
+  omggif@1.0.10: {}
+
   on-exit-leak-free@2.1.2: {}
 
   on-finished@2.4.1:
@@ -6653,6 +6694,8 @@ snapshots:
   png-js@1.1.0:
     dependencies:
       browserify-zlib: 0.2.0
+
+  pngjs@7.0.0: {}
 
   postgres-array@2.0.0: {}
 
