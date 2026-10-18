@@ -73,7 +73,7 @@ export function ipv6Words(address: string): number[] | null {
 export function isRefusedAddress(address: string): boolean {
   const version = isIP(address);
   if (version === 4) {
-    const [a = 0, b = 0] = ipv4Parts(address);
+    const [a = 0, b = 0, c = 0] = ipv4Parts(address);
     return (
       a === 0 || // this network
       a === 10 || // private
@@ -82,8 +82,10 @@ export function isRefusedAddress(address: string): boolean {
       (a === 169 && b === 254) || // link-local, cloud metadata
       (a === 172 && b >= 16 && b <= 31) || // private, Docker's networks
       (a === 192 && b === 168) || // private
-      (a === 192 && b === 0) || // IETF protocol assignments
+      (a === 192 && b === 0) || // IETF protocol assignments, documentation 192.0.2.0/24
       (a === 198 && (b === 18 || b === 19)) || // benchmarking
+      (a === 198 && b === 51 && c === 100) || // documentation (M2-ISS-19)
+      (a === 203 && b === 0 && c === 113) || // documentation (M2-ISS-19)
       a >= 224 // multicast and reserved
     );
   }
@@ -115,7 +117,20 @@ export function isRefusedIpv6(words: readonly number[] | null): boolean {
       // ::, ::1 and every other ::a.b.c.d land here; 0.x.x.x is refused as "this network".
       return isRefusedAddress(embedded);
     }
+    // 6to4 (2002:wwxx:yyzz::/48) reaches the IPv4 address in its second and third words
+    // (M2-ISS-19, SEC-M2-10).
+    if (w0 === 0x2002) {
+      return isRefusedAddress(
+        `${String(w1 >> 8)}.${String(w1 & 255)}.${String(w2 >> 8)}.${String(w2 & 255)}`,
+      );
+    }
     return (
+      // NAT64 for local use (64:ff9b:1::/48, RFC 8215): translators inside a private network.
+      (w0 === 0x64 && w1 === 0xff9b && w2 === 1) ||
+      // Documentation: 2001:db8::/32 and 3fff::/20 (RFC 9637).
+      (w0 === 0x2001 && w1 === 0x0db8) ||
+      (w0 === 0x3fff && (w1 & 0xf000) === 0) ||
+      (w0 & 0xfe00) === 0xfc00 || // unique local
       (w0 & 0xfe00) === 0xfc00 || // unique local
       (w0 & 0xffc0) === 0xfe80 || // link-local
       (w0 & 0xffc0) === 0xfec0 || // site-local (deprecated)

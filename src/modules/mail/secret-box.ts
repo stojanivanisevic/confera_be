@@ -16,6 +16,7 @@ import { APP_CONFIG } from '../../config/config.module';
 const VERSION = 'v1';
 const KEY_ID = 'k1';
 const INFO = 'confera data key v1';
+const TAG_BYTES = 16;
 
 export class SecretBoxError extends Error {
   constructor(message: string) {
@@ -55,10 +56,18 @@ export class SecretBox {
         'The stored secret is not in the written form, or under another key.',
       );
     }
+    // A tag of the full 16 bytes only (M2-ISS-20, SEC-M2-11): GCM would also accept a cut
+    // one of 4 to 15 bytes, which is far easier to forge.
+    const authTag = Buffer.from(tag, 'base64url');
+    if (authTag.length !== TAG_BYTES) {
+      throw new SecretBoxError('The stored secret does not open: its tag is not 16 bytes.');
+    }
     try {
-      const decipher = createDecipheriv('aes-256-gcm', this.#key, Buffer.from(iv, 'base64url'));
+      const decipher = createDecipheriv('aes-256-gcm', this.#key, Buffer.from(iv, 'base64url'), {
+        authTagLength: TAG_BYTES,
+      });
       decipher.setAAD(Buffer.from(bindingOf(binding), 'utf8'));
-      decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+      decipher.setAuthTag(authTag);
       return Buffer.concat([
         decipher.update(Buffer.from(ciphertext, 'base64url')),
         decipher.final(),

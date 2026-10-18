@@ -32,4 +32,18 @@ describe('the secret box (ADR-11)', () => {
     expect(() => box.open('v1:k2:a:b:c', binding)).toThrow(SecretBoxError);
     expect(() => box.open('plain text', binding)).toThrow(SecretBoxError);
   });
+
+  it('opens nothing with a tag cut short, however few bytes are missing (M2-ISS-20, SEC-M2-11)', () => {
+    const [version, keyId, iv, tag, ciphertext] = box
+      .seal('invented-mail-password', binding)
+      .split(':');
+    const full = Buffer.from(tag ?? '', 'base64url');
+    expect(full).toHaveLength(16);
+    for (const length of [4, 8, 12, 15]) {
+      const cut = full.subarray(0, length).toString('base64url');
+      expect(() => box.open([version, keyId, iv, cut, ciphertext].join(':'), binding)).toThrow(
+        SecretBoxError,
+      );
+    }
+  });
 });

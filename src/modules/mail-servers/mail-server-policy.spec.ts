@@ -130,7 +130,7 @@ describe('mail server policy', () => {
       expect(targetProblem(target(host), 'prod')).toBe('address_not_allowed');
     });
 
-    it.each(['smtp.example.test', '203.0.113.10', 'mail.udekom.example.test'])(
+    it.each(['smtp.example.test', '8.8.4.4', 'mail.udekom.example.test'])(
       'allows %s in production',
       (host) => {
         expect(targetProblem(target(host), 'prod')).toBeNull();
@@ -149,7 +149,23 @@ describe('mail server policy', () => {
 
     it('knows the refused address ranges', () => {
       expect(isRefusedAddress('8.8.8.8')).toBe(false);
-      expect(isRefusedAddress('2001:db8::1')).toBe(false);
+      expect(isRefusedAddress('2a00:1450:4001::1')).toBe(false);
+      // Documentation ranges, 6to4 and local-use NAT64 (M2-ISS-19, SEC-M2-10).
+      for (const refused of [
+        '192.0.2.1',
+        '198.51.100.7',
+        '203.0.113.10',
+        '2001:db8::1',
+        '3fff:fff::1',
+        '2002:0a00:0001::1',
+        '2002:c0a8:0101::1',
+        '64:ff9b:1::a00:1',
+      ]) {
+        expect(isRefusedAddress(refused)).toBe(true);
+      }
+      // 6to4 of a public address is a public address.
+      expect(isRefusedAddress('2002:0808:0808::1')).toBe(false);
+      expect(isRefusedAddress('3fff:1000::1')).toBe(false);
       expect(isRefusedAddress('172.15.0.1')).toBe(false);
       expect(isRefusedAddress('172.32.0.1')).toBe(false);
       expect(isRefusedAddress('224.0.0.1')).toBe(true);
@@ -184,6 +200,6 @@ describe('an IPv6 text the parser cannot read (SEC-M2-13)', () => {
 
   it('is refused: the rule fails closed', () => {
     expect(isRefusedIpv6(null)).toBe(true);
-    expect(isRefusedIpv6(ipv6Words('2001:db8::1'))).toBe(false);
+    expect(isRefusedIpv6(ipv6Words('2a00:1450:4001::1'))).toBe(false);
   });
 });
