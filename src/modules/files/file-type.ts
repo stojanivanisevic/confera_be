@@ -12,17 +12,25 @@ import type { FileType } from '../forms/catalogue';
  * - an old `.doc` is a compound file (CFB) with a `WordDocument` stream; it holds macros when
  *   it has a `Macros` or `_VBA_PROJECT_CUR` storage: accepted and flagged for the office.
  *
- * Only directories are read (the end of a ZIP, the directory sectors of a CFB), in bounded
- * steps, so a file of many entries or an archive bomb costs bounded time and memory. What is
- * none of these is `null`, and refused.
+ * Only directories are read (the end of a ZIP, the directory sectors of a CFB), and of a ZIP
+ * the few small parts that name a VBA project, in bounded steps: one budget of inflated bytes,
+ * of parts and of time per file (SEC-M3-01), so a file of many entries or an archive bomb
+ * costs bounded time and memory. What is none of these is `null`, and refused.
  */
 export interface DetectedType {
   readonly type: FileType | null;
   /** The file holds macros (a VBA project). */
   readonly macros: boolean;
+  /**
+   * The file is built as no document is (SEC-M3-01): ZIP entries that repeat a name or
+   * overlap, or more inspection than any document needs. It is refused, and the upload counts
+   * as an act of a script.
+   */
+  readonly crafted?: true;
 }
 
 const UNKNOWN: DetectedType = { type: null, macros: false };
+const CRAFTED: DetectedType = { type: null, macros: false, crafted: true };
 
 /** The most entries a central directory or a CFB directory may have before the file is refused. */
 const MAX_ENTRIES = 10_000;
@@ -39,6 +47,7 @@ async function readAt(handle: Handle, position: number, length: number): Promise
 /** An entry of a ZIP's central directory: where its data begins and how it is stored. */
 interface ZipEntry {
   readonly name: string;
+  readonly nameLength: number;
   readonly method: number;
   readonly compressedSize: number;
   readonly uncompressedSize: number;
@@ -47,9 +56,19 @@ interface ZipEntry {
 
 /** The most of one small part (content types, relationships) that is read and inflated. */
 const MAX_PART_BYTES = 1024 * 1024;
+/** The most a file's parts may inflate to in all (SEC-M3-01): a document's are a few KB. */
+export const MAX_INFLATED_BYTES = 2 * 1024 * 1024;
+/** The most parts of a file that are read and inflated (SEC-M3-01). */
+export const MAX_PARTS_READ = 64;
+/** The most time the inspection of one file's parts may take (SEC-M3-01). */
+export const MAX_INSPECTION_MS = 1_000;
 
-/** The entries of a ZIP, from its central directory; null when it is not a plain ZIP. */
-async function zipEntries(handle: Handle, size: number): Promise<ZipEntry[] | null> {
+/**
+ * The entries of a ZIP, from its central directory; null when it is not a plain ZIP, and
+ * `'crafted'` when its entries repeat a name or overlap (SEC-M3-01): in a real archive every
+ * entry has a name and bytes of its own, so one compressed block is never read twice.
+ */
+async function zipEntries(handle: Handle, size: number): Promise<ZipEntry[] | 'crafted' | null> {
   const tail = Math.min(size, 65_557);
   const end = await readAt(handle, size - tail, tail);
   let at = -1;
@@ -87,6 +106,7 @@ async function zipEntries(handle: Handle, size: number): Promise<ZipEntry[] | nu
     const commentLength = directory.readUInt16LE(position + 32);
     names.push({
       name: directory.subarray(position + 46, position + 46 + nameLength).toString('utf8'),
+      nameLength,
       method: directory.readUInt16LE(position + 10),
       compressedSize: directory.readUInt32LE(position + 20),
       uncompressedSize: directory.readUInt32LE(position + 24),
@@ -94,15 +114,49 @@ async function zipEntries(handle: Handle, size: number): Promise<ZipEntry[] | nu
     });
     position += 46 + nameLength + extraLength + commentLength;
   }
+  const seen = new Set<string>();
+  for (const entry of names) {
+    const lower = entry.name.toLowerCase();
+    if (seen.has(lower)) {
+      return 'crafted';
+    }
+    seen.add(lower);
+  }
+  // Each entry's local header, name and data end before the next entry and the directory.
+  const ordered = [...names].sort((a, b) => a.localOffset - b.localOffset);
+  let free = 0;
+  for (const entry of ordered) {
+    if (entry.localOffset < free) {
+      return 'crafted';
+    }
+    free = entry.localOffset + 30 + entry.nameLength + entry.compressedSize;
+    if (free > directoryOffset) {
+      return 'crafted';
+    }
+  }
   return names;
 }
 
+/** What is left of the inspection of one file (SEC-M3-01). */
+interface Budget {
+  bytes: number;
+  parts: number;
+  readonly until: number;
+}
+
 /**
- * The text of a small part of a ZIP (stored or deflated), or null when it is larger than a
- * part of its kind ever is, or cannot be read: bounded in what is read and in what it inflates to.
+ * The bytes of a small part of a ZIP (stored or deflated), or null when it is larger than a
+ * part of its kind ever is or than what is left of the budget, or cannot be read: bounded in
+ * what is read and in what it inflates to.
  */
-async function zipPartText(handle: Handle, size: number, entry: ZipEntry): Promise<string | null> {
-  if (entry.compressedSize > MAX_PART_BYTES || entry.uncompressedSize > MAX_PART_BYTES) {
+async function zipPart(
+  handle: Handle,
+  size: number,
+  entry: ZipEntry,
+  budget: Budget,
+): Promise<Buffer | null> {
+  const most = Math.min(MAX_PART_BYTES, budget.bytes);
+  if (entry.compressedSize > most || entry.uncompressedSize > most) {
     return null;
   }
   const local = await readAt(handle, entry.localOffset, 30);
@@ -116,10 +170,13 @@ async function zipPartText(handle: Handle, size: number, entry: ZipEntry): Promi
   const data = await readAt(handle, start, entry.compressedSize);
   try {
     if (entry.method === 0) {
-      return data.toString('utf8');
+      budget.bytes -= data.length;
+      return data;
     }
     if (entry.method === 8) {
-      return inflateRawSync(data, { maxOutputLength: MAX_PART_BYTES }).toString('utf8');
+      const inflated = inflateRawSync(data, { maxOutputLength: most });
+      budget.bytes -= inflated.length;
+      return inflated;
     }
   } catch {
     return null;
@@ -131,9 +188,19 @@ async function zipPartText(handle: Handle, size: number, entry: ZipEntry): Promi
  * Whether a `.docx` holds a VBA project (G2-22, Q3-11): Word finds it by its content type
  * and its relationship, whatever the part is called. So a part named like one, a content
  * type of a VBA project or of a macro-enabled document, or a relationship of the type
- * vbaProject each count. A part that cannot be read counts as macros (fail closed).
+ * vbaProject each count. A part that cannot be read counts as macros (fail closed), and so
+ * does a file whose parts would take more than the budget (SEC-M3-01): `'crafted'`.
  */
-async function docxHasMacros(handle: Handle, size: number, entries: ZipEntry[]): Promise<boolean> {
+async function docxHasMacros(
+  handle: Handle,
+  size: number,
+  entries: ZipEntry[],
+): Promise<boolean | 'crafted'> {
+  const budget: Budget = {
+    bytes: MAX_INFLATED_BYTES,
+    parts: MAX_PARTS_READ,
+    until: Date.now() + MAX_INSPECTION_MS,
+  };
   for (const entry of entries) {
     const lower = entry.name.toLowerCase();
     if (lower.endsWith('vbaproject.bin') || lower.endsWith('vbadata.xml')) {
@@ -144,10 +211,15 @@ async function docxHasMacros(handle: Handle, size: number, entries: ZipEntry[]):
     if (!contentTypes && !relationships) {
       continue;
     }
-    const text = await zipPartText(handle, size, entry);
-    if (text === null) {
+    if (budget.parts === 0 || entry.uncompressedSize > budget.bytes || Date.now() > budget.until) {
+      return 'crafted';
+    }
+    budget.parts -= 1;
+    const part = await zipPart(handle, size, entry, budget);
+    if (part === null) {
       return true;
     }
+    const text = part.toString('utf8');
     if (
       (contentTypes && /vbaProject|macroEnabled|vbaData/i.test(text)) ||
       (relationships && /relationships\/(?:vbaProject|wordVbaData)/i.test(text))
@@ -257,6 +329,9 @@ export async function detectFileType(path: string): Promise<DetectedType> {
     }
     if (head.readUInt32LE(0) === 0x04034b50) {
       const entries = await zipEntries(handle, size);
+      if (entries === 'crafted') {
+        return CRAFTED;
+      }
       if (entries === null) {
         return UNKNOWN;
       }
@@ -267,7 +342,11 @@ export async function detectFileType(path: string): Promise<DetectedType> {
       ) {
         return UNKNOWN;
       }
-      return { type: 'docx', macros: await docxHasMacros(handle, size, entries) };
+      const macros = await docxHasMacros(handle, size, entries);
+      // More work than any document needs: refused as holding macros (fail closed), and counted.
+      return macros === 'crafted'
+        ? { type: 'docx', macros: true, crafted: true }
+        : { type: 'docx', macros };
     }
     if (head.length === 8 && head.equals(CFB)) {
       const names = await compoundNames(handle, size);

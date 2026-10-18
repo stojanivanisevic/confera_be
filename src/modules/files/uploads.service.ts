@@ -122,6 +122,10 @@ export class UploadsService {
         const field = prepared.fields.find((candidate) => candidate.key === received.field);
         const accept = field?.rules.file?.accept ?? [];
         const detected = await detectFileType(received.path);
+        // A file built to make the inspection work (SEC-M3-01) is an act of a script.
+        if (detected.crafted === true) {
+          this.limits.suspicious(address);
+        }
         if (detected.type === null || !accept.includes(detected.type)) {
           throw new ProblemException(415, 'file_type_refused');
         }

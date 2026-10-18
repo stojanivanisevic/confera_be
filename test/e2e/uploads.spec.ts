@@ -3,7 +3,7 @@ import type { Client } from 'pg';
 import { FilesWorker } from '../../src/modules/files/files-worker';
 import { UploadsService } from '../../src/modules/files/uploads.service';
 import { type FakeClamd, startFakeClamd } from '../support/fake-clamd';
-import { docOf, docxOf, EICAR, pdfOf } from '../support/office-files';
+import { docOf, docxOf, EICAR, overlappingZipOf, pdfOf } from '../support/office-files';
 import { type Actors, as, createActors, type SignedIn, signIn } from './support/actors';
 import {
   ADMIN_HOST,
@@ -217,6 +217,21 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     expect((detail.body as { files: unknown[] }).files).toEqual([
       expect.objectContaining({ type: 'doc', scanFlag: 'macros' }),
     ]);
+  });
+
+  it('SEC-M3-01: an archive of 10 000 records over one compressed block is refused at once, and counts as a script', async () => {
+    const address = freshAddress();
+    const { formToken } = await tokenFor(e2e, form.slug, address);
+    const crafted = overlappingZipOf(10_000);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const started = Date.now();
+      const refused = await upload(form.slug, formToken, crafted, 'sazetak.docx', { address });
+      expect(refused.status).toBe(415);
+      expect(Date.now() - started).toBeLessThan(2_000);
+    }
+    // Three such acts: the next token of this client asks for a proof-of-work.
+    const next = await tokenFor(e2e, form.slug, address);
+    expect(next.proofOfWork).not.toBeNull();
   });
 
   it('ST-32: no token, another form’s token, too many uploads, a file of another token, attached twice', async () => {

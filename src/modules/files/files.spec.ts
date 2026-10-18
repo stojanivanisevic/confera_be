@@ -4,9 +4,11 @@ import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import {
   compoundFileOf,
+  deflatedZipOf,
   docOf,
   docxOf,
   EICAR,
+  overlappingZipOf,
   pdfOf,
   zipOf,
 } from '../../../test/support/office-files';
@@ -14,7 +16,7 @@ import { startFakeClamd } from '../../../test/support/fake-clamd';
 import { repoRoot } from '../../../test/support/run-node';
 import type { AppConfig } from '../../config/config';
 import { attachmentHeader, asciiFileName, safeFileName } from './file-names';
-import { detectFileType } from './file-type';
+import { detectFileType, MAX_PARTS_READ } from './file-type';
 import { retryDelayMs } from './files-worker';
 import { mayServe } from './serving';
 import { FileStorage, StorageKeyError } from './storage';
@@ -80,6 +82,73 @@ describe('the type of a file, from its content', () => {
     const started = Date.now();
     await expect(detectFileType(written(forged))).resolves.toEqual({ type: null, macros: false });
     expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  describe('the work of the inspection is bounded (SEC-M3-01)', () => {
+    it('10 000 records that point at one compressed block are refused in well under a second', async () => {
+      const path = written(overlappingZipOf(10_000));
+      const started = Date.now();
+      await expect(detectFileType(path)).resolves.toEqual({
+        type: null,
+        macros: false,
+        crafted: true,
+      });
+      expect(Date.now() - started).toBeLessThan(500);
+    });
+
+    it('entries that repeat a name (in any casing) are refused', async () => {
+      const zip = zipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'WORD/document.xml': '<w:document/>',
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({
+        type: null,
+        macros: false,
+        crafted: true,
+      });
+    });
+
+    it('parts that inflate to more than the budget in all are refused as macros', async () => {
+      const big = ' '.repeat(1024 * 1024 - 1024);
+      const zip = deflatedZipOf({
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/a.rels': big,
+        'word/_rels/b.rels': big,
+        'word/_rels/c.rels': big,
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({
+        type: 'docx',
+        macros: true,
+        crafted: true,
+      });
+    });
+
+    it(`more than ${MAX_PARTS_READ} relationship parts are refused as macros`, async () => {
+      const parts: Record<string, string> = {
+        '[Content_Types].xml': '<Types/>',
+        'word/document.xml': '<w:document/>',
+      };
+      for (let index = 0; index < MAX_PARTS_READ + 1; index += 1) {
+        parts[`word/_rels/p${index}.rels`] = '<Relationships/>';
+      }
+      await expect(detectFileType(written(deflatedZipOf(parts)))).resolves.toEqual({
+        type: 'docx',
+        macros: true,
+        crafted: true,
+      });
+    });
+
+    it('a deflated document with a few relationship parts is a plain .docx', async () => {
+      const zip = deflatedZipOf({
+        '[Content_Types].xml': '<Types/>',
+        '_rels/.rels': '<Relationships/>',
+        'word/document.xml': '<w:document/>',
+        'word/_rels/document.xml.rels': '<Relationships/>',
+      });
+      await expect(detectFileType(written(zip))).resolves.toEqual({ type: 'docx', macros: false });
+    });
   });
 });
 

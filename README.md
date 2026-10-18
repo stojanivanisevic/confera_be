@@ -470,7 +470,10 @@ the two equal. The OpenAPI document carries the declaration of every operation
   `upload_quota_reached`) and the admins told; the files of a token are purged an hour after
   it expired (time for a renewal), the token a day after its issue, and a temporary file
   untouched for an hour. A `.docx` counts as holding macros by the name, the content type
-  or the relationship of its VBA project. A file is served only by
+  or the relationship of its VBA project. Its inspection is bounded (SEC-M3-01): at most 64
+  parts, 2 MB inflated in all and 1 s per file; a ZIP whose entries repeat a name or overlap
+  is refused (415), one that needs more counts as holding macros (422), and either upload
+  counts as an act of a script. A file is served only by
   `GET /api/v1/submissions/{id}/files/{fileId}`, as an attachment with `filename*`, and only
   when its scan is clean (409 `scan_pending` or `file_not_clean`).
 - **Antivirus** (M3-BE-08): the files worker (every `JOBS_INTERVAL_SECONDS`) sends every
