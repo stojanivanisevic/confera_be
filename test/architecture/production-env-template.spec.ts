@@ -85,6 +85,7 @@ describe('deploy/api.env.example, the environment template of a server', () => {
       DATA_KEY: 'invented-data-key-of-the-server-template-0123456789ab',
       FILE_STORAGE_DIR: '/var/lib/confera/files',
       CLAMAV_ADDRESS: 'clamav:3310',
+      STAGING_MAIL_CATCHER: 'mailpit:1025',
     });
     expect(result).toEqual(expect.objectContaining({ ok: true }));
   });

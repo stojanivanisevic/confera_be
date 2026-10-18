@@ -1,7 +1,11 @@
 import { type ConfigProblem, parseEnvironment } from './config';
 import { DEV_PREFIX, DEV_VARIABLE_NAMES, INSTANCES, STAGES, VARIABLE_NAMES } from './config.schema';
 import { isLoopbackOrTestHost, TOOL_ONLY_VARIABLES } from './stage-guard';
-import { validEnvironment, validProductionEnvironment } from './testing/valid-environment';
+import {
+  validEnvironment,
+  validProductionEnvironment,
+  validStagingEnvironment,
+} from './testing/valid-environment';
 
 type Env = Record<string, string | undefined>;
 
@@ -24,6 +28,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
   it('accepts the valid environments these tests start from', () => {
     expect(problemsOf(validEnvironment())).toEqual([]);
     expect(problemsOf(validProductionEnvironment())).toEqual([]);
+    expect(problemsOf(validStagingEnvironment())).toEqual([]);
   });
 
   describe('non-production stages run only on a developer machine (ST-01)', () => {
@@ -72,7 +77,11 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
 
   describe('INSTANCE (ST-01)', () => {
     it.each(INSTANCES)('accepts %s on prod', (instance) => {
-      const result = parseEnvironment(validProductionEnvironment({ INSTANCE: instance }));
+      const result = parseEnvironment(
+        instance === 'staging'
+          ? validStagingEnvironment()
+          : validProductionEnvironment({ INSTANCE: instance }),
+      );
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.config.instance).toBe(instance);
@@ -105,6 +114,46 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
     it('is null in the configuration of a developer machine', () => {
       const result = parseEnvironment(validEnvironment());
       expect(result.ok && result.config.instance).toBeNull();
+    });
+  });
+
+  describe('the staging mail redirect (ADR-27, ST-50)', () => {
+    it('is required on a staging instance', () => {
+      for (const value of [undefined, '']) {
+        expect([
+          ...new Set(refused(validStagingEnvironment({ STAGING_MAIL_CATCHER: value }))),
+        ]).toEqual(['STAGING_MAIL_CATCHER']);
+      }
+    });
+
+    it('is refused on a production instance', () => {
+      expect(refused(validProductionEnvironment({ STAGING_MAIL_CATCHER: 'mailpit:1025' }))).toEqual(
+        ['STAGING_MAIL_CATCHER'],
+      );
+    });
+
+    it.each(NON_PRODUCTION)('is refused on STAGE=%s', (stage) => {
+      expect(
+        refused(validEnvironment({ STAGE: stage, STAGING_MAIL_CATCHER: '127.0.0.1:1025' })),
+      ).toEqual(['STAGING_MAIL_CATCHER']);
+    });
+
+    it('must be host:port', () => {
+      for (const value of ['mailpit', 'smtp://mailpit:1025', 'mailpit:0', 'mail pit:1025']) {
+        expect(refused(validStagingEnvironment({ STAGING_MAIL_CATCHER: value }))).toEqual([
+          'STAGING_MAIL_CATCHER',
+        ]);
+      }
+    });
+
+    it('is in the configuration of staging only', () => {
+      const staging = parseEnvironment(validStagingEnvironment());
+      expect(staging.ok && staging.config.mail.stagingCatcher).toEqual({
+        host: 'mailpit.confera.test',
+        port: 1025,
+      });
+      const production = parseEnvironment(validProductionEnvironment());
+      expect(production.ok && production.config.mail.stagingCatcher).toBeNull();
     });
   });
 

@@ -228,6 +228,7 @@ describe('a clean production start', () => {
       expect(JSON.parse(response.text)).toEqual({
         name: 'confera-api',
         version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+        instance: 'production',
       });
     });
 

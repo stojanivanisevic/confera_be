@@ -211,6 +211,8 @@ model MailLogEntry {
   subject        String?
   bodyHtml       String?  @map("body_html")
   bodyText       String?  @map("body_text")
+  /// The attempt went to the mail catcher of a staging instance, not to the server (ST-50).
+  diverted       Boolean  @default(false)
   sentAt         DateTime @default(now()) @map("sent_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
@@ -249,6 +251,7 @@ model User {
   publishedFormVersions FormVersion[]
   deadlineChanges       ConferenceDeadlineChange[]
   releasedMessages      MailMessage[]              @relation("ReleasedMessages")
+  discardedMessages     MailMessage[]              @relation("DiscardedMessages")
 
   @@unique([organisationId, id])
   @@map("users")
@@ -380,7 +383,8 @@ model MailMessage {
   /// What the template needs besides the link: ids and fixed codes, never a token.
   parameters       Json      @default("{}")
   /// queued, sending, sent, failed, held (by the send breaker of 0.3.0), stuck (left in sending by a crash),
-  /// waiting_for_server (no mail server can send it yet; a change of the mail servers makes it due).
+  /// waiting_for_server (no mail server can send it yet; a change of the mail servers makes it due),
+  /// discarded (a held message an admin threw away, 0.4.0).
   status           String    @default("queued")
   /// The language of the recipient: en or sr.
   language         String    @default("en")
@@ -404,6 +408,9 @@ model MailMessage {
   heldWindowHours  Int?      @map("held_window_hours")
   releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
   releasedBy       String?   @map("released_by") @db.Uuid
+  /// A held message an admin discarded (M3-ISS-14): never sent, never released.
+  discardedAt      DateTime? @map("discarded_at") @db.Timestamptz(3)
+  discardedBy      String?   @map("discarded_by") @db.Uuid
 
   organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   log          MailLogEntry[]
@@ -411,6 +418,7 @@ model MailMessage {
   form         Form?          @relation(fields: [organisationId, formId], references: [organisationId, id], onDelete: Restrict)
   submission   Submission?    @relation(fields: [organisationId, submissionId], references: [organisationId, id], onDelete: Restrict)
   releaser     User?          @relation("ReleasedMessages", fields: [organisationId, releasedBy], references: [organisationId, id], onDelete: Restrict)
+  discarder    User?          @relation("DiscardedMessages", fields: [organisationId, discardedBy], references: [organisationId, id], onDelete: Restrict)
 
   @@unique([organisationId, id])
   @@unique([organisationId, uniqueKey])

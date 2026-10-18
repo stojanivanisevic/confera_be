@@ -59,6 +59,10 @@ const PROBLEM = {
     'is required on STAGE=prod: a server keeps its uploaded files in a folder of its own and scans them (ADR-10)',
   toolOnly:
     'must not be present in the environment of the API on STAGE=prod: it belongs to the migration or provisioning job only',
+  catcherRequired:
+    'is required with INSTANCE=staging: a staging server sends every message to its mail catcher and never to a recipient (ADR-27, ST-50)',
+  catcherForbidden:
+    'must not be set unless STAGE=prod and INSTANCE=staging: only a staging server diverts its mail to a catcher (ADR-27, ST-50)',
 } as const;
 
 /**
@@ -182,6 +186,16 @@ export function stageGuardProblems(env: RawEnvironment): ConfigProblem[] {
     ) {
       add('LISTEN_HOST', PROBLEM.loopbackOnly);
     }
+  }
+
+  // The staging mail redirect (ADR-27, ST-50): on a staging instance always, nowhere else.
+  const staging = stage === 'prod' && env.INSTANCE === 'staging';
+  const catcher = env.STAGING_MAIL_CATCHER;
+  if (staging && (catcher === undefined || catcher === '')) {
+    add('STAGING_MAIL_CATCHER', PROBLEM.catcherRequired);
+  }
+  if (!staging && catcher !== undefined) {
+    add('STAGING_MAIL_CATCHER', PROBLEM.catcherForbidden);
   }
 
   if (admin !== undefined && admin.hostname === publicOrigin?.hostname) {

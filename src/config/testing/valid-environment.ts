@@ -21,16 +21,28 @@ export function validEnvironment(overrides: RawEnvironment = {}): TestEnvironmen
   };
 }
 
-/** A complete, valid environment of a server (STAGE=prod, staging instance). */
+/**
+ * A complete, valid environment of a server (STAGE=prod, production instance). A staging
+ * instance needs its mail catcher too: `validStagingEnvironment`.
+ */
 export function validProductionEnvironment(overrides: RawEnvironment = {}): TestEnvironment {
   return {
     ...validEnvironment(),
     STAGE: 'prod',
-    INSTANCE: 'staging',
+    INSTANCE: 'production',
     FILE_STORAGE_DIR: '/var/lib/confera/files',
     CLAMAV_ADDRESS: 'clamav.confera.test:3310',
     ADMIN_ORIGIN: 'https://admin.confera.test',
     PUBLIC_ORIGIN: 'https://forms.confera.test',
     ...overrides,
   };
+}
+
+/** A complete, valid environment of the staging server: its mail goes to the catcher (ST-50). */
+export function validStagingEnvironment(overrides: RawEnvironment = {}): TestEnvironment {
+  return validProductionEnvironment({
+    INSTANCE: 'staging',
+    STAGING_MAIL_CATCHER: 'mailpit.confera.test:1025',
+    ...overrides,
+  });
 }

@@ -21,6 +21,11 @@ export class MailLogSummaryDto {
   result!: 'sent' | 'failed';
   /** A code, never the server's words. */
   errorCode!: string | null;
+  /**
+   * True when the attempt went to the mail catcher of the staging server and not to the
+   * configured server (ADR-27, ST-50); `recipient` is still the original recipient.
+   */
+  diverted!: boolean;
   sentAt!: string;
 }
 

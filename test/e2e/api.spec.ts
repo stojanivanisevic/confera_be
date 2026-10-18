@@ -88,7 +88,7 @@ describe('the API, end to end', () => {
       const response = await e2e.admin('/api/v1/meta');
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toMatch(/^application\/json/);
-      expect(response.body).toEqual({ name: 'confera-api', version });
+      expect(response.body).toEqual({ name: 'confera-api', version, instance: 'production' });
     });
 
     it.each(['/health', '/health/ready'])('%s answers under any host name', async (path) => {

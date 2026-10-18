@@ -52,7 +52,10 @@ describe('a delivery through a host that answers slowly (E2-06)', () => {
   });
 
   it('is given up after a total time that does not depend on the server', async () => {
-    const transport = new MailTransport({ stage: 'test' } as AppConfig);
+    const transport = new MailTransport({
+      stage: 'test',
+      mail: { stagingCatcher: null },
+    } as unknown as AppConfig);
     const started = Date.now();
     const outcome = await Promise.race([
       transport

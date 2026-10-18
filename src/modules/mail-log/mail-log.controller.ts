@@ -26,6 +26,7 @@ function summaryOf(row: Row): MailLogSummaryDto {
     attempt: row.attempt,
     result: row.result as 'sent' | 'failed',
     errorCode: row.errorCode,
+    diverted: row.diverted,
     sentAt: row.sentAt.toISOString(),
   };
 }

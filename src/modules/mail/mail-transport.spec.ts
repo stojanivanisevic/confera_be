@@ -1,6 +1,13 @@
 import nodemailer from 'nodemailer';
 import type { AppConfig } from '../../config/config';
-import { type DeliveryTarget, type HostLookup, MailTransport } from './mail-transport';
+import {
+  CATCHER_RECIPIENT,
+  type DeliveryTarget,
+  type HostLookup,
+  MailTransport,
+  ORIGINAL_RECIPIENT_HEADER,
+  STAGING_MARK,
+} from './mail-transport';
 
 /**
  * SEC-M2-13: the controls of the transport that only a lookup or the options handed to the
@@ -8,7 +15,7 @@ import { type DeliveryTarget, type HostLookup, MailTransport } from './mail-tran
  * the connection goes to the checked address with the name for the certificate. (2) TLS
  * 1.2 at least, with a verified certificate.
  */
-const server = { stage: 'prod' } as AppConfig;
+const server = { stage: 'prod', mail: { stagingCatcher: null } } as unknown as AppConfig;
 const target: DeliveryTarget = {
   host: 'smtp.example.test',
   port: 587,
@@ -44,7 +51,7 @@ describe('the mail transport (SEC-M2-13)', () => {
   it.each([
     ['a name that resolves to loopback', ['127.0.0.1']],
     ['a name that resolves to a mapped private address', ['::ffff:10.0.0.1']],
-    ['a name that resolves to one public and one private address', ['203.0.113.10', '10.0.0.1']],
+    ['a name that resolves to one public and one private address', ['8.8.4.4', '10.0.0.1']],
     ['a name that resolves to the cloud metadata address', ['169.254.169.254']],
   ])('refuses %s, before any connection', async (_name, addresses) => {
     const transport = new MailTransport(server, resolvingTo(...addresses));
@@ -56,12 +63,12 @@ describe('the mail transport (SEC-M2-13)', () => {
   });
 
   it('connects to the checked address, with the name for the certificate, TLS 1.2 at least, verified', async () => {
-    const transport = new MailTransport(server, resolvingTo('203.0.113.10'));
+    const transport = new MailTransport(server, resolvingTo('8.8.4.4'));
     await expect(transport.deliver(target, message)).resolves.toEqual({ ok: true });
     expect(created).toHaveLength(1);
     expect(created[0]).toEqual(
       expect.objectContaining({
-        host: '203.0.113.10',
+        host: '8.8.4.4',
         port: 587,
         requireTLS: true,
         secure: false,
@@ -82,5 +89,64 @@ describe('the mail transport (SEC-M2-13)', () => {
       error: 'connection_failed',
     });
     expect(created).toEqual([]);
+  });
+  describe('on a staging instance (ADR-27, ST-50)', () => {
+    const staging = {
+      stage: 'prod',
+      mail: { stagingCatcher: { host: 'mailpit', port: 1025 } },
+    } as unknown as AppConfig;
+    const provider: DeliveryTarget = {
+      ...target,
+      host: 'smtp.gmail.com',
+      username: 'ured@example.test',
+      password: 'invented-provider-password',
+    };
+
+    it('sends to the catcher only, in clear, without the login of the configured server, and never looks the server up', async () => {
+      const lookups: string[] = [];
+      const transport = new MailTransport(staging, (host) => {
+        lookups.push(host);
+        return Promise.resolve([{ address: '8.8.4.4' }]);
+      });
+      const sent: Record<string, unknown>[] = [];
+      jest.spyOn(nodemailer, 'createTransport').mockImplementation(((
+        options: Record<string, unknown>,
+      ) => {
+        created.push(options);
+        return {
+          sendMail: (mail: Record<string, unknown>) => {
+            sent.push(mail);
+            return Promise.resolve({});
+          },
+          close: () => undefined,
+        };
+      }) as unknown as typeof nodemailer.createTransport);
+      await expect(transport.deliver(provider, message)).resolves.toEqual({ ok: true });
+      expect(lookups).toEqual([]);
+      expect(created).toEqual([
+        expect.objectContaining({ host: 'mailpit', port: 1025, ignoreTLS: true, auth: undefined }),
+      ]);
+      const [mail] = sent;
+      // No address of the envelope or of the To header is the real recipient's.
+      expect(mail?.envelope).toEqual({ from: target.fromAddress, to: [CATCHER_RECIPIENT] });
+      expect(mail?.to).toEqual([{ name: 'mila@example.test', address: CATCHER_RECIPIENT }]);
+      expect(mail?.headers).toEqual({ [ORIGINAL_RECIPIENT_HEADER]: 'mila@example.test' });
+      expect(mail?.subject).toBe(`${STAGING_MARK} Proba`);
+      expect(JSON.stringify(mail)).not.toContain('invented-provider-password');
+      expect(transport.diverted).toBe(true);
+    });
+
+    it('still refuses a target that production would refuse', async () => {
+      const transport = new MailTransport(staging, resolvingTo('8.8.4.4'));
+      await expect(transport.deliver({ ...target, host: '10.0.0.5' }, message)).resolves.toEqual({
+        ok: false,
+        error: 'address_not_allowed',
+      });
+      expect(created).toEqual([]);
+    });
+
+    it('is off on a production instance', () => {
+      expect(new MailTransport(server, resolvingTo('8.8.4.4')).diverted).toBe(false);
+    });
   });
 });

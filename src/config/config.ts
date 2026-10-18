@@ -36,6 +36,12 @@ export interface AppConfig {
   readonly mail: {
     /** Seconds between two looks of the worker at the outbox; 0 is off. */
     readonly workerIntervalSeconds: number;
+    /**
+     * The mail catcher of a staging instance (ADR-27, ST-50), or null. Set only with
+     * INSTANCE=staging (the guard refuses it elsewhere and requires it there): every message
+     * then goes to it alone, whatever the recipient and the mail server.
+     */
+    readonly stagingCatcher: { readonly host: string; readonly port: number } | null;
   };
   readonly files: {
     /** The absolute path of the private folder of the uploaded files (ADR-10). */
@@ -70,7 +76,7 @@ export type ConfigResult =
 
 export type RawEnvironment = Readonly<Record<string, string | undefined>>;
 
-function clamavOf(address: string | undefined): AppConfig['files']['clamav'] {
+function hostPortOf(address: string | undefined): { host: string; port: number } | null {
   if (address === undefined) {
     return null;
   }
@@ -96,10 +102,13 @@ function toConfig(env: Environment): AppConfig {
     },
     logLevel: env.LOG_LEVEL ?? 'info',
     dataKey: new Secret(env.DATA_KEY),
-    mail: { workerIntervalSeconds: env.MAIL_WORKER_INTERVAL_SECONDS ?? 5 },
+    mail: {
+      workerIntervalSeconds: env.MAIL_WORKER_INTERVAL_SECONDS ?? 5,
+      stagingCatcher: hostPortOf(env.STAGING_MAIL_CATCHER),
+    },
     files: {
       storageDirectory: resolve(env.FILE_STORAGE_DIR ?? join('tmp', 'files')),
-      clamav: clamavOf(env.CLAMAV_ADDRESS),
+      clamav: hostPortOf(env.CLAMAV_ADDRESS),
     },
     jobs: { intervalSeconds: env.JOBS_INTERVAL_SECONDS ?? 30 },
     devTools: {

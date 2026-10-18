@@ -47,6 +47,8 @@ const PROBLEM = {
   directory:
     'must be the path of a folder: letters, digits and . _ - / \\ : only, no space (for example /var/lib/confera/files)',
   clamavAddress: 'must be host:port of the ClamAV daemon (clamd), for example 127.0.0.1:3310',
+  stagingMailCatcher:
+    'must be host:port of the mail catcher of the staging server, for example mailpit:1025',
 } as const;
 
 export function isOrigin(value: string): boolean {
@@ -137,6 +139,10 @@ export const environmentSchema = z.object({
   CLAMAV_ADDRESS: z
     .string({ error: PROBLEM.clamavAddress })
     .regex(/^[A-Za-z0-9.-]{1,253}:[1-9][0-9]{0,4}$/, { error: PROBLEM.clamavAddress })
+    .optional(),
+  STAGING_MAIL_CATCHER: z
+    .string({ error: PROBLEM.stagingMailCatcher })
+    .regex(/^[A-Za-z0-9.-]{1,253}:[1-9][0-9]{0,4}$/, { error: PROBLEM.stagingMailCatcher })
     .optional(),
   DEV_API_DOCS: flag.optional(),
   DEV_LOG_QUERIES: flag.optional(),
@@ -231,6 +237,12 @@ export const VARIABLES = {
   CLAMAV_ADDRESS: {
     description:
       'host:port of the ClamAV daemon that scans attached files (ADR-10, B1). Required on prod. Without it a file stays "scan pending" and is never served (fail closed).',
+    secret: false,
+    required: false,
+  },
+  STAGING_MAIL_CATCHER: {
+    description:
+      'host:port of the mail catcher (ADR-27, ST-50). Required with INSTANCE=staging and refused everywhere else: every message then goes to the catcher only, in clear and without a login, whatever mail server an admin configured, to a fixed catcher address, with the original recipient in the header X-Confera-Original-Recipient and the subject marked [STAGING].',
     secret: false,
     required: false,
   },

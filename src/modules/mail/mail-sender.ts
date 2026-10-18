@@ -580,6 +580,7 @@ export class MailSender {
         subject: prepared.logContent ? logged.subject : null,
         bodyHtml: prepared.logContent ? logged.html : null,
         bodyText: prepared.logContent ? logged.text : null,
+        diverted: this.transport.diverted,
       },
     });
     return result;
