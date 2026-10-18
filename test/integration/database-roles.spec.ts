@@ -44,7 +44,8 @@ const SCHEMA_CHANGES: readonly [name: string, sql: string][] = [
   ['CREATE VIEW', 'CREATE VIEW zz_view AS SELECT 1 AS id'],
   ['CREATE SCHEMA', 'CREATE SCHEMA zz_schema'],
   ['CREATE FUNCTION', "CREATE FUNCTION zz_function() RETURNS int LANGUAGE sql AS 'SELECT 1'"],
-  ['CREATE EXTENSION', 'CREATE EXTENSION IF NOT EXISTS pg_trgm'],
+  // pg_trgm is installed by the migrations of 0.4.0 (the search); another trusted one is tried.
+  ['CREATE EXTENSION', 'CREATE EXTENSION IF NOT EXISTS hstore'],
   [
     'CREATE TRIGGER',
     'CREATE TRIGGER zz_trigger BEFORE INSERT ON users EXECUTE FUNCTION suppress_redundant_updates_trigger()',
