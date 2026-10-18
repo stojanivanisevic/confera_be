@@ -114,9 +114,7 @@ describe('the submissions table (M4-BE-04, NFR-PERF-02)', () => {
     }
   }
 
-  async function list(
-    query: string,
-  ): Promise<{
+  async function list(query: string): Promise<{
     items: {
       reference: string;
       firstAuthor: string;

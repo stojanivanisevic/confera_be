@@ -29,6 +29,8 @@ export const AUDIT_ACTIONS = [
   'organisation.updated',
   'organisation.payment_details_changed',
   'security.unknown_address_sign_ins',
+  /** The operator's global revoke (scripts/revoke-all.mjs, M2-ISS-12). */
+  'instance.global_revoke',
   'mail_server.created',
   'mail_server.updated',
   'mail_server.deleted',
