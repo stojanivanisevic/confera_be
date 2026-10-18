@@ -15,6 +15,7 @@ import {
   ReleasedDto,
   OrganisationBreakerDto,
 } from './held-mail.dto';
+import { heldNumbersOf } from './send-breaker';
 
 /**
  * The emails the send breaker holds (ADR-08, M3-BE-09, M3-FE-08): the list with why each
@@ -72,6 +73,7 @@ export class HeldMailService {
           kind: row.kind,
           recipient: row.recipientAddress,
           heldReason: (row.heldReason ?? 'send_breaker_form') as (typeof HELD_REASONS)[number],
+          heldBy: heldNumbersOf(row),
           conference: row.conference,
           formId: row.formId,
           submission: row.submission,

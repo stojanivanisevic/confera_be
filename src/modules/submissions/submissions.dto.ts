@@ -1,11 +1,28 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { HeldNumbersDto } from '../held-mail/held-mail.dto';
 
 /** The largest page of a list (ST-41: a page size above it is refused). */
 export const MAX_PAGE_SIZE = 100;
 
 export const SCAN_STATES = ['pending', 'clean', 'infected', 'not_clean'] as const;
+export const SCAN_FLAGS = ['macros', 'external_links'] as const;
+/**
+ * Why a file cannot be downloaded (UX3-07): `scan_pending`, it waits for its first scan;
+ * `scan_retrying`, the scanner did not answer and the scan is tried again at `nextScanAt`;
+ * `file_not_clean`, infected or beyond the scanner's limits, never.
+ */
+export const DOWNLOAD_BLOCKS = ['scan_pending', 'scan_retrying', 'file_not_clean'] as const;
+
+/** What the table shows of the files of a submission (UX3-07), without opening it. */
+export class SubmissionFileSignsDto {
+  /** The flags its files carry, each once, in this order: macros, external_links. */
+  @ApiProperty({ enum: SCAN_FLAGS, isArray: true })
+  flags!: (typeof SCAN_FLAGS)[number][];
+  /** Whether a file still waits for its virus scan. */
+  scanPending!: boolean;
+}
 
 /** One row of the submissions table (FR-SUB-02). Member match and billing arrive with 0.8.0 and 0.6.0. */
 export class SubmissionSummaryDto {
@@ -24,6 +41,7 @@ export class SubmissionSummaryDto {
   language!: string;
   authorCount!: number;
   receivedAt!: string;
+  fileSigns!: SubmissionFileSignsDto;
 }
 
 export class SubmissionPageDto {
@@ -80,10 +98,16 @@ export class SubmissionFileDto {
    * `macros`: an old .doc with macros, accepted and flagged for the office (G2-22);
    * `external_links`: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06).
    */
-  scanFlag!: string | null;
+  @ApiProperty({ enum: SCAN_FLAGS, nullable: true })
+  scanFlag!: (typeof SCAN_FLAGS)[number] | null;
   /** When the scan ended, or since when it waits. */
   scannedAt!: string | null;
   pendingSince!: string | null;
+  /** Pending: when the next scan is due. */
+  nextScanAt!: string | null;
+  /** Null: it may be downloaded. Otherwise why not, yet or ever (UX3-07). */
+  @ApiProperty({ enum: DOWNLOAD_BLOCKS, nullable: true })
+  downloadBlocked!: (typeof DOWNLOAD_BLOCKS)[number] | null;
   sha256!: string;
 }
 
@@ -101,6 +125,8 @@ export class SubmissionEmailDto {
   /** queued, sending, sent, failed, held, stuck or waiting_for_server. */
   status!: string;
   heldReason!: string | null;
+  /** The numbers of the hold, as in the held emails (UX3-06); null when not held or unknown. */
+  heldBy!: HeldNumbersDto | null;
   lastErrorCode!: string | null;
   createdAt!: string;
   sentAt!: string | null;

@@ -3627,11 +3627,11 @@
           },
           "endsOn": {
             "type": "string",
-            "description": "The last day, YYYY-MM-DD, in the conference's time zone."
+            "description": "The last day, inclusive, YYYY-MM-DD, in the conference's time zone: what a person reads\n(\"Ends 31 Dec 2099\", UX3-08). It is what an admin sets and what is stored."
           },
           "endsAt": {
             "type": "string",
-            "description": "The instant it ends: the start of the next day in the conference's time zone."
+            "description": "The exclusive end: the instant it closes, the start of the day after `endsOn` in the\nconference's time zone (`endsOn` 2099-12-31 in Europe/Belgrade: 2099-12-31T23:00:00.000Z).\nFor comparisons and countdowns, not to show as the last day."
           },
           "passed": {
             "type": "boolean",
@@ -4018,6 +4018,16 @@
           "recipient": {
             "type": "string"
           },
+          "heldBy": {
+            "nullable": true,
+            "description": "The numbers of the hold (UX3-06): `count` confirmations in the last `windowHours` hours,\nthis one included, above `limit` (for `recipient_domain`: submissions to that domain in\n24 hours, limit 100). Null for an email held before the numbers were kept.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldNumbersDto"
+              }
+            ]
+          },
           "conference": {
             "type": "object",
             "properties": {
@@ -4065,6 +4075,7 @@
           "id",
           "kind",
           "recipient",
+          "heldBy",
           "conference",
           "formId",
           "submission",
@@ -4115,6 +4126,29 @@
           "page",
           "pageSize",
           "breaker"
+        ]
+      },
+      "HeldNumbersDto": {
+        "type": "object",
+        "properties": {
+          "windowHours": {
+            "enum": [
+              1,
+              24
+            ],
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "windowHours",
+          "count",
+          "limit"
         ]
       },
       "InviteUserDto": {
@@ -5037,6 +5071,9 @@
           "receivedAt": {
             "type": "string"
           },
+          "fileSigns": {
+            "$ref": "#/components/schemas/SubmissionFileSignsDto"
+          },
           "form": {
             "type": "object",
             "properties": {
@@ -5124,6 +5161,7 @@
           "language",
           "authorCount",
           "receivedAt",
+          "fileSigns",
           "form",
           "answers",
           "authors",
@@ -5153,6 +5191,16 @@
             "type": "string",
             "nullable": true
           },
+          "heldBy": {
+            "nullable": true,
+            "description": "The numbers of the hold, as in the held emails (UX3-06); null when not held or unknown.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldNumbersDto"
+              }
+            ]
+          },
           "lastErrorCode": {
             "type": "string",
             "nullable": true
@@ -5171,6 +5219,7 @@
           "recipient",
           "status",
           "heldReason",
+          "heldBy",
           "lastErrorCode",
           "createdAt",
           "sentAt"
@@ -5198,6 +5247,25 @@
             ],
             "type": "string"
           },
+          "scanFlag": {
+            "nullable": true,
+            "description": "`macros`: an old .doc with macros, accepted and flagged for the office (G2-22);\n`external_links`: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06).",
+            "enum": [
+              "macros",
+              "external_links"
+            ],
+            "type": "string"
+          },
+          "downloadBlocked": {
+            "nullable": true,
+            "description": "Null: it may be downloaded. Otherwise why not, yet or ever (UX3-07).",
+            "enum": [
+              "scan_pending",
+              "scan_retrying",
+              "file_not_clean"
+            ],
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -5212,11 +5280,6 @@
           "sizeBytes": {
             "type": "number"
           },
-          "scanFlag": {
-            "type": "string",
-            "nullable": true,
-            "description": "`macros`: an old .doc with macros, accepted and flagged for the office (G2-22);\n`external_links`: a .docx with a remote template, frame or object, or a UNC path (SEC-M3-06)."
-          },
           "scannedAt": {
             "type": "string",
             "nullable": true,
@@ -5226,6 +5289,11 @@
             "type": "string",
             "nullable": true
           },
+          "nextScanAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pending: when the next scan is due."
+          },
           "sha256": {
             "type": "string"
           }
@@ -5233,14 +5301,40 @@
         "required": [
           "type",
           "scanState",
+          "scanFlag",
+          "downloadBlocked",
           "id",
           "field",
           "name",
           "sizeBytes",
-          "scanFlag",
           "scannedAt",
           "pendingSince",
+          "nextScanAt",
           "sha256"
+        ]
+      },
+      "SubmissionFileSignsDto": {
+        "type": "object",
+        "properties": {
+          "flags": {
+            "type": "array",
+            "description": "The flags its files carry, each once, in this order: macros, external_links.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "macros",
+                "external_links"
+              ]
+            }
+          },
+          "scanPending": {
+            "type": "boolean",
+            "description": "Whether a file still waits for its virus scan."
+          }
+        },
+        "required": [
+          "flags",
+          "scanPending"
         ]
       },
       "SubmissionPageDto": {
@@ -5369,6 +5463,9 @@
           },
           "receivedAt": {
             "type": "string"
+          },
+          "fileSigns": {
+            "$ref": "#/components/schemas/SubmissionFileSignsDto"
           }
         },
         "required": [
@@ -5384,7 +5481,8 @@
           "billingStatus",
           "language",
           "authorCount",
-          "receivedAt"
+          "receivedAt",
+          "fileSigns"
         ]
       },
       "TemplateCatalogueDto": {

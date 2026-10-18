@@ -836,6 +836,13 @@ describe('forms and intake (M3)', () => {
       const held = await as(e2e, admin, 'get', `/api/v1/held-mail?formId=${form.formId}`);
       expect(held.status).toBe(200);
       expect(held.body).toEqual(expect.objectContaining({ total: 3 }));
+      // Why, with the numbers (UX3-06): the 4th confirmation in an hour, above the form's 3.
+      expect((held.body as { items: unknown[] }).items[0]).toEqual(
+        expect.objectContaining({
+          heldReason: 'send_breaker_form',
+          heldBy: { count: 4, limit: 3, windowHours: 1 },
+        }),
+      );
       const released = await as(e2e, admin, 'post', '/api/v1/held-mail/release').send({
         all: true,
         formId: form.formId,

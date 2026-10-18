@@ -107,6 +107,14 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     return row?.id ?? '';
   }
 
+  /** What the table of submissions shows of a submission's files (UX3-07). */
+  async function signsInTable(submission: string): Promise<unknown> {
+    const page = await as(e2e, admin, 'get', '/api/v1/submissions?pageSize=100');
+    expect(page.status).toBe(200);
+    const items = (page.body as { items: { id: string; fileSigns: unknown }[] }).items;
+    return items.find((item) => item.id === submission)?.fileSigns;
+  }
+
   it('a file goes in, is attached, waits for its scan, and downloads once clean, under its own name', async () => {
     const address = freshAddress();
     const { formToken } = await tokenFor(e2e, form.slug, address);
@@ -129,6 +137,16 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     const early = await as(e2e, admin, 'get', path);
     expect(early.status).toBe(409);
     expect(early.body).toEqual(expect.objectContaining({ code: 'scan_pending' }));
+    // The detail says why not yet, and the table shows a file waiting (UX3-07).
+    const waiting = await as(e2e, admin, 'get', `/api/v1/submissions/${submission}`);
+    expect((waiting.body as { files: unknown[] }).files).toEqual([
+      expect.objectContaining({
+        scanState: 'pending',
+        downloadBlocked: 'scan_pending',
+        nextScanAt: expect.any(String),
+      }),
+    ]);
+    expect(await signsInTable(submission)).toEqual({ flags: [], scanPending: true });
     const report = await files.tick();
     expect(report.clean).toBeGreaterThanOrEqual(1);
     const download = await as(e2e, admin, 'get', path)
@@ -157,8 +175,11 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
         field: 'biographies',
         scanState: 'clean',
         scanFlag: null,
+        downloadBlocked: null,
+        nextScanAt: null,
       }),
     ]);
+    expect(await signsInTable(submission)).toEqual({ flags: [], scanPending: false });
   });
 
   it('20 MB are taken, one byte more is refused before it is stored (FR-FILE-01)', async () => {
@@ -219,6 +240,8 @@ describe('uploads, scans and downloads (M3-BE-04, M3-BE-08)', () => {
     expect((detail.body as { files: unknown[] }).files).toEqual([
       expect.objectContaining({ type: 'doc', scanFlag: 'macros' }),
     ]);
+    // The table shows the flag without opening the submission (UX3-07).
+    expect(await signsInTable(submission)).toEqual({ flags: ['macros'], scanPending: true });
   });
 
   it('SEC-M3-01: an archive of 10 000 records over one compressed block is refused at once, and counts as a script', async () => {

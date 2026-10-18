@@ -163,9 +163,14 @@ export class PublicFormDto {
   slug!: string;
   @ApiProperty({ enum: PUBLIC_FORM_STATES })
   state!: PublicFormState;
-  @ApiProperty({ enum: CLOSED_REASONS, nullable: true })
+  @ApiProperty({
+    enum: CLOSED_REASONS,
+    nullable: true,
+    description:
+      'Why a closed form is closed (UX3-03): `deadline_passed`, its last day is over (the page may name `deadline`); `conference_closed`, the office closed submissions before or without the deadline (the page names no date); `not_published`. Null while open.',
+  })
   closedReason!: ClosedReason | null;
-  /** The last day of submissions, YYYY-MM-DD, in the conference's time zone; null without a deadline. */
+  /** The last day of submissions (inclusive), YYYY-MM-DD, in the conference's time zone; null without a deadline. */
   deadline!: string | null;
   /** The instant the form closes (the start of the day after the deadline there); null without one. */
   closesAt!: string | null;

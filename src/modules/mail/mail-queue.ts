@@ -60,6 +60,17 @@ export type SecurityChange =
 /** Why the send breaker holds a message (ADR-08). */
 export type HeldReason = 'send_breaker_form' | 'send_breaker_organisation' | 'recipient_domain';
 
+/**
+ * A hold with its numbers (UX3-06): `count` in the last `windowHours` hours, this message
+ * included, went above `limit`.
+ */
+export interface Hold {
+  readonly reason: HeldReason;
+  readonly count: number;
+  readonly limit: number;
+  readonly windowHours: 1 | 24;
+}
+
 export interface QueuedMessage {
   readonly organisationId: string;
   readonly kind: MailKind;
@@ -79,7 +90,7 @@ export interface QueuedMessage {
   readonly formId?: string | null;
   readonly submissionId?: string | null;
   /** When set, the message is held for an admin (the send breaker) instead of queued. */
-  readonly held?: HeldReason | null;
+  readonly held?: Hold | null;
 }
 
 @Injectable()
@@ -107,7 +118,10 @@ export class MailQueue {
         formId: message.formId ?? null,
         submissionId: message.submissionId ?? null,
         status: message.held === undefined || message.held === null ? 'queued' : 'held',
-        heldReason: message.held ?? null,
+        heldReason: message.held?.reason ?? null,
+        heldCount: message.held?.count ?? null,
+        heldLimit: message.held?.limit ?? null,
+        heldWindowHours: message.held?.windowHours ?? null,
       },
     });
   }

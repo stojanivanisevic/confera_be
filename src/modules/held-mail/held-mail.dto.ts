@@ -18,12 +18,25 @@ export const HELD_REASONS = [
   'recipient_domain',
 ] as const;
 
+export class HeldNumbersDto {
+  count!: number;
+  limit!: number;
+  @ApiProperty({ enum: [1, 24] })
+  windowHours!: 1 | 24;
+}
+
 export class HeldMailDto {
   id!: string;
   kind!: string;
   recipient!: string;
   @ApiProperty({ enum: HELD_REASONS })
   heldReason!: (typeof HELD_REASONS)[number];
+  /**
+   * The numbers of the hold (UX3-06): `count` confirmations in the last `windowHours` hours,
+   * this one included, above `limit` (for `recipient_domain`: submissions to that domain in
+   * 24 hours, limit 100). Null for an email held before the numbers were kept.
+   */
+  heldBy!: HeldNumbersDto | null;
   conference!: { id: string; code: string; name: string } | null;
   formId!: string | null;
   submission!: { id: string; reference: string } | null;

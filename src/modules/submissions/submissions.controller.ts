@@ -19,10 +19,12 @@ import { FilesModule } from '../files/files.module';
 import { FileStorage } from '../files/storage';
 import { attachmentHeader } from '../files/file-names';
 import { MEDIA_TYPES } from '../files/file-type';
-import { mayServe } from '../files/serving';
+import { downloadBlocked, mayServe } from '../files/serving';
 import type { FileType } from '../forms/catalogue';
+import { heldNumbersOf } from '../held-mail/send-breaker';
 import {
   MAX_PAGE_SIZE,
+  SCAN_FLAGS,
   SubmissionDetailDto,
   SubmissionPageDto,
   SubmissionQueryDto,
@@ -33,7 +35,11 @@ const DEFAULT_PAGE_SIZE = 25;
 
 type SummaryRow = Prisma.SubmissionGetPayload<{
   include: { conference: { select: { id: true; code: true; name: true; editionYear: true } } };
-}>;
+}> & { readonly files: readonly { scanState: string; scanFlag: string | null }[] };
+
+function scanFlagOf(flag: string | null): (typeof SCAN_FLAGS)[number] | null {
+  return SCAN_FLAGS.find((known) => known === flag) ?? null;
+}
 
 /** The fields of a row of the table, as a plain object (a detail spreads it). */
 type Summary = { [Field in keyof SubmissionSummaryDto]: SubmissionSummaryDto[Field] };
@@ -53,6 +59,10 @@ function summary(row: SummaryRow): Summary {
     language: row.language,
     authorCount: row.authorCount,
     receivedAt: row.receivedAt.toISOString(),
+    fileSigns: {
+      flags: SCAN_FLAGS.filter((flag) => row.files.some((file) => file.scanFlag === flag)),
+      scanPending: row.files.some((file) => file.scanState === 'pending'),
+    },
   };
 }
 
@@ -78,6 +88,7 @@ export class SubmissionsService {
           where,
           include: {
             conference: { select: { id: true, code: true, name: true, editionYear: true } },
+            files: { select: { scanState: true, scanFlag: true } },
           },
           orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
           skip: (page - 1) * pageSize,
@@ -140,10 +151,12 @@ export class SubmissionsService {
           type: file.detectedType,
           sizeBytes: file.sizeBytes,
           scanState: file.scanState as 'pending' | 'clean' | 'infected' | 'not_clean',
-          scanFlag: file.scanFlag,
+          scanFlag: scanFlagOf(file.scanFlag),
           scannedAt: file.scannedAt?.toISOString() ?? null,
           pendingSince:
             file.scanState === 'pending' ? (file.attachedAt ?? file.createdAt).toISOString() : null,
+          nextScanAt: file.scanState === 'pending' ? file.nextScanAt.toISOString() : null,
+          downloadBlocked: downloadBlocked(file),
           sha256: file.sha256,
         })),
         consent: {
@@ -163,6 +176,7 @@ export class SubmissionsService {
           recipient: message.recipientAddress,
           status: message.status,
           heldReason: message.heldReason,
+          heldBy: heldNumbersOf(message),
           lastErrorCode: message.lastErrorCode,
           createdAt: message.createdAt.toISOString(),
           sentAt: message.sentAt?.toISOString() ?? null,

@@ -20,3 +20,19 @@ export function mayServe(file: { kind: string; scanState: string }): ServeDecisi
   }
   return file.scanState === 'pending' ? 'scan_pending' : 'file_not_clean';
 }
+
+/**
+ * Why a file cannot be downloaded, or null (UX3-07), from the same decision as the download:
+ * `scan_retrying` is a pending file whose scan was tried and found the scanner not answering.
+ */
+export function downloadBlocked(file: {
+  kind: string;
+  scanState: string;
+  scanAttempts: number;
+}): 'scan_pending' | 'scan_retrying' | 'file_not_clean' | null {
+  const decision = mayServe(file);
+  if (decision === 'serve') {
+    return null;
+  }
+  return decision === 'scan_pending' && file.scanAttempts > 0 ? 'scan_retrying' : decision;
+}

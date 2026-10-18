@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
-import type { HeldReason } from '../mail/mail-queue';
+import type { Hold } from '../mail/mail-queue';
 
 /**
  * The send breaker (ADR-08, item 3; M3-BE-09; ST-34): per form and per organisation, on
@@ -25,7 +25,7 @@ export interface BreakerLimits {
 
 @Injectable()
 export class SendBreaker {
-  /** Whether the confirmation of a new submission is held, and why; null: it goes out. */
+  /** Whether the confirmation of a new submission is held, why and by which numbers; null: it goes out. */
   async decide(
     tx: Prisma.TransactionClient,
     input: {
@@ -35,7 +35,7 @@ export class SendBreaker {
       readonly domain: string;
       readonly now: Date;
     },
-  ): Promise<HeldReason | null> {
+  ): Promise<Hold | null> {
     const hourAgo = new Date(input.now.getTime() - HOUR_MS);
     const dayAgo = new Date(input.now.getTime() - DAY_MS);
     const sent = (where: Prisma.MailMessageWhereInput, since: Date) =>
@@ -53,22 +53,58 @@ export class SendBreaker {
       sent({}, hourAgo),
       sent({}, dayAgo),
     ]);
-    if (formHour >= input.form.perHour || formDay >= input.form.perDay) {
-      return 'send_breaker_form';
+    // The counts are of the confirmations that went out; with this one each is one more.
+    const form = over(formHour, formDay, input.form);
+    if (form !== null) {
+      return { reason: 'send_breaker_form', ...form };
     }
-    if (
-      organisationHour >= input.organisation.perHour ||
-      organisationDay >= input.organisation.perDay
-    ) {
-      return 'send_breaker_organisation';
+    const organisation = over(organisationHour, organisationDay, input.organisation);
+    if (organisation !== null) {
+      return { reason: 'send_breaker_organisation', ...organisation };
     }
     const toDomain = await tx.submission.count({
       where: { correspondingDomain: input.domain, receivedAt: { gt: dayAgo } },
     });
     // The count holds the submission at hand: the 101st to a domain is held, not the 100th (Q3-06).
     if (toDomain > DOMAIN_DAILY_LIMIT) {
-      return 'recipient_domain';
+      return {
+        reason: 'recipient_domain',
+        count: toDomain,
+        limit: DOMAIN_DAILY_LIMIT,
+        windowHours: 24,
+      };
     }
     return null;
   }
+}
+
+/** The limit a confirmation would go above, the hour's first, with the count this one makes. */
+function over(
+  hour: number,
+  day: number,
+  limits: BreakerLimits,
+): { count: number; limit: number; windowHours: 1 | 24 } | null {
+  if (hour >= limits.perHour) {
+    return { count: hour + 1, limit: limits.perHour, windowHours: 1 };
+  }
+  if (day >= limits.perDay) {
+    return { count: day + 1, limit: limits.perDay, windowHours: 24 };
+  }
+  return null;
+}
+
+/** The numbers of a held message as the API gives them (UX3-06); null when none were kept. */
+export function heldNumbersOf(row: {
+  readonly heldCount: number | null;
+  readonly heldLimit: number | null;
+  readonly heldWindowHours: number | null;
+}): { count: number; limit: number; windowHours: 1 | 24 } | null {
+  if (row.heldCount === null || row.heldLimit === null || row.heldWindowHours === null) {
+    return null;
+  }
+  return {
+    count: row.heldCount,
+    limit: row.heldLimit,
+    windowHours: row.heldWindowHours === 1 ? 1 : 24,
+  };
 }

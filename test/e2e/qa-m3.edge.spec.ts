@@ -242,15 +242,26 @@ describe('0.3.0 edge probes of the public forms (Q3)', () => {
         );
         expect(sent.status).toBe(201);
       }
-      const rows = await inOrganisation<{ held_reason: string | null }>(
+      const rows = await inOrganisation<{
+        held_reason: string | null;
+        held_count: number | null;
+        held_limit: number | null;
+        held_window_hours: number | null;
+      }>(
         owner,
         orgA(),
-        "SELECT held_reason FROM mail_outbox WHERE kind = 'submission_confirmation' AND form_id = $1 ORDER BY created_at",
+        "SELECT held_reason, held_count, held_limit, held_window_hours FROM mail_outbox WHERE kind = 'submission_confirmation' AND form_id = $1 ORDER BY created_at",
         [form.formId],
       );
       expect(rows).toHaveLength(101);
       expect(rows.filter((row) => row.held_reason === null)).toHaveLength(100);
-      expect(rows[100]?.held_reason).toBe('recipient_domain');
+      // With its numbers (UX3-06): "101 to one domain in 24 hours, limit 100".
+      expect(rows[100]).toEqual({
+        held_reason: 'recipient_domain',
+        held_count: 101,
+        held_limit: 100,
+        held_window_hours: 24,
+      });
     } finally {
       const now = await as(e2e, admin, 'get', '/api/v1/held-mail');
       await as(e2e, admin, 'patch', '/api/v1/held-mail/breaker').send({

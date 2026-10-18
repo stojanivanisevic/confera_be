@@ -10,9 +10,16 @@ export class DeadlineDto {
   // The order of the values is fixed here, not left to the compiler (a stable contract).
   @ApiProperty({ enum: DEADLINE_KINDS })
   kind!: DeadlineKind;
-  /** The last day, YYYY-MM-DD, in the conference's time zone. */
+  /**
+   * The last day, inclusive, YYYY-MM-DD, in the conference's time zone: what a person reads
+   * ("Ends 31 Dec 2099", UX3-08). It is what an admin sets and what is stored.
+   */
   endsOn!: string;
-  /** The instant it ends: the start of the next day in the conference's time zone. */
+  /**
+   * The exclusive end: the instant it closes, the start of the day after `endsOn` in the
+   * conference's time zone (`endsOn` 2099-12-31 in Europe/Belgrade: 2099-12-31T23:00:00.000Z).
+   * For comparisons and countdowns, not to show as the last day.
+   */
   endsAt!: string;
   /** Whether it has passed now. */
   passed!: boolean;

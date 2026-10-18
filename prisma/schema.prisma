@@ -397,6 +397,11 @@ model MailMessage {
   submissionId     String?   @map("submission_id") @db.Uuid
   /// Why a `held` message waits for an admin: send_breaker_form, send_breaker_organisation, recipient_domain.
   heldReason       String?   @map("held_reason")
+  /// The numbers of the hold (UX3-06): `held_count` in the last `held_window_hours` hours, above
+  /// `held_limit`. Null on a message that is not held, and on one held before they were kept.
+  heldCount        Int?      @map("held_count")
+  heldLimit        Int?      @map("held_limit")
+  heldWindowHours  Int?      @map("held_window_hours")
   releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
   releasedBy       String?   @map("released_by") @db.Uuid
 

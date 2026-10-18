@@ -25,7 +25,7 @@ import type { TenantDatabase } from '../../platform/prisma/tenant-database';
 import type { TenantContext } from '../../platform/tenancy/tenant-context';
 import type { MailQueue } from '../mail/mail-queue';
 import { FilesWorker, retryDelayMs } from './files-worker';
-import { mayServe } from './serving';
+import { downloadBlocked, mayServe } from './serving';
 import { FileStorage, StorageKeyError } from './storage';
 import { ClamdScanner, verdictOf, type VirusScanner } from './virus-scanner';
 
@@ -509,6 +509,22 @@ describe('the antivirus (M3-BE-08, ST-38)', () => {
     expect(mayServe({ kind: 'submission_file', scanState: 'infected' })).toBe('file_not_clean');
     expect(mayServe({ kind: 'submission_file', scanState: 'not_clean' })).toBe('file_not_clean');
     expect(mayServe({ kind: 'generated_document', scanState: 'pending' })).toBe('serve');
+  });
+
+  it('says why a file cannot be downloaded: waiting, retrying while the scanner is down, never (UX3-07)', () => {
+    const file = (scanState: string, scanAttempts: number) => ({
+      kind: 'submission_file',
+      scanState,
+      scanAttempts,
+    });
+    expect(downloadBlocked(file('clean', 1))).toBeNull();
+    expect(downloadBlocked(file('pending', 0))).toBe('scan_pending');
+    expect(downloadBlocked(file('pending', 2))).toBe('scan_retrying');
+    expect(downloadBlocked(file('infected', 1))).toBe('file_not_clean');
+    expect(downloadBlocked(file('not_clean', 1))).toBe('file_not_clean');
+    expect(
+      downloadBlocked({ kind: 'generated_document', scanState: 'pending', scanAttempts: 0 }),
+    ).toBeNull();
   });
 
   it('the purge deletes the row first, and keeps the bytes of a file that a renewal or a submit took meanwhile (SEC-M3-05)', async () => {

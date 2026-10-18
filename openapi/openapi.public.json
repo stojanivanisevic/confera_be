@@ -433,7 +433,8 @@
               "deadline_passed",
               "not_published"
             ],
-            "type": "string"
+            "type": "string",
+            "description": "Why a closed form is closed (UX3-03): `deadline_passed`, its last day is over (the page may name `deadline`); `conference_closed`, the office closed submissions before or without the deadline (the page names no date); `not_published`. Null while open."
           },
           "slug": {
             "type": "string"
@@ -441,7 +442,7 @@
           "deadline": {
             "type": "string",
             "nullable": true,
-            "description": "The last day of submissions, YYYY-MM-DD, in the conference's time zone; null without a deadline."
+            "description": "The last day of submissions (inclusive), YYYY-MM-DD, in the conference's time zone; null without a deadline."
           },
           "closesAt": {
             "type": "string",
