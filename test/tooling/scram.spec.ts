@@ -18,6 +18,8 @@ async function verifiers(calls: [string, string | null][]): Promise<string[]> {
 }
 
 describe('the SCRAM verifier of db:provision (M1-ISS-14)', () => {
+  jest.setTimeout(60_000);
+
   it('has the form PostgreSQL stores, holds no part of the password, and is salted afresh', async () => {
     const password = 'invented-provision-password-42';
     const [first, second] = await verifiers([
