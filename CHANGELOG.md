@@ -24,6 +24,7 @@ version at every milestone (ADR-19).
 
 ### Changed
 
+- Every form version names its publisher: `form_versions.published_by` is `NOT NULL` (the contract already said `publishedBy` is never null), and `seed:e2e` publishes its form as the seeded admin. A development database seeded before this fix is refused by `db:migrate` with a hint: `stack:wipe` and seed again (blank-slate run 2).
 - The fixes of the 0.3.0 verification: the proof-of-work is decided at the submit as well (Q3-02), asked for by acts of a script and not by the volume of one address, at 13 bits instead of 16 (Q3-08); an IPv6 client is its /64 (Q3-03); a refused upload uses none of the token's uploads (Q3-04); a broken upload leaves no temporary file, and temporary files count against the quota (Q3-05); the 100th confirmation to a domain goes out (Q3-06); a fake success carries the edition and answers a repeat of its key alike (Q3-07); a `.docx` is found to hold macros by the content type and relationship of its VBA project (Q3-11).
 
 - The audit log keeps no bank account number (owner decision D9): `rsdAccount` and `eurIban` are recorded by name only, and entries written before are shown without their values (M2-ISS-16).

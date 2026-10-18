@@ -168,7 +168,11 @@ function verdict(response: { status: number; body: unknown }): { status: number;
 /** The file of the submission of A (a path's `{fileId}`). */
 let file = '';
 
-async function objectsOfA(owner: Client, organisationId: string): Promise<Record<string, string>> {
+async function objectsOfA(
+  owner: Client,
+  organisationId: string,
+  publisherId: string,
+): Promise<Record<string, string>> {
   await owner.query('BEGIN');
   try {
     await owner.query("SELECT set_config('app.org_id', $1, true)", [organisationId]);
@@ -204,9 +208,9 @@ async function objectsOfA(owner: Client, organisationId: string): Promise<Record
       [organisationId, conference],
     );
     const version = await one(
-      `INSERT INTO form_versions (organisation_id, form_id, number, definition)
-       VALUES ($1, $2, 1, '{}') RETURNING id`,
-      [organisationId, form],
+      `INSERT INTO form_versions (organisation_id, form_id, number, definition, published_by)
+       VALUES ($1, $2, 1, '{}', $3) RETURNING id`,
+      [organisationId, form, publisherId],
     );
     await owner.query('UPDATE forms SET current_version_id = $1 WHERE id = $2', [version, form]);
     const submission = await one(
@@ -254,7 +258,7 @@ describe('the authorisation matrix of the admin API', () => {
     await new Factories(owner).reset();
     e2e = await startE2eApp();
     actors = await createActors(e2e, owner);
-    objects = await objectsOfA(owner, actors.a.organisation.id);
+    objects = await objectsOfA(owner, actors.a.organisation.id, actors.a.admin.id);
   });
 
   afterAll(async () => {

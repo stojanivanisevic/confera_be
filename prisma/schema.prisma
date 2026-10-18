@@ -512,11 +512,12 @@ model FormVersion {
   /// The definition the public form renders and the server checks (contracts/form-definition.schema.json).
   definition     Json
   publishedAt    DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
-  publishedBy    String?  @map("published_by") @db.Uuid
+  /// Who published it: every version has a publisher (publish is an admin's act; no system path).
+  publishedBy    String   @map("published_by") @db.Uuid
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   form         Form         @relation("Versions", fields: [organisationId, formId], references: [organisationId, id], onDelete: Restrict)
-  publisher    User?        @relation(fields: [organisationId, publishedBy], references: [organisationId, id], onDelete: Restrict)
+  publisher    User         @relation(fields: [organisationId, publishedBy], references: [organisationId, id], onDelete: Restrict)
   currentOf    Form[]       @relation("CurrentVersion")
   tokens       FormToken[]
   submissions  Submission[]

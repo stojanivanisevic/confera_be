@@ -48,7 +48,7 @@ export class CatalogueFieldDto {
 export class FormVersionSummaryDto {
   number!: number;
   publishedAt!: string;
-  publishedBy!: { id: string; displayName: string } | null;
+  publishedBy!: { id: string; displayName: string };
 }
 
 /** A form of a conference, as the admin sees it (FR-FORM-02). */
@@ -150,7 +150,7 @@ export class FormBreakerDto {
 export class FormVersionDto {
   number!: number;
   publishedAt!: string;
-  publishedBy!: { id: string; displayName: string } | null;
+  publishedBy!: { id: string; displayName: string };
   definition!: Record<string, unknown>;
 }
 

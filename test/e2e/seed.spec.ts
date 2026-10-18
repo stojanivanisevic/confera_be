@@ -4,6 +4,7 @@ import type { Client } from 'pg';
 import { TenantDatabase } from '../../src/platform/prisma/tenant-database';
 import { TenantContext } from '../../src/platform/tenancy/tenant-context';
 import { repoRoot, runNode } from '../support/run-node';
+import { as, signIn } from './support/actors';
 import { ADMIN_HOST, type E2eApp, startE2eApp } from './support/e2e-app';
 import { connect, connectAsOwner, e2eDatabase, rows } from './support/e2e-database';
 import { assertInvented, Factories } from './support/factories';
@@ -29,7 +30,53 @@ interface SeedFile {
       readonly role: string;
       readonly password?: string;
     }[];
+    readonly conferences?: readonly { readonly form: { readonly id: string } }[];
   }[];
+}
+
+/** A schema of the OpenAPI document, as far as the check of `publishedBy` reads it. */
+interface Schema {
+  readonly $ref?: string;
+  readonly type?: string;
+  readonly nullable?: boolean;
+  readonly required?: readonly string[];
+  readonly properties?: Readonly<Record<string, Schema>>;
+}
+
+const contractSchemas = (
+  JSON.parse(readFileSync(join(repoRoot, 'openapi', 'openapi.json'), 'utf8')) as {
+    components: { schemas: Record<string, Schema> };
+  }
+).components.schemas;
+
+/** The schema of `publishedBy` in a version summary, as the contract states it. */
+function publishedByInContract(): Schema {
+  const summary = contractSchemas.FormVersionSummaryDto;
+  const property = summary?.properties?.publishedBy;
+  if (property === undefined) {
+    throw new Error('the contract has no FormVersionSummaryDto.publishedBy');
+  }
+  expect(summary?.required).toContain('publishedBy');
+  return property.$ref === undefined
+    ? property
+    : (contractSchemas[property.$ref.split('/').pop() ?? ''] ?? {});
+}
+
+/** The problems of a value against an object schema of plain string properties. */
+function problemsOf(value: unknown, schema: Schema): string[] {
+  if (value === null) {
+    return schema.nullable === true ? [] : ['null where the contract allows no null'];
+  }
+  if (typeof value !== 'object') {
+    return [`a ${typeof value} where the contract wants an object`];
+  }
+  const record = value as Record<string, unknown>;
+  return [
+    ...(schema.required ?? []).filter((key) => !(key in record)).map((key) => `no ${key}`),
+    ...Object.entries(schema.properties ?? {})
+      .filter(([key, property]) => key in record && typeof record[key] !== property.type)
+      .map(([key, property]) => `${key} is not a ${property.type ?? '?'}`),
+  ];
 }
 
 const seed = JSON.parse(
@@ -228,6 +275,45 @@ describe('seed:e2e', () => {
     expect(response.body).toEqual(
       expect.objectContaining({ slug: 'e2eprobnaforma01', state: 'open', versionNumber: 1 }),
     );
+  });
+
+  it('the seeded form, as its admin sees it, names a publisher as the contract says (blank-slate run 2)', async () => {
+    expect((await run('test')).exitCode).toBe(0);
+    const organisation = seed.organisations.find((entry) => (entry.conferences ?? []).length > 0);
+    const formId = organisation?.conferences?.[0]?.form.id ?? '';
+    const admin = organisation?.users.find((user) => user.role === 'admin');
+    expect(admin?.password).toBeDefined();
+    const signedIn = await signIn(e2e, { email: admin?.email ?? '' }, admin?.password);
+
+    const response = await as(e2e, signedIn, 'get', `/api/v1/forms/${formId}`);
+    expect(response.status).toBe(200);
+    const body = response.body as {
+      currentVersion: { number: number; publishedBy: unknown } | null;
+      versions: { number: number; publishedBy: unknown }[];
+    };
+    const contract = publishedByInContract();
+    expect(body.versions.length).toBeGreaterThan(0);
+    for (const version of [body.currentVersion, ...body.versions]) {
+      expect({
+        version: version?.number,
+        problems: problemsOf(version?.publishedBy, contract),
+      }).toEqual({
+        version: version?.number,
+        problems: [],
+      });
+    }
+    // The publisher is the seeded admin, under the name of the seed file.
+    expect(body.currentVersion?.publishedBy).toEqual({
+      id: admin?.id,
+      displayName: admin?.displayName,
+    });
+
+    const detail = await as(e2e, signedIn, 'get', `/api/v1/forms/${formId}/versions/1`);
+    expect(detail.status).toBe(200);
+    expect((detail.body as { publishedBy: unknown }).publishedBy).toEqual({
+      id: admin?.id,
+      displayName: admin?.displayName,
+    });
   });
 
   it('signs a seeded person in with the password of the seed file', async () => {

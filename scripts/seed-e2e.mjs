@@ -61,7 +61,7 @@ function readSeed() {
  * with its deadline and its abstract form published under a fixed address, so that the
  * hosted form, the frame page and the snippet can be tried against the real API.
  */
-async function seedConference(client, organisationId, conference) {
+async function seedConference(client, organisationId, conference, publisherId) {
   await client.query(
     `INSERT INTO conferences (id, organisation_id, name, code, edition_year, listed_sites, languages, state)
      VALUES ($1, $2, $3, $4, $5, $6::text[], ARRAY['en', 'sr']::text[], $7)
@@ -89,12 +89,14 @@ async function seedConference(client, organisationId, conference) {
      VALUES ($1, $2, $3, 'abstract', $4, '{}') ON CONFLICT (id) DO NOTHING`,
     [form.id, organisationId, conference.id, form.slug],
   );
+  // Published by the seeded admin, as a publish through the API would be: every version
+  // names its publisher (the column is NOT NULL, the contract says publishedBy is never null).
   const version = await client.query(
-    `INSERT INTO form_versions (organisation_id, form_id, number, definition)
-     VALUES ($1, $2, 1, $3)
-     ON CONFLICT (organisation_id, form_id, number) DO UPDATE SET number = EXCLUDED.number
+    `INSERT INTO form_versions (organisation_id, form_id, number, definition, published_by)
+     VALUES ($1, $2, 1, $3, $4)
+     ON CONFLICT (organisation_id, form_id, number) DO UPDATE SET published_by = EXCLUDED.published_by
      RETURNING id`,
-    [organisationId, form.id, JSON.stringify(seededAbstractDefinition())],
+    [organisationId, form.id, JSON.stringify(seededAbstractDefinition()), publisherId],
   );
   await client.query('UPDATE forms SET current_version_id = $1 WHERE id = $2', [
     version.rows[0].id,
@@ -138,8 +140,13 @@ async function seedOrganisation(client, organisation) {
       );
     }
     await seedTemplates(client, organisation.id);
-    for (const conference of organisation.conferences ?? []) {
-      await seedConference(client, organisation.id, conference);
+    const conferences = organisation.conferences ?? [];
+    const publisher = organisation.users.find((user) => user.role === 'admin');
+    if (conferences.length > 0 && publisher === undefined) {
+      throw new Error('an organisation with a conference has no admin to publish its form');
+    }
+    for (const conference of conferences) {
+      await seedConference(client, organisation.id, conference, publisher.id);
     }
     await seedAbstractForms(client, organisation.id);
     await client.query('COMMIT');
