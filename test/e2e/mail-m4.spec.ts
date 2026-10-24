@@ -4,10 +4,17 @@ import { FilesWorker } from '../../src/modules/files/files-worker';
 import { MaintenanceWorker } from '../../src/modules/jobs/maintenance-worker';
 import { MailWorker } from '../../src/modules/mail/mail-worker';
 import { type FakeClamd, startFakeClamd } from '../support/fake-clamd';
-import { as, confirmPassword, createActors, type Actors, type SignedIn } from './support/actors';
-import { type E2eApp, e2eLocalEnvironment, startE2eApp } from './support/e2e-app';
+import {
+  as,
+  confirmPassword,
+  createActors,
+  signIn,
+  type Actors,
+  type SignedIn,
+} from './support/actors';
+import { ADMIN_HOST, type E2eApp, e2eLocalEnvironment, startE2eApp } from './support/e2e-app';
 import { connectAsOwner } from './support/e2e-database';
-import { Factories } from './support/factories';
+import { Factories, INVENTED_PASSWORD } from './support/factories';
 import {
   abstractAnswers,
   ageTokens,
@@ -99,6 +106,14 @@ describe('templates, email images and the mail log (M4-BE-03, 05, 06)', () => {
     );
     return { id: row?.id ?? '', email: (answers.authors as { email: string }[])[0]?.email ?? '' };
   }
+
+  const requestReset = (email: string) =>
+    e2e
+      .http()
+      .post('/api/v1/password-resets')
+      .set('Host', ADMIN_HOST)
+      .set('Origin', e2e.config.origins.admin)
+      .send({ email });
 
   async function open(id: string): Promise<void> {
     const shown = await as(e2e, admin, 'get', `/api/v1/submissions/${id}`);
@@ -529,16 +544,140 @@ describe('templates, email images and the mail log (M4-BE-03, 05, 06)', () => {
         mailLogContent: true,
         version: (again.body as { version: number }).version,
       });
+      // A test message of its own (Q4-07): the refusal is checked, never skipped.
+      await confirmPassword(e2e, admin);
+      const servers = (await as(e2e, admin, 'get', '/api/v1/mail-servers')).body as {
+        items: { id: string; name: string }[];
+      };
+      const mailpit = servers.items.find((item) => item.name === 'Mailpit');
+      const sent = await as(
+        e2e,
+        admin,
+        'post',
+        `/api/v1/mail-servers/${mailpit?.id ?? ''}/test-message`,
+      ).send({ to: 'proba.servera@a.example.test' });
+      expect(sent.status).toBe(200);
+      expect(sent.body).toEqual(expect.objectContaining({ result: 'sent' }));
       const [test] = await inOrganisation<{ id: string }>(
         owner,
         orgA(),
-        "SELECT l.id FROM mail_log l WHERE l.kind = 'test_message' LIMIT 1",
+        "SELECT l.id FROM mail_log l WHERE l.kind = 'test_message' AND l.recipient = 'proba.servera@a.example.test'",
       );
-      if (test !== undefined) {
-        expect((await as(e2e, admin, 'post', `/api/v1/mail-log/${test.id}/resend`)).status).toBe(
-          409,
-        );
-      }
+      expect(test).toBeDefined();
+      const refused = await as(e2e, admin, 'post', `/api/v1/mail-log/${test?.id ?? ''}/resend`);
+      expect(refused.status).toBe(409);
+      expect(refused.body).toEqual(expect.objectContaining({ code: 'resend_refused' }));
+    });
+
+    it('SEC-M4-02: an email change confirmation is never resent; the person asks again', async () => {
+      const person = await new Factories(owner).user(actors.a.organisation, { role: 'reviewer' });
+      const session = await signIn(e2e, person);
+      const newEmail = `nova.adresa.${String(Date.now())}@a.example.test`;
+      const asked = await as(e2e, session, 'post', '/api/v1/account/email').send({
+        password: INVENTED_PASSWORD,
+        newEmail,
+      });
+      expect(asked.status).toBe(202);
+      await worker.tick();
+      const [entry] = await inOrganisation<{ id: string }>(
+        owner,
+        orgA(),
+        "SELECT id FROM mail_log WHERE kind = 'email_change_confirmation' AND recipient = $1",
+        [newEmail],
+      );
+      expect(entry).toBeDefined();
+      const refused = await as(e2e, admin, 'post', `/api/v1/mail-log/${entry?.id ?? ''}/resend`);
+      expect(refused.status).toBe(409);
+      expect(refused.body).toEqual(expect.objectContaining({ code: 'resend_refused' }));
+      const confirmations = await inOrganisation<{ id: string }>(
+        owner,
+        orgA(),
+        "SELECT id FROM mail_outbox WHERE kind = 'email_change_confirmation' AND recipient_address = $1",
+        [newEmail],
+      );
+      expect(confirmations).toHaveLength(1);
+    });
+
+    it('SEC-M4-02: a reset is judged by the time it was asked for, not by the time of its resend', async () => {
+      const person = await new Factories(owner).user(actors.a.organisation, { role: 'reviewer' });
+      const asked = await requestReset(person.email);
+      expect(asked.status).toBe(202);
+      await worker.tick();
+      const [original] = await inOrganisation<{ id: string; message_id: string }>(
+        owner,
+        orgA(),
+        "SELECT id, message_id FROM mail_log WHERE kind = 'password_reset' AND recipient = $1",
+        [person.email],
+      );
+      expect(original).toBeDefined();
+      // Resent while nothing has changed: queued. Then the password changes before it goes.
+      const resent = await as(e2e, admin, 'post', `/api/v1/mail-log/${original?.id ?? ''}/resend`);
+      expect(resent.status).toBe(200);
+      await inOrganisation(
+        owner,
+        orgA(),
+        'UPDATE users SET password_changed_at = now() WHERE id = $1',
+        [person.id],
+      );
+      await worker.tick();
+      const [copy] = await inOrganisation<{ status: string; last_error_code: string | null }>(
+        owner,
+        orgA(),
+        'SELECT status, last_error_code FROM mail_outbox WHERE id = $1',
+        [(resent.body as { messageId: string }).messageId],
+      );
+      expect(copy).toEqual({ status: 'failed', last_error_code: 'superseded' });
+      expect(await mailsTo(person.email)).toHaveLength(1);
+      // The original is older than the change now: a resend of it is refused.
+      const refused = await as(e2e, admin, 'post', `/api/v1/mail-log/${original?.id ?? ''}/resend`);
+      expect(refused.status).toBe(409);
+      expect(refused.body).toEqual(expect.objectContaining({ code: 'resend_refused' }));
+    });
+
+    it('SEC-M4-02: a reset is not resent after the address changed, nor one that failed as stale', async () => {
+      const person = await new Factories(owner).user(actors.a.organisation, { role: 'reviewer' });
+      const asked = await requestReset(person.email);
+      expect(asked.status).toBe(202);
+      await worker.tick();
+      const [entry] = await inOrganisation<{ id: string; message_id: string }>(
+        owner,
+        orgA(),
+        "SELECT id, message_id FROM mail_log WHERE kind = 'password_reset' AND recipient = $1",
+        [person.email],
+      );
+      await inOrganisation(
+        owner,
+        orgA(),
+        'UPDATE users SET email_changed_at = now() WHERE id = $1',
+        [person.id],
+      );
+      const afterChange = await as(
+        e2e,
+        admin,
+        'post',
+        `/api/v1/mail-log/${entry?.id ?? ''}/resend`,
+      );
+      expect(afterChange.status).toBe(409);
+      // A message that failed as no longer true is never brought back.
+      await inOrganisation(
+        owner,
+        orgA(),
+        'UPDATE users SET email_changed_at = NULL WHERE id = $1',
+        [person.id],
+      );
+      await inOrganisation(
+        owner,
+        orgA(),
+        "UPDATE mail_outbox SET status = 'failed', last_error_code = 'superseded' WHERE id = $1",
+        [entry?.message_id],
+      );
+      const failedStale = await as(
+        e2e,
+        admin,
+        'post',
+        `/api/v1/mail-log/${entry?.id ?? ''}/resend`,
+      );
+      expect(failedStale.status).toBe(409);
     });
 
     it('keeps 24 months by default, and the retention job removes what is older than the period set', async () => {
