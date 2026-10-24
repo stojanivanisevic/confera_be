@@ -227,8 +227,11 @@ describe('M4-QA-01 edge cases (statuses, status emails, search, mail log, images
     it('ten identical status changes sent at once: one change, one email, nine told 409', async () => {
       const { id } = await opened();
       const { version } = await detail(id);
+      const { previewDigest } = await preview(admin, id, { action: 'accept' });
       const answers = await Promise.all(
-        Array.from({ length: 10 }, () => post(admin, id, { action: 'accept', version })),
+        Array.from({ length: 10 }, () =>
+          post(admin, id, { action: 'accept', version, previewDigest }),
+        ),
       );
       const statuses = answers.map((answer) => answer.status).sort();
       expect(statuses).toEqual([200, ...Array<number>(9).fill(409)]);
@@ -244,6 +247,7 @@ describe('M4-QA-01 edge cases (statuses, status emails, search, mail log, images
       const { version } = await detail(id);
       const note = 'Molimo skratite apstrakt.';
       const shown = await preview(admin, id, { action: 'return', message: note });
+      const acceptShown = await preview(second, id, { action: 'accept' });
       const [returned, accepted] = await Promise.all([
         post(admin, id, {
           action: 'return',
@@ -251,7 +255,7 @@ describe('M4-QA-01 edge cases (statuses, status emails, search, mail log, images
           previewDigest: shown.previewDigest,
           version,
         }),
-        post(second, id, { action: 'accept', version }),
+        post(second, id, { action: 'accept', version, previewDigest: acceptShown.previewDigest }),
       ]);
       expect([returned.status, accepted.status].sort()).toEqual([200, 409]);
       const sent = [
@@ -287,7 +291,10 @@ describe('M4-QA-01 edge cases (statuses, status emails, search, mail log, images
     it('an edit on the author’s behalf on a version another admin has moved on is refused', async () => {
       const { id } = await opened();
       const { version } = await detail(id);
-      expect((await post(second, id, { action: 'accept', version })).status).toBe(200);
+      const { previewDigest } = await preview(second, id, { action: 'accept' });
+      expect((await post(second, id, { action: 'accept', version, previewDigest })).status).toBe(
+        200,
+      );
       const edit = await as(e2e, admin, 'put', `/api/v1/submissions/${id}`).send({
         version,
         answers: abstractAnswers({ title: 'Promenjen naslov' }),
