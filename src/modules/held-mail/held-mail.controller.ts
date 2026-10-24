@@ -127,25 +127,33 @@ export class HeldMailService {
       throw new ProblemException(400, VALIDATION_FAILED, [{ path: 'ids', code: 'idsOrAll' }]);
     }
     return this.database.transaction(async (tx) => {
-      const discarded = await tx.mailMessage.updateMany({
+      const discarded = await tx.mailMessage.updateManyAndReturn({
         where: {
           status: 'held',
           ...(input.ids === undefined ? {} : { id: { in: input.ids } }),
           ...(input.formId === undefined ? {} : { formId: input.formId }),
         },
         data: { status: 'discarded', discardedAt: new Date(), discardedBy: actor.userId },
+        select: { id: true },
       });
-      if (discarded.count > 0) {
+      if (discarded.length > 0) {
+        // Which emails, not only how many (SEC-M4-08): a discarded email is never sent.
         await this.audit.record(tx, {
           organisationId: actor.organisationId,
           actorUserId: actor.userId,
           action: 'held_mail.discarded',
           subjectType: 'held_mail',
           subjectId: input.formId ?? null,
-          detail: { count: discarded.count },
+          detail: {
+            count: discarded.length,
+            ids: discarded
+              .map((row) => row.id)
+              .sort()
+              .join(' '),
+          },
         });
       }
-      return { discarded: discarded.count };
+      return { discarded: discarded.length };
     });
   }
 

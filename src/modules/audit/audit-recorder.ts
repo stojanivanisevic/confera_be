@@ -68,9 +68,11 @@ export interface FieldChange {
   readonly new: string | null;
 }
 
-/** Counts and periods of a summary. Never a personal value. */
+/** Counts and periods of a summary, and ids of records. Never a personal value. */
 export interface AuditDetail {
   readonly count?: number;
+  /** The ids of the records an action touched, separated by spaces (SEC-M4-08). */
+  readonly ids?: string;
   readonly from?: string;
   readonly to?: string;
   readonly newDevice?: boolean;

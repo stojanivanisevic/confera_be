@@ -876,6 +876,10 @@ describe('forms and intake (M3)', () => {
       );
       const audit = await as(e2e, admin, 'get', '/api/v1/audit?action=held_mail.discarded');
       expect(audit.body).toEqual(expect.objectContaining({ total: 1 }));
+      // Which email was discarded, not only how many (SEC-M4-08).
+      expect(
+        (audit.body as { items: { detail: Record<string, unknown> }[] }).items[0]?.detail,
+      ).toEqual({ count: 1, ids: heldIds[0] });
       expect((await as(e2e, adminB, 'get', '/api/v1/held-mail')).body).toEqual(
         expect.objectContaining({ total: 0 }),
       );
