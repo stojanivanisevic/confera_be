@@ -16,6 +16,7 @@ import { ApiBody, ApiConsumes } from '@nestjs/swagger';
 import busboy from 'busboy';
 import type { Request, Response } from 'express';
 import { ProblemException } from '../../common/http/problem';
+import { RateLimiter } from '../../common/http/rate-limiter';
 import { AdminController } from '../../common/http/surface';
 import type { Prisma } from '../../generated/prisma/client';
 import { TenantDatabase } from '../../platform/prisma/tenant-database';
@@ -25,30 +26,15 @@ import { AuditRecorder } from '../audit/audit-recorder';
 import { ImageError, MAX_UPLOAD_BYTES, processEmailImage } from './email-images';
 import { attachmentHeader, safeFileName } from './file-names';
 import { FilesModule } from './files.module';
+import { MailImageDto, MailImageListDto } from './mail-images.dto';
 import { mayServe } from './serving';
 import { FileStorage } from './storage';
 
 /** Email images an organisation may keep (P): far above what its templates can show. */
 export const MAX_IMAGES_PER_ORGANISATION = 500;
-
-/** An email image (M4-BE-06): re-encoded, private, shown in templates once its scan is clean. */
-export class MailImageDto {
-  id!: string;
-  /** The name it was uploaded under, cleaned (with the extension of what it is now). */
-  name!: string;
-  /** What it is now: png or jpeg (a GIF became a PNG of its first frame). */
-  type!: string;
-  width!: number;
-  height!: number;
-  sizeBytes!: number;
-  /** pending until ClamAV has said clean; only a clean image is shown or sent. */
-  scanState!: string;
-  createdAt!: string;
-}
-
-export class MailImageListDto {
-  items!: MailImageDto[];
-}
+/** Uploads one admin may make in ten minutes (SEC-M4-04): a template needs a handful. */
+export const UPLOADS_PER_USER = 30;
+const UPLOAD_WINDOW_MS = 10 * 60 * 1000;
 
 type FileRow = Prisma.StoredFileGetPayload<object>;
 
@@ -70,6 +56,7 @@ const REFUSAL_STATUS: Readonly<Record<ImageError['code'], number>> = {
   image_too_many_pixels: 422,
   image_unreadable: 422,
   image_too_large: 413,
+  image_busy: 429,
 };
 
 /**
@@ -80,6 +67,8 @@ const REFUSAL_STATUS: Readonly<Record<ImageError['code'], number>> = {
  */
 @Injectable()
 export class MailImagesService {
+  readonly #uploads = new RateLimiter(UPLOADS_PER_USER, UPLOAD_WINDOW_MS);
+
   constructor(
     private readonly database: TenantDatabase,
     private readonly storage: FileStorage,
@@ -87,8 +76,13 @@ export class MailImagesService {
   ) {}
 
   async upload(actor: Access, request: Request): Promise<MailImageDto> {
+    if (!this.#uploads.take(actor.userId)) {
+      request.resume();
+      throw new ProblemException(429, 'too_many_requests');
+    }
     const kept = await this.database.db.storedFile.count({ where: { kind: 'email_image' } });
     if (kept >= MAX_IMAGES_PER_ORGANISATION) {
+      request.resume();
       throw new ProblemException(409, 'image_quota_reached');
     }
     const received = await this.receive(request);
@@ -112,6 +106,13 @@ export class MailImagesService {
     }
     try {
       return await this.database.transaction(async (tx) => {
+        // Counted again under a lock of the organisation's images (SEC-M4-04): uploads at
+        // the same moment cannot pass the quota together.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera mail images ${actor.organisationId}`}, 0))`;
+        const now = await tx.storedFile.count({ where: { kind: 'email_image' } });
+        if (now >= MAX_IMAGES_PER_ORGANISATION) {
+          throw new ProblemException(409, 'image_quota_reached');
+        }
         const row = await tx.storedFile.create({
           data: {
             organisationId: actor.organisationId,

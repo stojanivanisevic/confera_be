@@ -5262,11 +5262,59 @@
       },
       "MailImageDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name it was uploaded under, cleaned (with the extension of what it is now)."
+          },
+          "type": {
+            "type": "string",
+            "description": "What it is now: png or jpeg (a GIF became a PNG of its first frame)."
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "sizeBytes": {
+            "type": "number"
+          },
+          "scanState": {
+            "type": "string",
+            "description": "pending until ClamAV has said clean; only a clean image is shown or sent."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "width",
+          "height",
+          "sizeBytes",
+          "scanState",
+          "createdAt"
+        ]
       },
       "MailImageListDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailImageDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
       },
       "MailLogEntryDto": {
         "type": "object",
