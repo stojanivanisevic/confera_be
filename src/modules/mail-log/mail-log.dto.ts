@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { MAIL_KINDS } from '../mail/mail-queue';
 
 /** One attempt of one message (FR-SMTP-04). Without its content; see MailLogEntryDto. */
@@ -97,6 +97,16 @@ export class MailLogQueryDto {
   @IsOptional()
   @IsUUID('4')
   messageId?: string;
+
+  /**
+   * Words searched in the recipient and the subject, any case (UX4-13): every word must
+   * occur in one of them. "did the author get the acceptance?" is `q=<address>` and the
+   * kind. A subject the log did not keep (`mailLogContent` off) is not searched.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
 
   @IsOptional()
   @Type(() => Number)

@@ -55,6 +55,21 @@ function summaryOf(row: Row): MailLogSummaryDto {
   };
 }
 
+/**
+ * The words of a search of the log (UX4-13): at most 8, cut at the characters LIKE reads as
+ * a wildcard or an escape, so that a word is always matched as it is written.
+ */
+function searchWords(query: string | undefined): string[] {
+  return [
+    ...new Set(
+      (query ?? '')
+        .normalize('NFKC')
+        .split(/[\s%_\\]+/u)
+        .filter((word) => word !== ''),
+    ),
+  ].slice(0, 8);
+}
+
 const INCLUDE = { message: { select: { resendOf: true, resendMode: true } } } as const;
 
 /**
@@ -262,6 +277,12 @@ export class MailLogController {
       ...(query.result === undefined ? {} : { result: query.result }),
       ...(query.conferenceId === undefined ? {} : { conferenceId: query.conferenceId }),
       ...(query.messageId === undefined ? {} : { messageId: query.messageId }),
+      AND: searchWords(query.q).map((word) => ({
+        OR: [
+          { recipient: { contains: word, mode: 'insensitive' as const } },
+          { subject: { contains: word, mode: 'insensitive' as const } },
+        ],
+      })),
     };
     const [total, rows] = await this.database.transaction((tx) =>
       Promise.all([

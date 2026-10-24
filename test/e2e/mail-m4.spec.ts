@@ -680,6 +680,44 @@ describe('templates, email images and the mail log (M4-BE-03, 05, 06)', () => {
       expect(failedStale.status).toBe(409);
     });
 
+    it('UX4-13: searches the log by recipient and subject, any case; a wildcard is a plain character', async () => {
+      const { email } = await submitOne('sr');
+      await worker.tick();
+      const local = email.split('@')[0] ?? '';
+      const found = await as(
+        e2e,
+        admin,
+        'get',
+        `/api/v1/mail-log?q=${encodeURIComponent(local.toUpperCase())}`,
+      );
+      expect(found.status).toBe(200);
+      const items = (found.body as { items: { recipient: string; kind: string }[] }).items;
+      expect(items.length).toBeGreaterThanOrEqual(1);
+      expect(items.every((item) => item.recipient === email)).toBe(true);
+      // Two words: the address and a word of the subject of its confirmation.
+      const both = await as(
+        e2e,
+        admin,
+        'get',
+        `/api/v1/mail-log?q=${encodeURIComponent(`${local} prijava`)}&kind=submission_confirmation`,
+      );
+      expect((both.body as { items: unknown[] }).items).toHaveLength(1);
+      for (const wildcard of ['%', '_', '\\', '%%%']) {
+        const none = await as(
+          e2e,
+          admin,
+          'get',
+          `/api/v1/mail-log?q=${encodeURIComponent(wildcard)}&pageSize=1`,
+        );
+        expect(none.status).toBe(200);
+      }
+      const nothing = await as(e2e, admin, 'get', '/api/v1/mail-log?q=nepostojeca%25adresa');
+      expect((nothing.body as { total: number }).total).toBe(0);
+      expect((await as(e2e, admin, 'get', `/api/v1/mail-log?q=${'x'.repeat(201)}`)).status).toBe(
+        400,
+      );
+    });
+
     it('keeps 24 months by default, and the retention job removes what is older than the period set', async () => {
       const retention = await as(e2e, admin, 'get', '/api/v1/mail-log/retention');
       expect(retention.body).toEqual(expect.objectContaining({ days: 730 }));
