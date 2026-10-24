@@ -244,6 +244,8 @@ model User {
   /// invited (no password yet), active, deactivated, removed (kept for the attribution of past actions).
   status                 String    @default("invited")
   passwordChangedAt      DateTime? @map("password_changed_at") @db.Timestamptz(3)
+  /// When the address last changed by a confirmed email change: a link asked for before it is stale (SEC-M4-02).
+  emailChangedAt         DateTime? @map("email_changed_at") @db.Timestamptz(3)
   /// The second factor of 0.9.0 (ADR-03, G2-16). Null: not enrolled.
   secondFactorEnrolledAt DateTime? @map("second_factor_enrolled_at") @db.Timestamptz(3)
   /// Raised by every change; a change that names an older version is refused (409).

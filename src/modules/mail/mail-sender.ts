@@ -10,6 +10,7 @@ import { type LinkPurpose, SecureLinks } from '../links/secure-links';
 import { chooseServers } from '../mail-servers/mail-server-policy';
 import type { Language } from '../templates/placeholders';
 import { type Rendered, RenderError } from '../templates/render';
+import { changedSince, linkRequestedAt } from './link-staleness';
 import { composeMessage, contentIdOf, LINK_SENTINEL, withLink } from './mail-composer';
 import { type DeliveryError, type InlineImage, MailTransport } from './mail-transport';
 import { SecretBox } from './secret-box';
@@ -238,15 +239,25 @@ export class MailSender {
     }
     const user = await this.database.db.user.findUnique({
       where: { id: message.linkUserId },
-      select: { status: true, email: true, passwordChangedAt: true },
+      select: { status: true, email: true, passwordChangedAt: true, emailChangedAt: true },
     });
     if (user === null) {
       return 'account_gone';
     }
-    // A request made before the password changed does not outlive it (SEC-M2-01).
+    // A request made before the password or the address changed does not outlive it
+    // (SEC-M2-01); a resend is judged by the time of the request it repeats (SEC-M4-02).
     if (
-      user.passwordChangedAt !== null &&
-      message.createdAt.getTime() < user.passwordChangedAt.getTime()
+      changedSince(
+        user,
+        await linkRequestedAt(
+          (id) =>
+            this.database.db.mailMessage.findUnique({
+              where: { id },
+              select: { createdAt: true, resendOf: true },
+            }),
+          message,
+        ),
+      )
     ) {
       return 'superseded';
     }

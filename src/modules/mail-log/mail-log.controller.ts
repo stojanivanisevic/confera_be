@@ -18,6 +18,7 @@ import { TenantDatabase } from '../../platform/prisma/tenant-database';
 import type { Access } from '../access/access';
 import { CurrentAccess, Permission } from '../access/access.decorators';
 import { AuditRecorder } from '../audit/audit-recorder';
+import { changedSince, linkRequestedAt, STALE_REASONS } from '../mail/link-staleness';
 import { type MailKind, MailQueue } from '../mail/mail-queue';
 import {
   MailLogEntryDto,
@@ -56,8 +57,13 @@ function summaryOf(row: Row): MailLogSummaryDto {
 
 const INCLUDE = { message: { select: { resendOf: true, resendMode: true } } } as const;
 
-/** The kinds that are never resent: a test message is sent anew from its server. */
-const NOT_RESENT: readonly string[] = ['test_message'];
+/**
+ * The kinds that are never resent: a test message is sent anew from its server; an email
+ * change is confirmed by a link to an address the account does not have yet, so a resend
+ * would make a live link that moves the account to an address someone once typed
+ * (SEC-M4-02): the person asks for the change again.
+ */
+const NOT_RESENT: readonly string[] = ['test_message', 'email_change_confirmation'];
 
 /**
  * Resending and the retention of the mail log (M4-BE-05; FR-SMTP-05, FR-SMTP-06).
@@ -87,8 +93,12 @@ export class MailLogService {
       const original = entry.message;
       if (
         NOT_RESENT.includes(original.kind) ||
+        original.linkPurpose === 'email_change' ||
         !['sent', 'failed', 'stuck'].includes(original.status)
       ) {
+        throw new ProblemException(409, 'resend_refused');
+      }
+      if (original.linkPurpose !== null && (await this.isStale(tx, original))) {
         throw new ProblemException(409, 'resend_refused');
       }
       const id = randomUUID();
@@ -148,6 +158,47 @@ export class MailLogService {
         resendMode: copy ? ('copy' as const) : ('rendered_again' as const),
       };
     });
+  }
+
+  /**
+   * A message with a link that is no longer true is not resent (SEC-M4-02): it failed as
+   * stale, or the password or the address changed after its link was first asked for. The
+   * sender judges the resend by that time again when it sends.
+   */
+  private async isStale(
+    tx: Prisma.TransactionClient,
+    original: {
+      createdAt: Date;
+      resendOf: string | null;
+      status: string;
+      lastErrorCode: string | null;
+      linkUserId: string | null;
+    },
+  ): Promise<boolean> {
+    if (original.status === 'failed' && STALE_REASONS.includes(original.lastErrorCode ?? '')) {
+      return true;
+    }
+    if (original.linkUserId === null) {
+      return true;
+    }
+    const user = await tx.user.findUnique({
+      where: { id: original.linkUserId },
+      select: { passwordChangedAt: true, emailChangedAt: true },
+    });
+    return (
+      user === null ||
+      changedSince(
+        user,
+        await linkRequestedAt(
+          (id) =>
+            tx.mailMessage.findUnique({
+              where: { id },
+              select: { createdAt: true, resendOf: true },
+            }),
+          original,
+        ),
+      )
+    );
   }
 
   async retention(): Promise<MailLogRetentionDto> {
@@ -264,7 +315,9 @@ export class MailLogController {
   /**
    * Resends the message of this entry (FR-SMTP-05): as it was sent, with a fresh secure link
    * that ends the earlier one, or rendered again from the template when the content was not
-   * kept. 409 `resend_refused` for a test message, or a message that is not done yet.
+   * kept. 409 `resend_refused` for a test message, an email change confirmation, a message
+   * that is not done yet, and a link that is no longer true (it failed as stale, or the
+   * password or the address changed after it was asked for; SEC-M4-02).
    */
   @Post(':id/resend')
   @Permission('mail_log.manage')

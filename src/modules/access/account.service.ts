@@ -382,7 +382,12 @@ export class AccountService {
         }
         await tx.user.update({
           where: { id: link.userId },
-          data: { email: link.recipient, version: { increment: 1 }, updatedAt: new Date() },
+          data: {
+            email: link.recipient,
+            emailChangedAt: new Date(),
+            version: { increment: 1 },
+            updatedAt: new Date(),
+          },
         });
         await this.sessions.endAllOf(tx, link.userId, 'email_changed');
         await this.links.revokeAll(tx, link.userId);
