@@ -58,7 +58,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Vaš nalog kod " },
+          { "type": "text", "text": "Vaš nalog – organizacija: " },
           { "type": "placeholder", "key": "organisationName" }
         ]
       },
@@ -77,9 +77,9 @@
             "type": "paragraph",
             "children": [
               { "type": "placeholder", "key": "inviterName" },
-              { "type": "text", "text": " Vas je pozvao/la u " },
+              { "type": "text", "text": " Vas je pozvao/la na Conferu. Organizacija: " },
               { "type": "placeholder", "key": "organisationName" },
-              { "type": "text", "text": " na Conferi. Izaberite lozinku preko ovog linka:" }
+              { "type": "text", "text": ". Izaberite lozinku preko ovog linka:" }
             ]
           },
           {
@@ -163,7 +163,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Nova lozinka kod " },
+          { "type": "text", "text": "Nova lozinka – organizacija: " },
           { "type": "placeholder", "key": "organisationName" }
         ]
       },
@@ -267,7 +267,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Potvrdite novu adresu kod " },
+          { "type": "text", "text": "Potvrdite novu adresu – organizacija: " },
           { "type": "placeholder", "key": "organisationName" }
         ]
       },
@@ -366,9 +366,9 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Neko se prijavio na Vaš nalog kod " },
+              { "type": "text", "text": "Neko se prijavio na Vaš nalog (organizacija: " },
               { "type": "placeholder", "key": "organisationName" },
-              { "type": "text", "text": " i zatražio promenu adrese na " },
+              { "type": "text", "text": ") i zatražio promenu adrese na " },
               { "type": "placeholder", "key": "newEmail" },
               {
                 "type": "text",
@@ -472,9 +472,9 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Kod " },
+              { "type": "text", "text": "Organizacija: " },
               { "type": "placeholder", "key": "organisationName" },
-              { "type": "text", "text": " se dogodilo: " },
+              { "type": "text", "text": ". Dogodilo se: " },
               { "type": "placeholder", "key": "change" },
               { "type": "text", "text": "." }
             ]
@@ -570,11 +570,14 @@
           {
             "type": "paragraph",
             "children": [
-              { "type": "text", "text": "Neko pokušava da se prijavi na Vaš nalog kod " },
+              {
+                "type": "text",
+                "text": "Neko pokušava da se prijavi na Vaš nalog (organizacija: "
+              },
               { "type": "placeholder", "key": "organisationName" },
               {
                 "type": "text",
-                "text": " pogrešnom lozinkom. Prijava mu je usporena; Vaš poznati pregledač nije pogođen. Ako to niste bili Vi, ništa ne morate da radite; ako poruke ne prestaju, obavestite administratora."
+                "text": ") pogrešnom lozinkom. Prijava mu je usporena; Vaš poznati pregledač nije pogođen. Ako to niste bili Vi, ništa ne morate da radite; ako poruke ne prestaju, obavestite administratora."
               }
             ]
           }
@@ -616,7 +619,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Confera probna poruka sa " },
+          { "type": "text", "text": "Confera probna poruka – server: " },
           { "type": "placeholder", "key": "serverName" }
         ]
       },
@@ -932,11 +935,34 @@
             ]
           },
           {
-            "type": "paragraph",
+            "type": "conditional",
+            "key": "hasContact",
             "children": [
               {
-                "type": "text",
-                "text": "Please reply to this message with the corrected text; the office will enter it for you."
+                "type": "paragraph",
+                "children": [
+                  { "type": "text", "text": "Please reply to this message, or write to " },
+                  { "type": "placeholder", "key": "contactEmail" },
+                  {
+                    "type": "text",
+                    "text": ", with the corrected text; the office will enter it for you."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "noContact",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Please send the corrected text to the office of the conference; the office will enter it for you."
+                  }
+                ]
               }
             ]
           },
@@ -1006,11 +1032,34 @@
             "children": [{ "type": "text", "text": "Vaša prijava je vraćena na doradu." }]
           },
           {
-            "type": "paragraph",
+            "type": "conditional",
+            "key": "hasContact",
             "children": [
               {
-                "type": "text",
-                "text": "Molimo Vas da na ovu poruku odgovorite ispravljenim tekstom; kancelarija će ga uneti umesto Vas."
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Molimo Vas da ispravljeni tekst pošaljete odgovorom na ovu poruku ili na adresu "
+                  },
+                  { "type": "placeholder", "key": "contactEmail" },
+                  { "type": "text", "text": "; kancelarija će ga uneti umesto Vas." }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "conditional",
+            "key": "noContact",
+            "children": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Molimo Vas da ispravljeni tekst pošaljete kancelariji konferencije; kancelarija će ga uneti umesto Vas."
+                  }
+                ]
               }
             ]
           },

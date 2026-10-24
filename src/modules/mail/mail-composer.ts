@@ -112,16 +112,18 @@ export const CONFIRMATION_TITLE_LENGTH = 200;
 const DOMAIN = /(^|[^\p{L}\p{N}@.-])[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)*\.\p{L}{2,}(?![\p{L}\p{N}])/u;
 
 /**
- * The title as a confirmation or a status email shows it (FR-FORM-15, SA-13, ST-35, ST-44):
- * one line, no control or invisible character, cut to its length; and none at all when it
- * holds an address or a bare domain, which a mail program would make a link of (the form
- * refuses an address; this holds for a row planted past it, and for a correction).
+ * A line the author typed, as a confirmation or a status email shows it (FR-FORM-15, SA-13,
+ * ST-35, ST-44, SEC-M4-03): one line, no control or invisible character, cut to its length;
+ * and none at all when it holds an address or a bare domain, which a mail program would
+ * make a link of (the form refuses an address; this holds for a row planted past it, and
+ * for a correction). Every value of a template that the author typed passes here: the
+ * title and the first author's name. A false positive costs only that value.
  */
-export function confirmationTitle(title: string | null): string | null {
-  if (title === null) {
+export function authorLine(value: string | null): string | null {
+  if (value === null) {
     return null;
   }
-  const line = title
+  const line = value
     .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
@@ -140,6 +142,11 @@ export function confirmationTitle(title: string | null): string | null {
   }
   // Judged on what the mail would show: at most 201 characters, so the match stays cheap.
   return DOMAIN.test(cut) ? null : cut;
+}
+
+/** The title as a confirmation or a status email shows it: an author's line (above). */
+export function confirmationTitle(title: string | null): string | null {
+  return authorLine(title);
 }
 
 function lifetimeText(ms: number, language: Language): string {
@@ -181,9 +188,10 @@ async function valuesOf(
   input: ComposeInput,
   type: TemplateType,
   language: Language,
-  organisationName: string,
+  organisation: { readonly name: string; readonly contactEmail: string | null },
   options: ComposeOptions,
 ): Promise<{ values: Record<string, string>; conditions: Set<string> }> {
+  const organisationName = organisation.name;
   const parameters = (input.parameters ?? {}) as Record<string, unknown>;
   const nameOf = async (id: unknown): Promise<string | null> => {
     if (typeof id !== 'string') {
@@ -279,7 +287,10 @@ async function valuesOf(
       const submission = await submissionOf(parameters.submissionId);
       values.reference = submission?.reference ?? '';
       values.conferenceName = submission?.conference.name ?? '';
-      values.authorName = submission?.firstAuthorName ?? '';
+      values.authorName = authorLine(submission?.firstAuthorName ?? null) ?? '';
+      // Where the author writes back (D8, UX4-06): Reply-To is the same address.
+      values.contactEmail = organisation.contactEmail ?? '';
+      conditions.add(organisation.contactEmail === null ? 'noContact' : 'hasContact');
       const title = confirmationTitle(submission?.title ?? null);
       values.title = title ?? '';
       if (title !== null) {
@@ -361,16 +372,9 @@ export async function composeMessage(
   }
   const organisation = await tx.organisation.findUniqueOrThrow({
     where: { id: input.organisationId },
-    select: { name: true },
+    select: { name: true, contactEmail: true },
   });
-  const { values, conditions } = await valuesOf(
-    tx,
-    input,
-    type,
-    language,
-    organisation.name,
-    options,
-  );
+  const { values, conditions } = await valuesOf(tx, input, type, language, organisation, options);
   const images = await imagesFor(tx, template.body, type, options.images ?? { kind: 'cid' });
   const rendered = renderTemplate(template, catalogueOf(type), {
     values,

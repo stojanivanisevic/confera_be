@@ -38,6 +38,8 @@ const COMMON = ['recipientName', 'organisationName'] as const;
  * A status email (FR-MAIL-05): to the corresponding author, about one submission. Sent by an
  * admin's act, so it may name the first author; `message` is the admin's text for the
  * author (FR-MAIL-08), the one placeholder whose value keeps its line breaks.
+ * `contactEmail` is the organisation's contact address (D8), where a reply goes (UX4-06);
+ * `hasContact` and `noContact` switch a block on when it is set and when it is not.
  */
 const STATUS = [
   'organisationName',
@@ -46,7 +48,10 @@ const STATUS = [
   'title',
   'authorName',
   'message',
+  'contactEmail',
 ] as const;
+
+const STATUS_CONDITIONS = ['hasTitle', 'hasMessage', 'hasContact', 'noContact'] as const;
 
 export const PLACEHOLDERS: Readonly<Record<TemplateType, readonly string[]>> = {
   invitation: [...COMMON, 'inviterName', 'expiresIn', 'link'],
@@ -81,13 +86,13 @@ export const CONDITIONS: Readonly<Record<TemplateType, readonly string[]>> = {
   sign_in_brake: [],
   test_message: [],
   submission_confirmation: ['hasTitle'],
-  submission_opened: ['hasTitle', 'hasMessage'],
-  submission_returned: ['hasTitle', 'hasMessage'],
-  submission_resumed: ['hasTitle', 'hasMessage'],
-  submission_accepted: ['hasTitle', 'hasMessage'],
-  submission_rejected: ['hasTitle', 'hasMessage'],
-  submission_withdrawn: ['hasTitle', 'hasMessage'],
-  submission_reopened: ['hasTitle', 'hasMessage'],
+  submission_opened: STATUS_CONDITIONS,
+  submission_returned: STATUS_CONDITIONS,
+  submission_resumed: STATUS_CONDITIONS,
+  submission_accepted: STATUS_CONDITIONS,
+  submission_rejected: STATUS_CONDITIONS,
+  submission_withdrawn: STATUS_CONDITIONS,
+  submission_reopened: STATUS_CONDITIONS,
 };
 
 export function catalogueOf(type: TemplateType): Catalogue {

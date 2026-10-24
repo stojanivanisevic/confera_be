@@ -3,7 +3,7 @@ import { catalogueOf } from '../templates/placeholders';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repoRoot } from '../../../test/support/run-node';
-import { CONFIRMATION_TITLE_LENGTH, confirmationTitle } from './mail-composer';
+import { authorLine, CONFIRMATION_TITLE_LENGTH, confirmationTitle } from './mail-composer';
 
 /**
  * ST-35 (M3-BE-06, FR-FORM-15 as amended by SA-13): the confirmation of a submission carries
@@ -100,5 +100,30 @@ describe('the confirmation of a submission (ST-35)', () => {
   it('a domain in the part of a long title that the mail shows leaves it out; the rest is not judged', () => {
     expect(confirmationTitle(`${'a '.repeat(50)}evil.com ${'ž'.repeat(300)}`)).toBeNull();
     expect(confirmationTitle(`${'ž'.repeat(300)} evil.com`)).toBe(`${'ž'.repeat(200)}…`);
+  });
+
+  it.each([
+    ['evil.com', null],
+    ['Ana paypal-verify.com', null],
+    ['Ana https://x.example.test', null],
+    ['Ana ana@x.example.test', null],
+    ['x.com:8080/a Petrović', null],
+    ['Ana\r\nBcc: x', 'Ana Bcc: x'],
+    ['Živana Đorđević', 'Živana Đorđević'],
+    ['Dr. Ana M. Petrović', 'Dr. Ana M. Petrović'],
+  ])('ST-44, SEC-M4-03: the author name %j is shown as %j', (name, shown) => {
+    expect(authorLine(name)).toBe(shown);
+  });
+
+  it('SEC-M4-03: every status email shows the name of the first author through the same filter', () => {
+    for (const type of [
+      'submission_opened',
+      'submission_returned',
+      'submission_accepted',
+    ] as const) {
+      expect(catalogueOf(type).placeholders.has('authorName')).toBe(true);
+    }
+    // What reaches a template is the filtered value; an empty name leaves no link behind.
+    expect(authorLine('evil.com') ?? '').toBe('');
   });
 });

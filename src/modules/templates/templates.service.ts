@@ -59,7 +59,7 @@ export function toTemplateDto(row: TemplateRow): MailTemplateDto {
 function sampleValues(
   type: TemplateType,
   language: Language,
-  names: { organisation: string; conference: string | null },
+  names: { organisation: string; conference: string | null; contact?: string | null },
 ): Record<string, string> {
   const sr = language === 'sr';
   const all: Record<string, string> = {
@@ -77,6 +77,7 @@ function sampleValues(
     reference: 'IT27-0001',
     title: sr ? 'Učenje na daljinu u malim školama' : 'Distance learning in small schools',
     authorName: 'Živana Đorđević',
+    contactEmail: names.contact ?? '',
     message: sr
       ? 'Skratite apstrakt na 300 reči.\nDodajte ključne reči.'
       : 'Please shorten the abstract to 300 words.\nAdd the keywords.',
@@ -230,9 +231,12 @@ export class TemplatesService {
       const images = await this.imagesOf(tx, checked.body, true);
       try {
         const values = sampleValues(type, input.language as Language, names);
+        // The contact blocks as the organisation would get them now (UX4-06).
+        const conditions = new Set(catalogueOf(type).conditions);
+        conditions.delete(names.contact === null ? 'hasContact' : 'noContact');
         const rendered = renderBody(checked.body, {
           values,
-          conditions: new Set(catalogueOf(type).conditions),
+          conditions,
           link: 'https://admin.confera.example/preview-link',
           images,
         });
@@ -410,6 +414,7 @@ export class TemplatesService {
         values: sampleValues(type, (input.language ?? 'en') as Language, {
           organisation: 'x'.repeat(100),
           conference: 'x'.repeat(200),
+          contact: `${'x'.repeat(240)}@example.test`,
         }),
         conditions: new Set(catalogue.conditions),
         link: 'https://admin.confera.example/a-link-of-the-length-of-a-real-one-0123456789',
@@ -424,13 +429,19 @@ export class TemplatesService {
   private async namesOf(
     tx: Prisma.TransactionClient,
     conferenceId: string | null,
-  ): Promise<{ organisation: string; conference: string | null }> {
-    const organisation = await tx.organisation.findFirstOrThrow({ select: { name: true } });
+  ): Promise<{ organisation: string; conference: string | null; contact: string | null }> {
+    const organisation = await tx.organisation.findFirstOrThrow({
+      select: { name: true, contactEmail: true },
+    });
     const conference =
       conferenceId === null
         ? null
         : await tx.conference.findUnique({ where: { id: conferenceId }, select: { name: true } });
-    return { organisation: organisation.name, conference: conference?.name ?? null };
+    return {
+      organisation: organisation.name,
+      conference: conference?.name ?? null,
+      contact: organisation.contactEmail,
+    };
   }
 
   /** The images of a body that may be shown: clean email images, as data for the preview. */
