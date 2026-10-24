@@ -29,6 +29,8 @@ export const MAX_GIF_FRAMES = 100;
 export const OUTPUT_MAX_WIDTH = 600;
 export const OUTPUT_MAX_BYTES = 200 * 1024;
 export const DECODE_TIMEOUT_MS = 5_000;
+/** How long a decode's end waits for its thread to stop before the next one may start. */
+const TERMINATE_WAIT_MS = 1_000;
 /** The decodes that may wait for the one that runs; one more is refused. */
 export const MAX_WAITING_DECODES = 16;
 /** The heap of the decoding worker; the pixel buffers are bounded by the header check. */
@@ -407,8 +409,13 @@ function decodeInWorker(
       if (!settled) {
         settled = true;
         clearTimeout(timer);
-        void worker.terminate();
-        outcome();
+        // The outcome is told once the thread has stopped, so that the next decode of the
+        // queue never runs beside one that is still being ended (its memory is not freed
+        // before that), or after a second at most.
+        void Promise.race([
+          worker.terminate().catch(() => undefined),
+          new Promise((resolve) => setTimeout(resolve, TERMINATE_WAIT_MS).unref()),
+        ]).then(outcome);
       }
     };
     const timer = setTimeout(() => {
