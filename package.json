@@ -61,7 +61,7 @@
     "fontkit": "2.0.4",
     "jpeg-js": "0.4.4",
     "nestjs-cls": "7.0.1",
-    "nodemailer": "10.1.0",
+    "nodemailer": "10.1.7",
     "omggif": "1.0.10",
     "pdfmake": "0.3.11",
     "pg": "8.23.1",
@@ -69,7 +69,7 @@
     "pngjs": "7.0.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

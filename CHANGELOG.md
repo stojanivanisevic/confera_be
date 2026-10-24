@@ -24,6 +24,10 @@ Statuses, status emails, template management, email images and the mail log (0.4
 
 - The status `received` is `new`; a message is rendered when it is queued (M2-ISS-05); the trap alias `website` is gone (M3-ISS-19); failed test messages name a cause and test messages are capped and rate-limited (M2-ISS-14, M3-ISS-02); `db:provision` sends SCRAM verifiers (M1-ISS-14); documentation, 6to4 and local NAT64 mail targets are refused (M2-ISS-19); a GCM tag must be 16 bytes (M2-ISS-20); the Serbian confirmation no longer declines the conference name (M3-ISS-13); an unterminated comment in a `.docx` part is scanned by the engine's search (M3-ISS-12).
 
+### Security
+
+- Dependencies (Q4-08), so that `pnpm audit` passes again: body-parser 2.3.0 to 2.4.0 (GHSA-27r3-jxmh-p828, high: a denial of service through trailing bytes after a compressed body; through express 5.2.1, whose range takes it), multer 2.4.0 to 2.5.0 (GHSA-q7qp-rjg7-q26m, high: a denial of service through a pending asynchronous `fileFilter`; an override, since @nestjs/platform-express 12.1.2 pins 2.4.0; Confera reads uploads with busboy), zod 4.6.5 to 4.6.7 (GHSA-mrhx-c7xc-m3w5, high: memory exhausted while validating oversized constrained collections). Also, below the gate: nodemailer 10.1.0 to 10.1.7 (GHSA-8c8m-p3m8-cjg8 and two more moderate advisories of its address parser, which could turn display text into a recipient) and fast-uri 3.1.8 to 3.1.9 (two moderate and two low advisories). body-parser 2.4.0 and multer 2.5.0 were two days old: `minimumReleaseAgeExclude` names those two exact versions until they are three days old, and `pnpm supply-chain` refuses an entry that is not one exact version.
+
 ## 0.3.0 – 2026-10-18
 
 Forms, embed and intake: the public abstract form, its files and its confirmation, and the admin API of forms, deadlines, submissions and held mail.

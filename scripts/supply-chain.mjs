@@ -67,6 +67,15 @@ function checkSettings() {
       `pnpm-workspace.yaml minimumReleaseAge: must be at least ${String(MINIMUM_RELEASE_AGE_FLOOR)} minutes.`,
     );
   }
+  // An exception to the release age names one exact version (a security patch), never a
+  // whole package or a range.
+  for (const entry of pnpmSetting('minimumReleaseAgeExclude') ?? []) {
+    if (!/^(@[a-z0-9._-]+\/)?[a-z0-9._-]+@\d+\.\d+\.\d+$/.test(String(entry))) {
+      fail(
+        `pnpm-workspace.yaml minimumReleaseAgeExclude: "${String(entry)}" must name one exact version.`,
+      );
+    }
+  }
   if (pnpmSetting('minimumReleaseAgeStrict') === false) {
     fail('pnpm-workspace.yaml minimumReleaseAgeStrict: must not be switched off.');
   }
