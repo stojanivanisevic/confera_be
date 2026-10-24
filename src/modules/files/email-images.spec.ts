@@ -8,6 +8,7 @@ import {
   OUTPUT_MAX_BYTES,
   processEmailImage,
   readHeader,
+  reencode,
 } from './email-images';
 
 /**
@@ -72,6 +73,33 @@ function gifOf(width: number, height: number, frames: number): Buffer {
     writer.addFrame(0, 0, width, height, new Array<number>(width * height).fill(n % 2));
   }
   return buffer.subarray(0, writer.end());
+}
+
+/**
+ * A GIF whose logical screen is `screen` pixels but whose one frame's descriptor claims
+ * `frame` (at `left`, `top`), with a valid LZW stream of one pixel (SEC-M4-01).
+ */
+function gifWithFrame(
+  screen: { w: number; h: number },
+  frame: { w: number; h: number; left?: number; top?: number },
+): Buffer {
+  const header = Buffer.alloc(13);
+  header.write('GIF89a', 0, 'latin1');
+  header.writeUInt16LE(screen.w, 6);
+  header.writeUInt16LE(screen.h, 8);
+  header[10] = 0x80;
+  const descriptor = Buffer.alloc(10);
+  descriptor[0] = 0x2c;
+  descriptor.writeUInt16LE(frame.left ?? 0, 1);
+  descriptor.writeUInt16LE(frame.top ?? 0, 3);
+  descriptor.writeUInt16LE(frame.w, 5);
+  descriptor.writeUInt16LE(frame.h, 7);
+  return Buffer.concat([
+    header,
+    Buffer.from([0, 0, 0, 255, 255, 255]),
+    descriptor,
+    Buffer.from([0x02, 0x02, 0x44, 0x01, 0x00, 0x3b]),
+  ]);
 }
 
 /** A PNG whose header claims a size its data never has: the shape of a pixel bomb. */
@@ -150,6 +178,37 @@ describe('email images (M4-BE-06, ST-60, ST-67)', () => {
       ImageError,
     );
     expect(await refusal(processEmailImage(gifOf(4, 4, 101)))).toBe('image_too_many_pixels');
+  });
+
+  it('ST-67, SEC-M4-01: a GIF whose small screen hides an oversized frame is refused before any decode', async () => {
+    const cases = [
+      gifWithFrame({ w: 1, h: 1 }, { w: 65_535, h: 65_535 }),
+      gifWithFrame({ w: 10, h: 10 }, { w: 11, h: 10 }),
+      gifWithFrame({ w: 10, h: 10 }, { w: 10, h: 10, top: 1 }),
+      gifWithFrame({ w: 8_000, h: 2_000 }, { w: 8_000, h: 2_001 }),
+    ];
+    for (const bytes of cases) {
+      const started = performance.now();
+      expect(() => readHeader(bytes)).toThrow(ImageError);
+      expect(await refusal(processEmailImage(bytes))).toBe('image_too_many_pixels');
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+    // A frame that fits its screen is decoded as before.
+    expect(readHeader(gifWithFrame({ w: 10, h: 10 }, { w: 1, h: 1, left: 9, top: 9 })).frames).toBe(
+      1,
+    );
+  });
+
+  it('ST-67, SEC-M4-01: the worker checks the first frame itself before it allocates anything', async () => {
+    // Past the header check (as a header that lied would be): the worker refuses, at once.
+    const bytes = gifWithFrame({ w: 1, h: 1 }, { w: 65_535, h: 65_535 });
+    const started = performance.now();
+    const outcome = await reencode(bytes, { type: 'gif', width: 1, height: 1, frames: 1 }).then(
+      () => 'accepted',
+      (error: unknown) => (error instanceof ImageError ? error.code : 'other'),
+    );
+    expect(outcome).toBe('image_too_many_pixels');
+    expect(performance.now() - started).toBeLessThan(3_000);
   });
 
   it('ST-67: a malformed image ends in bounded time as unreadable', async () => {

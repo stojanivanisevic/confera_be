@@ -13,6 +13,9 @@ import { Worker } from 'node:worker_threads';
  *   with pure JavaScript decoders (no native code beside the keys, SEC-A-52): only the PNG,
  *   JPEG and GIF decoders exist. A malformed image ends the worker with an error, a slow one
  *   is terminated; the API and the other jobs go on meanwhile.
+ * - **One decode at a time** in the process (Q4-02, SEC-M4-04): a 16 MP PNG of 16-bit RGBA
+ *   needs about 200 MB outside the heap, so the decodes wait in a queue of at most 16, and
+ *   one more is refused (`image_busy`). The time limit counts from the start of the decode.
  * - **Re-encoded** at most 600 pixels wide: a PNG or a GIF (its first frame) as PNG, a JPEG
  *   as JPEG; the new file holds pixels only, so every metadata block of the upload is gone.
  *   A result above 200 KB is made a JPEG of lower quality, or refused.
@@ -26,6 +29,8 @@ export const MAX_GIF_FRAMES = 100;
 export const OUTPUT_MAX_WIDTH = 600;
 export const OUTPUT_MAX_BYTES = 200 * 1024;
 export const DECODE_TIMEOUT_MS = 5_000;
+/** The decodes that may wait for the one that runs; one more is refused. */
+export const MAX_WAITING_DECODES = 16;
 /** The heap of the decoding worker; the pixel buffers are bounded by the header check. */
 const WORKER_HEAP_MB = 96;
 
@@ -37,7 +42,9 @@ export type ImageRefusal =
   /** Broken, truncated, or not decodable within the time limit. */
   | 'image_unreadable'
   /** Above 200 KB even after re-encoding. */
-  | 'image_too_large';
+  | 'image_too_large'
+  /** Too many images wait for their decode in this process: try again shortly. */
+  | 'image_busy';
 
 export class ImageError extends Error {
   constructor(readonly code: ImageRefusal) {
@@ -63,8 +70,15 @@ export interface EncodedImage {
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-/** The frames of a GIF, by walking its blocks; -1 when the structure is broken. */
-function gifFrames(bytes: Buffer): number {
+/**
+ * The frames of a GIF, by walking its blocks; -1 when the structure is broken, and
+ * `oversized` when a frame does not fit the logical screen or has more than MAX_PIXELS
+ * pixels (SEC-M4-01): the decoder sizes its buffer from the frame's own descriptor (up to
+ * 65,535 x 65,535), not from the screen, so the screen alone bounds nothing.
+ */
+function gifFrames(bytes: Buffer): { frames: number; oversized: boolean } {
+  const screenWidth = bytes.readUInt16LE(6);
+  const screenHeight = bytes.readUInt16LE(8);
   let at = 13;
   const flags = bytes[10] ?? 0;
   if ((flags & 0x80) !== 0) {
@@ -74,7 +88,7 @@ function gifFrames(bytes: Buffer): number {
   while (at < bytes.length) {
     const block = bytes[at];
     if (block === 0x3b) {
-      return frames;
+      return { frames, oversized: false };
     }
     if (block === 0x21) {
       // An extension: its label, then sub-blocks until a zero length.
@@ -82,7 +96,21 @@ function gifFrames(bytes: Buffer): number {
     } else if (block === 0x2c) {
       frames += 1;
       if (frames > MAX_GIF_FRAMES) {
-        return frames;
+        return { frames, oversized: false };
+      }
+      if (at + 10 > bytes.length) {
+        return { frames: -1, oversized: false };
+      }
+      const left = bytes.readUInt16LE(at + 1);
+      const top = bytes.readUInt16LE(at + 3);
+      const width = bytes.readUInt16LE(at + 5);
+      const height = bytes.readUInt16LE(at + 7);
+      if (
+        left + width > screenWidth ||
+        top + height > screenHeight ||
+        width * height > MAX_PIXELS
+      ) {
+        return { frames, oversized: true };
       }
       const local = bytes[at + 9] ?? 0;
       at += 10;
@@ -91,12 +119,12 @@ function gifFrames(bytes: Buffer): number {
       }
       at += 1; // the minimum code size of the LZW data
     } else {
-      return -1;
+      return { frames: -1, oversized: false };
     }
     for (;;) {
       const size = bytes[at];
       if (size === undefined) {
-        return -1;
+        return { frames: -1, oversized: false };
       }
       at += 1 + size;
       if (size === 0) {
@@ -104,7 +132,7 @@ function gifFrames(bytes: Buffer): number {
       }
     }
   }
-  return frames;
+  return { frames, oversized: false };
 }
 
 /** The JPEG frame header: walks the markers to the first SOFn. Null when there is none. */
@@ -156,7 +184,10 @@ export function readHeader(bytes: Buffer): ImageHeader {
     bytes.length >= 13 &&
     (bytes.toString('latin1', 0, 6) === 'GIF87a' || bytes.toString('latin1', 0, 6) === 'GIF89a')
   ) {
-    const frames = gifFrames(bytes);
+    const { frames, oversized } = gifFrames(bytes);
+    if (oversized) {
+      throw new ImageError('image_too_many_pixels');
+    }
     if (frames < 1) {
       throw new ImageError('image_unreadable');
     }
@@ -192,6 +223,10 @@ const { GifReader } = require(workerData.modules.gif);
 const { type, maxWidth, maxBytes, maxPixels } = workerData;
 const input = Buffer.from(workerData.bytes);
 
+class Refusal extends Error {
+  constructor(code) { super(code); this.code = code; }
+}
+
 function decode() {
   if (type === 'png') {
     const png = PNG.sync.read(input, { checkCRC: true });
@@ -208,6 +243,17 @@ function decode() {
     return { width: image.width, height: image.height, data: image.data };
   }
   const reader = new GifReader(new Uint8Array(input));
+  // The first frame's own size, checked again before anything is allocated (SEC-M4-01):
+  // the decoder sizes its buffer from it, not from the screen.
+  const frame = reader.frameInfo(0);
+  if (
+    reader.width * reader.height > maxPixels ||
+    frame.x + frame.width > reader.width ||
+    frame.y + frame.height > reader.height ||
+    frame.width * frame.height > maxPixels
+  ) {
+    throw new Refusal('image_too_many_pixels');
+  }
   const data = new Uint8Array(reader.width * reader.height * 4);
   reader.decodeAndBlitFrameRGBA(0, data);
   return { width: reader.width, height: reader.height, data };
@@ -278,7 +324,7 @@ try {
     parentPort.postMessage({ type: result.type, width: image.width, height: image.height, bytes: result.bytes });
   }
 } catch (error) {
-  parentPort.postMessage({ refusal: 'image_unreadable' });
+  parentPort.postMessage({ refusal: error instanceof Refusal ? error.code : 'image_unreadable' });
 }
 `;
 
@@ -291,11 +337,50 @@ function decoderModules(): { pngjs: string; jpeg: string; gif: string } {
   };
 }
 
+/** One decode at a time: the next one starts when the one before has ended (Q4-02). */
+class DecodeQueue {
+  #running = false;
+  readonly #waiting: (() => void)[] = [];
+
+  async run<T>(work: () => Promise<T>): Promise<T> {
+    if (this.#running) {
+      if (this.#waiting.length >= MAX_WAITING_DECODES) {
+        throw new ImageError('image_busy');
+      }
+      await new Promise<void>((resolve) => {
+        this.#waiting.push(resolve);
+      });
+    }
+    this.#running = true;
+    try {
+      return await work();
+    } finally {
+      const next = this.#waiting.shift();
+      if (next === undefined) {
+        this.#running = false;
+      } else {
+        next();
+      }
+    }
+  }
+}
+
+const decodes = new DecodeQueue();
+
 /**
  * Decodes, scales and encodes an image in a worker thread of its own, within the time limit
- * (ST-67). The header has been checked; anything the worker cannot do ends as a refusal.
+ * (ST-67), one at a time in the process. The header has been checked; anything the worker
+ * cannot do ends as a refusal.
  */
 export function reencode(
+  bytes: Buffer,
+  header: ImageHeader,
+  options: { timeoutMs?: number } = {},
+): Promise<EncodedImage> {
+  return decodes.run(() => decodeInWorker(bytes, header, options));
+}
+
+function decodeInWorker(
   bytes: Buffer,
   header: ImageHeader,
   options: { timeoutMs?: number } = {},
