@@ -14,7 +14,11 @@
 #   - before every migration it dumps the database (custom format, root 0600) and reads the dump
 #     back with pg_restore --list; a failed, empty or unreadable dump, or a disk fuller than the
 #     limit, stops it before the migration with nothing changed (SEC-M4I-02);
-#   - a new version that does not become healthy is rolled back to the previous digest.
+#   - a new version that does not become healthy is rolled back to the previous digest;
+#   - a client killed during the migration does not stop the deploy, which finishes, logs to its
+#     run log and to the journal; a deploy stopped during the dump leaves no .partial
+#     (SEC-M4I-13);
+#   - a rollback refuses an image newer than the database, and allows one older (SEC-M4I-14).
 # Prints one line per check and ends with exit code 0 only if every check passed.
 set -uo pipefail
 
@@ -377,10 +381,12 @@ out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
 code=$?
 if [ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.env &&
   [ "$(grep '^CONFERA_WEB_IMAGE=' /srv/confera/images.env)" = "$web_before" ] &&
-  ! grep -q ' migrate$\| pg_dump \|^pull \|^run ' "$LOG" &&
+  ! grep -q ' migrate$\| pg_dump \|^pull ' "$LOG" &&
+  [ "$(grep -c '^run ' "$LOG")" -eq "$(grep -c '^run .* --entrypoint ls .* /app/prisma/migrations$' "$LOG")" ] &&
+  grep -q ' exec --no-TTY postgres psql .*_prisma_migrations' "$LOG" &&
   grep -q ' up --detach --no-deps --wait --wait-timeout 240 api worker$' "$LOG" &&
   grep -q ' exec --no-TTY api node -e ' "$LOG"; then
-  ok "rollback be: back to the previous digest, api and worker restarted and smoke-tested, NO migration, no pull, web untouched"
+  ok "rollback be: back to the previous digest after comparing migrations, api and worker restarted and smoke-tested, NO migration, no pull, web untouched"
 else
   not_ok "rollback be: exit $code: $out; $(cat "$LOG"); $(cat /srv/confera/images.env)"
 fi
@@ -459,6 +465,112 @@ code=$?
 exec 9>&-
 [ "$code" -eq 75 ] && [ "$(calls)" -eq 0 ] && ok "a deploy does not start while the backup holds the lock" ||
   not_ok "lock shared with the backup: exit $code: $out"
+
+wait_for_unlock() {
+  local i
+  for i in $(seq 150); do
+    flock --nonblock /run/lock/confera-deploy.lock true 2>/dev/null && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+# ---- A dropped SSH session does not stop a deploy halfway (SEC-M4I-13) ----------------------------
+DIGEST3="sha256:$(printf '3%.0s' {1..64})"
+touch /etc/fake-docker/slow-migrate
+rm -f /tmp/migrate-started
+: >"$LOG"
+: >/var/log/fake-journal.log
+send be "$DIGEST3" >/tmp/dropped.out 2>&1 </dev/null &
+client=$!
+for i in $(seq 100); do [ -e /tmp/migrate-started ] && break; sleep 0.1; done
+started=no
+[ -e /tmp/migrate-started ] && started=yes
+# The client goes away during the migration, as a lost network or a cancelled job would.
+pkill -KILL -f "confera-deploy-be@127.0.0.1" 2>/dev/null
+kill -KILL "$client" 2>/dev/null
+wait "$client" 2>/dev/null
+sleep 0.5
+wait_for_unlock
+unlocked=$?
+rm -f /etc/fake-docker/slow-migrate
+migrate_line=$(grep -n -m 1 ' run --rm --no-TTY migrate$' "$LOG" | cut -d: -f1)
+up_line=$(grep -n -m 1 ' up --detach --no-deps --wait --wait-timeout 240 api worker$' "$LOG" | cut -d: -f1)
+if [ "$started" = yes ] && [ "$unlocked" -eq 0 ] && [ -n "$up_line" ] && [ "$up_line" -gt "${migrate_line:-999999}" ] &&
+  grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST3" /srv/confera/images.env &&
+  grep -q ' exec --no-TTY api node -e ' "$LOG"; then
+  ok "SEC-M4I-13: the client is killed during the migration; the deploy still restarts, smoke-tests and finishes"
+else
+  not_ok "dropped session: started $started, unlocked $unlocked, migrate $migrate_line, up $up_line; $(cat /srv/confera/images.env); $(cat "$LOG")"
+fi
+grep -q "^confera-deploy: deployed ghcr.io/stojanivanisevic/confera-be@$DIGEST3$" /var/log/fake-journal.log &&
+  grep -q "^confera-deploy: migrating the database$" /var/log/fake-journal.log &&
+  ok "SEC-M4I-13: every line of the deploy also went to the journal (logger --tag confera-deploy)" ||
+  not_ok "journal: $(cat /var/log/fake-journal.log)"
+run_log=$(grep -l "deployed ghcr.io/stojanivanisevic/confera-be@$DIGEST3" /var/log/confera-deploy/*-be-*.log 2>/dev/null | head -n 1)
+[ -n "$run_log" ] && [ "$(stat -c '%U %a' "$run_log")" = "root 600" ] &&
+  [ "$(stat -c '%U %a' /var/log/confera-deploy)" = "root 700" ] &&
+  ok "SEC-M4I-13: the run's whole output is in /var/log/confera-deploy/<UTC>-be-<pid>.log (root 0600)" ||
+  not_ok "run log: $(ls -la /var/log/confera-deploy 2>&1)"
+
+# ---- An interrupted dump leaves no .partial (SEC-M4I-13) -----------------------------------------
+DIGEST4="sha256:$(printf '4%.0s' {1..64})"
+cp /srv/confera/images.env /tmp/images.before
+touch /etc/fake-docker/slow-dump
+rm -f /tmp/dump-started
+: >"$LOG"
+/usr/local/sbin/confera-deploy be "$DIGEST4" >/tmp/killed.out 2>&1 &
+deployer=$!
+for i in $(seq 100); do [ -e /tmp/dump-started ] && break; sleep 0.1; done
+partial_seen=$(find /srv/confera/backups -name '*.partial' | wc -l)
+pkill -TERM -f "confera-deploy be $DIGEST4" 2>/dev/null
+wait "$deployer" 2>/dev/null
+wait_for_unlock
+rm -f /etc/fake-docker/slow-dump
+if [ "$partial_seen" -ge 1 ] && [ -z "$(find /srv/confera/backups -name '*.partial')" ] &&
+  ! grep -q ' migrate$' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env; then
+  ok "SEC-M4I-13: a deploy stopped (TERM) during the dump removes its .partial, migrates nothing, changes nothing"
+else
+  not_ok "killed dump: seen $partial_seen, left $(find /srv/confera/backups -name '*.partial'); $(cat /tmp/killed.out); $(cat "$LOG")"
+fi
+touch -d '8 days ago' /srv/confera/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial
+out=$(/usr/local/sbin/confera-backup 2>&1)
+[ ! -e /srv/confera/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial ] &&
+  ok "the nightly prune also removes an old .partial a killed run left (SIGKILL leaves no trap)" ||
+  not_ok "old partial kept: $out"
+
+# ---- A rollback never starts an image newer than the database (SEC-M4I-14) ---------------------
+DIGEST5="sha256:$(printf '5%.0s' {1..64})"
+DIGEST6="sha256:$(printf '6%.0s' {1..64})"
+/usr/local/sbin/confera-deploy be "$DIGEST5" >/dev/null 2>&1
+/usr/local/sbin/confera-deploy be "$DIGEST6" >/dev/null 2>&1
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST5" /srv/confera/images.env && [ "$code" -eq 0 ] &&
+  ok "SEC-M4I-14 setup: deployed 5, then 6, rolled back to 5 (images.be.previous now holds 6)" ||
+  not_ok "rollback setup: exit $code: $out"
+# R-02: the pre-deploy dump was restored, so the database lacks the last migration of version 6.
+cp /etc/fake-docker/applied-migrations /tmp/applied.before
+head -n 2 /tmp/applied.before >/etc/fake-docker/applied-migrations
+cp /srv/confera/images.env /tmp/images.before
+: >"$LOG"
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+cp /tmp/applied.before /etc/fake-docker/applied-migrations
+if [ "$code" -eq 65 ] && cmp -s /tmp/images.before /srv/confera/images.env && ! grep -q ' up \| migrate$' "$LOG" &&
+  [[ "$out" == *"newer than the database"*"20261015090000_mail_and_conferences"*"confera-deploy be <digest>"* ]]; then
+  ok "SEC-M4I-14: a second rollback (forward to 6) on a database without 6's migration is refused (exit 65), nothing restarted"
+else
+  not_ok "rollback to a newer image: exit $code: $out; $(cat "$LOG")"
+fi
+# The database is ahead of the recorded version (the usual rollback, one version back): allowed.
+echo 20261016090000_one_default_mail_server >>/etc/fake-docker/applied-migrations
+out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+code=$?
+cp /tmp/applied.before /etc/fake-docker/applied-migrations
+[ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST6" /srv/confera/images.env &&
+  ok "SEC-M4I-14: a rollback to a version older than the database is allowed (expand-then-contract)" ||
+  not_ok "rollback to an older image: exit $code: $out"
 
 chmod 0666 /etc/confera/deploy.conf
 out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)

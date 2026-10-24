@@ -2,7 +2,7 @@
 # A stand-in for the docker command inside the ST-63 test container (deploy/checks/st-63).
 # It records every call, one line each, and answers as the real one would for a deploy.
 # /etc/fake-docker/label holds what `image inspect` prints for the jobs-image label.
-# Switches (files in /etc/fake-docker): fail-migrate, fail-dump, empty-dump, bad-dump (pg_dump
+# Switches (files in /etc/fake-docker): fail-migrate, slow-migrate, slow-dump, fail-dump, empty-dump, bad-dump (pg_dump
 # writes something pg_restore cannot read), fail-up-once (the next `up` fails, the one after
 # succeeds: a new version that does not become healthy, then the rollback), fail-up-always.
 # /etc/fake-docker/image-migrations and applied-migrations: what the jobs image holds and what
@@ -26,8 +26,21 @@ case "$1 ${2-}" in
   "compose "*)
     args=" $* "
     if switch fail-migrate && [[ "$args" == *" run "*" migrate "* ]]; then exit 1; fi
+    # slow-migrate: the migration takes 3 s and says when it started (a session drops meanwhile).
+    if switch slow-migrate && [[ "$args" == *" run "*" migrate "* ]]; then
+      touch /tmp/migrate-started
+      sleep 3
+      exit 0
+    fi
     if [[ "$args" == *" exec --no-TTY postgres pg_dump "* ]]; then
       switch fail-dump && exit 1
+      # slow-dump: writes half an archive, says so, and takes 3 s (the deploy is killed meanwhile).
+      if switch slow-dump; then
+        printf 'PGDMP half'
+        touch /tmp/dump-started
+        sleep 3
+        exit 0
+      fi
       switch empty-dump && exit 0
       if switch bad-dump; then printf 'not an archive'; exit 0; fi
       printf 'PGDMP\001\020\000\004\010\001\001fake custom-format archive'

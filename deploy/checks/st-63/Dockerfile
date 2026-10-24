@@ -1,7 +1,7 @@
 # The test container of ST-63 (deploy/checks/deploy-gate.mjs): an SSH server set up exactly as
 # deploy/server/ describes it (the hardening drop-in and the deploy users' block, the forced
 # command, the sudoers rule, the deploy and backup scripts, the systemd units), with a stand-in
-# for docker. It never leaves the developer machine.
+# for docker and one for logger (no journal here). It never leaves the developer machine.
 FROM node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
 RUN apt-get update \
  && apt-get install --yes --no-install-recommends openssh-server openssh-client sudo util-linux systemd \
@@ -26,9 +26,10 @@ COPY deploy/server/sudoers-confera-deploy /etc/sudoers.d/confera-deploy
 COPY deploy/server/deploy.conf.example /etc/confera/deploy.conf
 COPY deploy/server/docker-daemon.json /etc/docker/daemon.json
 COPY deploy/checks/st-63/fake-docker.sh /usr/local/bin/docker
+COPY deploy/checks/st-63/fake-logger.sh /usr/local/bin/logger
 COPY deploy/checks/st-63/scenarios.sh /usr/local/bin/st-63-scenarios
 RUN chown root:root /usr/local/sbin/confera-deploy-gate /usr/local/sbin/confera-deploy /usr/local/sbin/confera-backup \
- && chmod 0755 /usr/local/sbin/confera-deploy-gate /usr/local/bin/docker /usr/local/bin/st-63-scenarios \
+ && chmod 0755 /usr/local/sbin/confera-deploy-gate /usr/local/bin/docker /usr/local/bin/logger /usr/local/bin/st-63-scenarios \
  && chmod 0700 /usr/local/sbin/confera-deploy /usr/local/sbin/confera-backup \
  && chmod 0440 /etc/sudoers.d/confera-deploy \
  && sed -i 's/^CONFERA_INSTANCE=$/CONFERA_INSTANCE=staging/' /etc/confera/deploy.conf \
