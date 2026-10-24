@@ -14,7 +14,8 @@
 #   3. a tar of the file volume (<project>_files), read-only, from a container without network,
 #      into <root>/backups/files-<UTC time>.tar (root, 0600); read back with tar --list;
 #   4. only when both are good: remove nightly-*, files-* and pre-deploy-* files (the dumps of
-#      confera-deploy) older than CONFERA_BACKUP_KEEP_DAYS (7 by default), naming each one.
+#      confera-deploy), and any *.partial left by a run that was killed, older than
+#      CONFERA_BACKUP_KEEP_DAYS (7 by default), naming each one.
 # A file is kept only once it has been read back; a failed step leaves no half-written file.
 #
 # The dumps are NOT encrypted: on staging the data is invented, and the folder is root's alone.
@@ -123,6 +124,6 @@ say "wrote $dump and $tarball (both read back)"
 
 # ---- 4. Prune, only after a good backup -----------------------------------------------------------
 find "$backups" -maxdepth 1 -type f \
-  \( -name 'nightly-*.dump' -o -name 'files-*.tar' -o -name 'pre-deploy-*.dump' \) \
+  \( -name 'nightly-*.dump' -o -name 'files-*.tar' -o -name 'pre-deploy-*.dump' -o -name '*.partial' \) \
   -mmin "+$((keep_days * 1440))" -printf 'confera-backup: removing %p (older than '"$keep_days"' days)\n' -delete
 say "backup ok"

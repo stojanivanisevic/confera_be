@@ -40,17 +40,38 @@
 # smoke-tests, and NEVER migrates: the schema stays as it is. This is safe for one version back
 # only, because migrations are written expand-then-contract (README section 15): the previous
 # version runs on the schema of the current one. A failed rollback puts the current version back.
-# After a rollback, images.<target>.previous holds the version rolled back from.
+# After a rollback, images.<target>.previous holds the version rolled back from, so a second
+# rollback goes FORWARD again: it is refused when that image holds a migration the database has
+# not applied (after a restore of the pre-deploy dump, for example), because a rollback never
+# migrates; that version comes back only by a deploy of its digest, which migrates (SEC-M4I-14).
+# The rule, both ways: an image runs on the database only when it knows every applied migration
+# (else: older, refused by a deploy) and the database has every migration of the image (else:
+# newer, which only a deploy may fix, by migrating first; a rollback refuses it).
+#
+# A dropped session does not stop a deploy halfway (SEC-M4I-13). Once the request is checked,
+# the script runs again in a session of its own (setsid), with no terminal and its output in
+# /var/log/confera-deploy/<UTC time>-<target>.log (root, 0600; 30 days kept), and this first
+# process only shows that log to the caller and waits for the end. Both ignore SIGHUP and
+# SIGPIPE. When the SSH session drops (network, the job's timeout, a cancelled run), the deploy
+# goes on to its end or its rollback. Every line it says also goes to the journal
+# (`journalctl -t confera-deploy`). A failed or interrupted dump leaves no .partial file.
 #
 # Exit codes: 0 deployed or rolled back; 64 refused (usage, or no previous version recorded);
-# 65 the image is not what it must be, or is older than the database; 74 the backup before the
-# migration failed, or the disk is too full for one (nothing was changed); 75 another deploy or
+# 65 the image is not what it must be, or is older than the database (deploy) or newer than it
+# (rollback); 74 the backup before the migration failed, or the disk is too full for one (nothing
+# was changed); 75 another deploy or
 # a backup runs; 78 the configuration of this script is missing or unsafe; 1 the deploy or
 # rollback failed (the version it started from was put back).
 set -euo pipefail
 umask 077
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
+# A closed SSH channel must not end the sequence (SEC-M4I-13); a TERM still ends it, through
+# the EXIT trap below.
+trap '' HUP PIPE
+partial=''
+trap '[ -z "$partial" ] || rm -f -- "$partial"' EXIT
+trap 'exit 1' TERM INT
 unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
 
 readonly CONF=/etc/confera/deploy.conf
@@ -58,9 +79,15 @@ readonly DIGEST_RE='^sha256:[0-9a-f]{64}$'
 readonly JOBS_LABEL=org.udekom.confera.jobs-image
 readonly MIGRATION_RE='^[0-9]{14}_[a-z0-9_]+$'
 
-say() { printf 'confera-deploy: %s\n' "$*"; }
+# Each line to the caller (when it is still there) and to the journal.
+journal() { logger --tag confera-deploy -- "$*" 2>/dev/null || true; }
+say() {
+  printf 'confera-deploy: %s\n' "$*" || true
+  journal "$*"
+}
 refuse() {
-  printf 'confera-deploy: refused: %s\n' "$1" >&2
+  printf 'confera-deploy: refused: %s\n' "$1" >&2 || true
+  journal "refused: $1"
   exit "${2:-64}"
 }
 readonly USAGE="usage: confera-deploy be|web sha256:<64 hex digits>, or confera-deploy rollback be|web"
@@ -82,6 +109,22 @@ case "$target" in
 esac
 if [ "$mode" = deploy ]; then
   [[ "$digest" =~ $DIGEST_RE ]] || refuse "not an image digest (sha256: and 64 lower-case hex digits)"
+fi
+
+# ---- The rest runs in a session of its own, which a dropped SSH session cannot end --------------
+readonly RUN_LOGS=/var/log/confera-deploy
+if [ "${CONFERA_DEPLOY_DETACHED-}" != 1 ]; then
+  install -d -m 0700 -o root -g root "$RUN_LOGS"
+  find "$RUN_LOGS" -maxdepth 1 -type f -name '*.log' -mtime +30 -delete 2>/dev/null || true
+  run_log="$RUN_LOGS/$(date -u +%Y%m%dT%H%M%SZ)-$target-$$.log"
+  : >"$run_log"
+  CONFERA_DEPLOY_DETACHED=1 setsid "$(readlink -f "$0")" "$@" </dev/null >>"$run_log" 2>&1 &
+  child=$!
+  # Shows the log to the caller; when the caller is gone, tail ends and the deploy does not.
+  tail --pid="$child" --sleep-interval=0.2 --lines=+1 --follow "$run_log" 2>/dev/null || true
+  code=0
+  wait "$child" || code=$?
+  exit "$code"
 fi
 
 # ---- The configuration: root's own file, read as data -----------------------------------------
@@ -201,6 +244,27 @@ smoke() {
   esac
 }
 
+# Sets in_image (the migrations of a jobs image) and applied (those the database has applied),
+# each sorted, one per line. Ends the script, changing nothing, when either cannot be read.
+read_migrations() {
+  local listing has_table
+  listing=$(docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --user 1000:1000 --entrypoint ls "$1" \
+    /app/prisma/migrations) || refuse "cannot list the migrations of $1" 65
+  in_image=$(grep -E "$MIGRATION_RE" <<<"$listing" | sort -u || true)
+  [ -n "$in_image" ] || refuse "$1 holds no migration" 65
+  local psql=("${compose[@]}" exec --no-TTY postgres psql --username postgres --dbname "$database"
+    --no-psqlrc --no-password --tuples-only --no-align --quiet --set ON_ERROR_STOP=1)
+  has_table=$("${psql[@]}" --command "SELECT to_regclass('public._prisma_migrations') IS NOT NULL") ||
+    { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
+  applied=''
+  if [ "$(tr -d '[:space:]' <<<"$has_table")" = t ]; then
+    applied=$("${psql[@]}" --command "SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1") ||
+      { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
+    applied=$(grep -E "$MIGRATION_RE" <<<"$applied" | sort -u || true)
+  fi
+}
+
 # ---- Rollback: the previous version of the target, without migrating ---------------------------
 if [ "$mode" = rollback ]; then
   say "rollback of $target"
@@ -219,6 +283,15 @@ if [ "$mode" = rollback ]; then
       refuse "$target_previous: $name is not one digest of $repository" 78
   done
   [ "$(grep -c . <<<"$wanted")" -eq "${#names[@]}" ] || refuse "$target_previous holds other lines" 78
+  # Never an image NEWER than the database: a rollback does not migrate (SEC-M4I-14).
+  if [ "$target" = be ]; then
+    wanted_jobs=$(grep -m 1 '^CONFERA_JOBS_IMAGE=' <<<"$wanted" | cut -d= -f2-)
+    read_migrations "$wanted_jobs"
+    unapplied=$(comm -13 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
+    if [ -n "$unapplied" ]; then
+      refuse "the recorded version is newer than the database: migrations it holds that the database has not applied: $(tr '\n' ' ' <<<"$unapplied")- a rollback never migrates; to run that version, deploy its digest (confera-deploy be <digest>), which migrates first; nothing was changed" 65
+    fi
+  fi
   current=$(target_lines)
   apply_lines "$wanted"
   say "restarting ${services[*]} on the previous version; no migration runs (the schema stays)"
@@ -278,21 +351,7 @@ fi
 
 # ---- 2. Never an image older than the database (be) ---------------------------------------------
 if [ "$target" = be ]; then
-  in_image=$(docker run --rm --network none --read-only --cap-drop ALL \
-    --security-opt no-new-privileges --user 1000:1000 --entrypoint ls "$jobs_image" \
-    /app/prisma/migrations) || refuse "cannot list the migrations of $jobs_image" 65
-  in_image=$(grep -E "$MIGRATION_RE" <<<"$in_image" | sort -u || true)
-  [ -n "$in_image" ] || refuse "$jobs_image holds no migration" 65
-  psql=("${compose[@]}" exec --no-TTY postgres psql --username postgres --dbname "$database"
-    --no-psqlrc --no-password --tuples-only --no-align --quiet --set ON_ERROR_STOP=1)
-  has_table=$("${psql[@]}" --command "SELECT to_regclass('public._prisma_migrations') IS NOT NULL") ||
-    { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
-  applied=''
-  if [ "$(tr -d '[:space:]' <<<"$has_table")" = t ]; then
-    applied=$("${psql[@]}" --command "SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1") ||
-      { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
-    applied=$(grep -E "$MIGRATION_RE" <<<"$applied" | sort -u || true)
-  fi
+  read_migrations "$jobs_image"
   unknown=$(comm -23 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
   if [ -n "$unknown" ]; then
     refuse "the image is older than the database: applied migrations it does not hold: $(tr '\n' ' ' <<<"$unknown")- migrations never run backwards; to go back one version, run confera-deploy rollback be (no migration); nothing was changed" 65
@@ -303,7 +362,8 @@ fi
 # The dump runs in the postgres container as its superuser over the local socket; the file is
 # written by this script (root, umask 077) and kept only once pg_restore has read it back.
 backup_failed() {
-  rm -f "$partial"
+  rm -f -- "$partial"
+  partial=''
   refuse "the backup before the migration failed: $1; nothing was migrated or restarted" 74
 }
 before=$(target_lines)
@@ -320,6 +380,7 @@ if [ "$target" = be ]; then
   [[ "$listing" == *"Format: CUSTOM"* ]] || backup_failed "pg_restore --list does not show a custom-format archive"
   chmod 0600 "$partial"
   mv -f "$partial" "$dump"
+  partial=''
   say "backup $dump (read back with pg_restore --list)"
 
   write_images CONFERA_JOBS_IMAGE "$jobs_image"
