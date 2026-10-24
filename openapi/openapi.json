@@ -1631,6 +1631,16 @@
             }
           },
           {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words searched in the recipient and the subject, any case (UX4-13): every word must\noccur in one of them. \"did the author get the acceptance?\" is `q=<address>` and the\nkind. A subject the log did not keep (`mailLogContent` off) is not searched.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -1837,7 +1847,7 @@
             }
           }
         },
-        "summary": "Resends the message of this entry (FR-SMTP-05): as it was sent, with a fresh secure link\nthat ends the earlier one, or rendered again from the template when the content was not\nkept. 409 `resend_refused` for a test message, or a message that is not done yet.",
+        "summary": "Resends the message of this entry (FR-SMTP-05): as it was sent, with a fresh secure link\nthat ends the earlier one, or rendered again from the template when the content was not\nkept. 409 `resend_refused` for a test message, an email change confirmation, a message\nthat is not done yet, and a link that is no longer true (it failed as stale, or the\npassword or the address changed after it was asked for; SEC-M4-02).",
         "tags": [
           "MailLog"
         ],
@@ -6290,7 +6300,7 @@
           "previewDigest": {
             "type": "string",
             "nullable": true,
-            "description": "Send it back with the change when it carries a `message`."
+            "description": "Send it back with the change (every action but `open`, SEC-M4-05)."
           }
         },
         "required": [

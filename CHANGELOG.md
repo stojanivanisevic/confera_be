@@ -27,6 +27,22 @@ Statuses, status emails, template management, email images and the mail log (0.4
 ### Security
 
 - Dependencies (Q4-08), so that `pnpm audit` passes again: body-parser 2.3.0 to 2.4.0 (GHSA-27r3-jxmh-p828, high: a denial of service through trailing bytes after a compressed body; through express 5.2.1, whose range takes it), multer 2.4.0 to 2.5.0 (GHSA-q7qp-rjg7-q26m, high: a denial of service through a pending asynchronous `fileFilter`; an override, since @nestjs/platform-express 12.1.2 pins 2.4.0; Confera reads uploads with busboy), zod 4.6.5 to 4.6.7 (GHSA-mrhx-c7xc-m3w5, high: memory exhausted while validating oversized constrained collections). Also, below the gate: nodemailer 10.1.0 to 10.1.7 (GHSA-8c8m-p3m8-cjg8 and two more moderate advisories of its address parser, which could turn display text into a recipient) and fast-uri 3.1.8 to 3.1.9 (two moderate and two low advisories). body-parser 2.4.0 and multer 2.5.0 were two days old: `minimumReleaseAgeExclude` names those two exact versions until they are three days old, and `pnpm supply-chain` refuses an entry that is not one exact version.
+- Email images (SEC-M4-01, SEC-M4-04, Q4-02): a GIF frame that does not fit its logical screen, or has more than 16 megapixels, is refused from its image descriptor (422 `image_too_many_pixels`), and the worker checks the first frame again before it allocates; one image is decoded at a time in the process (at most 16 wait, then 429 `image_busy`); an admin uploads at most 30 images in ten minutes (429 `too_many_requests`); the quota of 500 is counted again under a lock in the insert.
+- Resend from the mail log (SEC-M4-02): an email change confirmation is never resent; a message with a link is not resent when it failed as stale or the password or the address changed after its first request, and the sender judges a resend by the time of that first request. New column `users.email_changed_at`.
+- The first author's name passes the filter of the title in every email (one line, no address, no bare domain, else empty; SEC-M4-03).
+- Every status change whose email is on, except `open`, needs the `previewDigest` of its preview (400 at `previewDigest` without it; SEC-M4-05).
+- The audit entry of a discard of held mail lists the ids discarded (`detail.ids`, SEC-M4-08).
+
+### Fixed (0.4.0 fix round)
+
+- "dordevic" finds "Đorđević": a text with đ is indexed with đ as dj and as d (Q4-01); migration `20261024090000_search_text_d_form` rewrites the stored rows that hold a đ.
+- `MailImageDto` and `MailImageListDto` describe their fields in the OpenAPI document (they moved to `mail-images.dto.ts`; Q4-04).
+- The sent HTML is a whole document with `lang`, `<title>` and `Content-Language` in the message's language, and a few inline styles (UX4-03); an image is no wider than the screen, and one not yet clean shows its words (UX4-04).
+- The Serbian default templates never decline a name (UX4-05, M3-ISS-13): "organizacija: …", "server: …". The seeded texts already write Vi, Vas and Vaša capitalised throughout.
+- A mail to an author has `Reply-To` the organisation's contact address, and the returned-for-revision mail names it, or asks to send the text to the office when there is none (placeholder `contactEmail`, conditions `hasContact` and `noContact`; UX4-06).
+- Title, first author and institution sort in the Serbian Latin alphabet (ICU `sr-Latn`; UX4-15; migration `20261024100000_serbian_sort_collation`).
+- `GET /api/v1/mail-log` takes `q`, words searched in the recipient and the subject (UX4-13).
+- Tests: the resend case of a test message sets up its own message (Q4-07); the ST-44 vectors of the author's name; the resend refusals; the digest of every change.
 
 ## 0.3.0 – 2026-10-18
 

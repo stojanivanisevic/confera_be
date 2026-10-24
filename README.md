@@ -426,7 +426,15 @@ the two equal. The OpenAPI document carries the declaration of every operation
   server never sends faster than its `sendRatePerMinute`. Five attempts with backoff,
   then `failed`; a row left in `sending` by a crash becomes `stuck` and is not sent again
   by itself. With no server or no template a message waits and the application stays
-  healthy.
+  healthy. The HTML part is sent as a whole document (`src/modules/mail/mail-document.ts`,
+  UX4-03): `lang` and `Content-Language` of the message's language (`en`, `sr-Latn`), its
+  subject as `<title>`, one column of at most 600 px in a sans-serif face; the log and the
+  preview keep the rendered body. An image is at most the width of the screen
+  (`max-width:100%`), and one not yet clean is its words in brackets (UX4-04). A mail to an
+  author (`submission_*`) has `Reply-To` the organisation's `contactEmail` when it is set
+  (UX4-06); its templates have the placeholder `contactEmail` and the conditions
+  `hasContact` and `noContact`. The Serbian defaults never decline a name: it follows a
+  colon or a dash ("Konferencija: …", "organizacija: …"; UX4-05).
 
 - **Email images** (M4-BE-06, ADR-10, ADR-12; ST-60, ST-67): `POST /api/v1/mail-images`
   (multipart, one part `file`, at most 5 MB; permission `templates.manage`), `GET
@@ -439,16 +447,25 @@ the two equal. The OpenAPI document carries the declaration of every operation
   empty environment (422 `image_unreadable` for a broken one or one past its time), and
   re-encoded at most 600 pixels wide: PNG and GIF (its first frame) as PNG, JPEG as JPEG; the
   new file holds pixels only, so no metadata of the upload survives; above 200 KB it becomes a
-  JPEG of lower quality, or 413 `image_too_large`. It is stored as a file of the kind
+  JPEG of lower quality, or 413 `image_too_large`. One image is decoded at a time in the
+  process, at most 16 wait (one more is 429 `image_busy`), and an admin uploads at most 30
+  in ten minutes (429 `too_many_requests`; Q4-02, SEC-M4-04). A GIF frame larger than the
+  logical screen, or than 16 megapixels, is refused from its descriptor (SEC-M4-01). It is stored as a file of the kind
   `email_image`, scanned by the files worker, and served only to a signed-in admin of its
   organisation once clean, as an attachment. A message carries its images as inline parts
   (`cid:`), never a remote address; the mail log keeps their ids, not their bytes; the
-  preview embeds them as data. At most 500 images per organisation (409 `image_quota_reached`).
+  preview embeds them as data. At most 500 images per organisation (409 `image_quota_reached`),
+  counted again under a lock in the transaction that stores one.
 - **Resend and retention** (M4-BE-05, FR-SMTP-05, 06): `POST /api/v1/mail-log/{id}/resend`
   (permission `mail_log.manage`) queues a new message that names the one it repeats
   (`resendOf`): `copy` when the content was kept, sent as it was with a fresh secure link that
   ends the earlier one; `rendered_again` when the organisation keeps no content. A test
-  message, or a message not done yet, is 409 `resend_refused`. A log entry lists its
+  message, an email change confirmation (the person asks again), a message not done yet, and
+  a link that is no longer true (it failed as stale, or the password or the address changed
+  after its first request; `users.email_changed_at`) are 409 `resend_refused`; the sender
+  judges a resend by the time of the request at the head of its `resendOf` chain
+  (SEC-M4-02). `GET /api/v1/mail-log` takes `q`: words searched in the recipient and the
+  subject, any case (UX4-13). A log entry lists its
   `subject` (M2-ISS-14), `resendOf` and `resendMode`. `GET`/`PUT /api/v1/mail-log/retention`
   (`{ days, version }`, 30 to 3650; 730, 24 months, on a fresh install).
 - **The maintenance worker** (`src/modules/jobs/maintenance-worker.ts`): every
@@ -591,7 +608,7 @@ the two equal. The OpenAPI document carries the declaration of every operation
   `test/e2e/submissions-search.spec.ts`).
 - **Statuses** (M4-BE-01, Spec section 5): `new` (the 0.3.0 `received`), `open`,
   `returned_for_revision`, `accepted`, `rejected`, `withdrawn`;
-  `POST /api/v1/submissions/{id}/status` with `{ action, version, reason?, message?, previewDigest? }`,
+  `POST /api/v1/submissions/{id}/status` with `{ action, version, reason?, message?, previewDigest }`,
   the actions `open` (transition 2: a POST the detail screen sends once it is shown, never a
   side effect of a GET, ST-43), `return`, `resume`, `accept`, `reject`, `withdraw`, `reopen`
   (`src/modules/submissions/status-machine.ts`). A change the table does not have is 409
@@ -605,8 +622,8 @@ the two equal. The OpenAPI document carries the declaration of every operation
   `_reopened`, plus the confirmation), seeded in both languages. The email is queued in the
   transaction of the change, rendered there, to the corresponding author in the language of
   the submission. `POST /api/v1/submissions/{id}/status/preview` renders it without changing
-  anything and returns `previewDigest`; a change with a `message` must send that digest
-  back, and is refused with 409 `preview_outdated` when the email would differ from the one
+  anything and returns `previewDigest`; every change whose email is on, except `open`, must
+  send that digest back (400 at `previewDigest` without it; SEC-M4-05), and is refused with 409 `preview_outdated` when the email would differ from the one
   shown. `GET`/`PUT /api/v1/conferences/{id}/status-emails` switch each status email off
   for a conference: then nothing is sent and the history says `template_off`.
 - **Notes and corrections** (FR-SUB-06, 07): `POST /api/v1/submissions/{id}/notes` (admins
