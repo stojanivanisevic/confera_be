@@ -578,12 +578,15 @@ the two equal. The OpenAPI document carries the declaration of every operation
   notes, revisions, and `actions`: the changes of status allowed now).
 - **The table's search and filters** (M4-BE-04, FR-SUB-03): `q` is searched in reference,
   title and every author's names, email and institution without diacritics both ways
-  ("Zivkovic" finds "Živković", "Djordje" finds "Đorđe", Serbian Cyrillic finds the Latin
+  ("Zivkovic" finds "Živković"; "Djordje" and "Dordje" both find "Đorđe", since a text with
+  đ is indexed with đ as dj and as d; Serbian Cyrillic finds the Latin
   spelling; `src/modules/submissions/search.ts`), every word must occur, through a trigram
   index of the column `search_text`. Filters `conferenceId`, `status` and `participationType`
   (lists comma-separated); without `status` a withdrawn submission is left out. `sort` is one
   of a fixed map (`receivedAt`, `reference`, `title`, `firstAuthor`, `institution`,
   `participationType`, `status`, `conference`), `order` `asc` or `desc`, ties broken by the id.
+  Title, first author and institution sort in the Serbian Latin alphabet (ICU `sr-Latn`:
+  c č ć, d dž đ, s š, z ž; UX4-15).
   With 20,000 submissions a search or filter answers within a second (NFR-PERF-02,
   `test/e2e/submissions-search.spec.ts`).
 - **Statuses** (M4-BE-01, Spec section 5): `new` (the 0.3.0 `received`), `open`,
