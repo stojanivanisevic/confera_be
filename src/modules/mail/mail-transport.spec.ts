@@ -130,10 +130,44 @@ describe('the mail transport (SEC-M2-13)', () => {
       // No address of the envelope or of the To header is the real recipient's.
       expect(mail?.envelope).toEqual({ from: target.fromAddress, to: [CATCHER_RECIPIENT] });
       expect(mail?.to).toEqual([{ name: 'mila@example.test', address: CATCHER_RECIPIENT }]);
-      expect(mail?.headers).toEqual({ [ORIGINAL_RECIPIENT_HEADER]: 'mila@example.test' });
+      expect(mail?.headers).toEqual({
+        'Content-Language': 'en',
+        [ORIGINAL_RECIPIENT_HEADER]: 'mila@example.test',
+      });
       expect(mail?.subject).toBe(`${STAGING_MARK} Proba`);
       expect(JSON.stringify(mail)).not.toContain('invented-provider-password');
       expect(transport.diverted).toBe(true);
+    });
+
+    it('UX4-03, UX4-06: sends a whole document in the language of the message, with its Reply-To', async () => {
+      const transport = new MailTransport(staging, resolvingTo('8.8.4.4'));
+      const sent: Record<string, unknown>[] = [];
+      jest.spyOn(nodemailer, 'createTransport').mockImplementation((() => ({
+        sendMail: (mail: Record<string, unknown>) => {
+          sent.push(mail);
+          return Promise.resolve({});
+        },
+        close: () => undefined,
+      })) as unknown as typeof nodemailer.createTransport);
+      await transport.deliver(provider, {
+        to: 'mila@example.test',
+        subject: 'Vaša prijava <IT27-0001>',
+        html: '<p>Poštovanje,</p>',
+        text: 'Poštovanje,\n',
+        language: 'sr',
+        replyTo: 'kancelarija@example.test',
+      });
+      const [mail] = sent;
+      const html = String(mail?.html);
+      expect(html).toMatch(/^<!DOCTYPE html>\n<html lang="sr-Latn">/);
+      expect(html).toContain('<title>Vaša prijava &lt;IT27-0001&gt;</title>');
+      expect(html).toContain('<p>Poštovanje,</p>');
+      expect(html).toContain('max-width:600px');
+      expect(mail?.headers).toEqual(expect.objectContaining({ 'Content-Language': 'sr-Latn' }));
+      expect(mail?.replyTo).toEqual({ name: '', address: 'kancelarija@example.test' });
+      // Without an address no Reply-To at all.
+      await transport.deliver(provider, message);
+      expect(sent[1]).not.toHaveProperty('replyTo');
     });
 
     it('still refuses a target that production would refuse', async () => {

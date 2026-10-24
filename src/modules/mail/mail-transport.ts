@@ -4,6 +4,8 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import type { AppConfig } from '../../config/config';
 import { APP_CONFIG } from '../../config/config.module';
+import type { Language } from '../templates/placeholders';
+import { languageTag, mailDocument } from './mail-document';
 import { isRefusedAddress, type TlsMode, targetProblem } from '../mail-servers/mail-server-policy';
 
 /**
@@ -40,9 +42,14 @@ export interface InlineImage {
 export interface Delivery {
   readonly to: string;
   readonly subject: string;
+  /** The rendered body; it is sent inside a whole document (mail-document.ts, UX4-03). */
   readonly html: string;
   readonly text: string;
   readonly images?: readonly InlineImage[];
+  /** The language of the message: `lang` of the document and `Content-Language` (UX4-03). */
+  readonly language?: Language;
+  /** Where a reply goes (UX4-06): the organisation's contact address, when it has one. */
+  readonly replyTo?: string | null;
 }
 
 /** The address every message of a staging instance goes to, inside the catcher (ST-50). */
@@ -239,10 +246,14 @@ export class MailTransport {
         subject: headerSafe(
           catcher === null ? delivery.subject : `${STAGING_MARK} ${delivery.subject}`,
         ),
-        ...(catcher === null
+        headers: {
+          'Content-Language': languageTag(delivery.language ?? 'en'),
+          ...(catcher === null ? {} : { [ORIGINAL_RECIPIENT_HEADER]: headerSafe(delivery.to) }),
+        },
+        ...(delivery.replyTo === undefined || delivery.replyTo === null
           ? {}
-          : { headers: { [ORIGINAL_RECIPIENT_HEADER]: headerSafe(delivery.to) } }),
-        html: delivery.html,
+          : { replyTo: { name: '', address: headerSafe(delivery.replyTo) } }),
+        html: mailDocument(delivery.html, delivery.subject, delivery.language ?? 'en'),
         text: delivery.text,
         // Images travel inside the message (ADR-12): inline parts by content id, never a
         // remote address.

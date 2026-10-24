@@ -159,9 +159,11 @@ function blockHtml(node: BlockNode, input: RenderInput): string {
     case 'image': {
       const image = input.images?.get(node.fileId);
       if (image === undefined) {
-        return '';
+        // Not clean (yet), or gone: its words in its place, as in the text (UX4-04).
+        return node.alt === '' ? '' : `<p>[${escapeHtml(node.alt)}]</p>`;
       }
-      return `<p><img src="${escapeHtml(image.src)}" alt="${escapeHtml(node.alt)}" width="${String(image.width)}" height="${String(image.height)}"></p>`;
+      // Never wider than the screen of a phone (UX4-04): the width is the most it takes.
+      return `<p><img src="${escapeHtml(image.src)}" alt="${escapeHtml(node.alt)}" width="${String(image.width)}" height="${String(image.height)}" style="${IMAGE_STYLE}"></p>`;
     }
     case 'conditional':
       return input.conditions.has(node.key)
@@ -195,6 +197,9 @@ function blockText(node: BlockNode, input: RenderInput): string {
   }
 }
 
+/** The one style the serialiser writes, on an image only. */
+export const IMAGE_STYLE = 'max-width:100%;height:auto';
+
 /** The tags the serialiser writes, and the attributes each may carry. */
 const ALLOWED_TAGS: Readonly<Record<string, readonly string[]>> = {
   p: [],
@@ -209,7 +214,7 @@ const ALLOWED_TAGS: Readonly<Record<string, readonly string[]>> = {
   u: [],
   br: [],
   a: ['href'],
-  img: ['src', 'alt', 'width', 'height'],
+  img: ['src', 'alt', 'width', 'height', 'style'],
 };
 const TAG = /<(\/?)([a-z0-9]+)((?:\s[a-z]+="[^"<>]*")*)>/g;
 const ATTRIBUTE = /\s([a-z]+)="([^"<>]*)"/g;
@@ -242,6 +247,9 @@ export function assertSafeHtml(html: string): void {
         throw new RenderError('unsafe_html');
       }
       if ((attribute === 'width' || attribute === 'height') && !/^\d{1,4}$/.test(value)) {
+        throw new RenderError('unsafe_html');
+      }
+      if (attribute === 'style' && value !== IMAGE_STYLE) {
         throw new RenderError('unsafe_html');
       }
     }

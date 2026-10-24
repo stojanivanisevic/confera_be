@@ -398,7 +398,7 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
     },
   },
   {
-    name: 'a status email: the note of the admin keeps its lines and arrives as text; an image is an inline part; a hostile title is text (ST-44, ST-60)',
+    name: 'a status email: the note of the admin keeps its lines and arrives as text; an image is an inline part no wider than the screen, one not yet clean is its words; a hostile title is text (ST-44, ST-60, UX4-04)',
     type: 'submission_returned',
     subject: subject(text('Your submission '), placeholder('reference'), text(' needs changes')),
     body: doc(
@@ -426,7 +426,7 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
     },
     expected: {
       subject: 'Your submission IT27-0001 needs changes',
-      html: `<p>Dear Živana &lt;b&gt;Đorđević&lt;/b&gt;,</p>\n<p><img src="cid:${IMAGE_ID}@confera" alt="Logo of the conference" width="600" height="120"></p>\n\n<p>Title: &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;</p>\n<p>Line one &lt;i&gt;x&lt;/i&gt;<br>Line two<br>Line three</p>`,
+      html: `<p>Dear Živana &lt;b&gt;Đorđević&lt;/b&gt;,</p>\n<p><img src="cid:${IMAGE_ID}@confera" alt="Logo of the conference" width="600" height="120" style="max-width:100%;height:auto"></p>\n<p>[Not scanned yet]</p>\n<p>Title: &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;</p>\n<p>Line one &lt;i&gt;x&lt;/i&gt;<br>Line two<br>Line three</p>`,
       text: 'Dear Živana <b>Đorđević</b>,\n\n[Logo of the conference]\n\n[Not scanned yet]\n\nTitle: <script>alert(1)</script> & "quotes"\n\nLine one <i>x</i>\nLine two\nLine three\n',
     },
   },

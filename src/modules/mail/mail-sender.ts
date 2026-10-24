@@ -72,6 +72,8 @@ interface Prepared {
   readonly imageIds: readonly string[];
   readonly servers: ServerRow[];
   readonly logContent: boolean;
+  /** Reply-To (UX4-06): the organisation's contact address for a mail to an author. */
+  readonly replyTo: string | null;
 }
 
 @Injectable()
@@ -309,7 +311,7 @@ export class MailSender {
       }
       const organisation = await tx.organisation.findUniqueOrThrow({
         where: { id: message.organisationId },
-        select: { mailLogContent: true },
+        select: { mailLogContent: true, contactEmail: true },
       });
       const conference =
         message.conferenceId === null
@@ -328,6 +330,8 @@ export class MailSender {
         conferenceServerId: conference?.mailServerId ?? null,
         servers,
         logContent: organisation.mailLogContent,
+        // A mail to an author is answered to the office's contact address (D8, UX4-06).
+        replyTo: message.kind.startsWith('submission_') ? organisation.contactEmail : null,
       };
     });
   }
@@ -401,7 +405,7 @@ export class MailSender {
     rendered: Rendered & { images: readonly InlineImage[] },
     logged: Rendered,
     attempt: number,
-    prepared: Pick<Prepared, 'language' | 'logContent' | 'imageIds'>,
+    prepared: Pick<Prepared, 'language' | 'logContent' | 'imageIds' | 'replyTo'>,
   ): Promise<{ ok: true } | { ok: false; error: DeliveryError }> {
     let password: string | null = null;
     if (server.passwordSealed !== null) {
@@ -421,7 +425,12 @@ export class MailSender {
         fromAddress: server.fromAddress,
         fromName: server.fromName,
       },
-      { to: message.recipientAddress, ...rendered },
+      {
+        to: message.recipientAddress,
+        ...rendered,
+        language: prepared.language,
+        replyTo: prepared.replyTo,
+      },
     );
     await this.database.db.mailLogEntry.create({
       data: {
