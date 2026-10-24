@@ -1360,6 +1360,14 @@ application answers). If the new version does not come up, it puts `images.env.p
 and restarts the previous version. One deploy runs at a time, and never beside the nightly
 backup (both take the same lock).
 
+A dropped session cannot stop a deploy halfway (SEC-M4I-13): once the request is checked, the
+script runs on in a session of its own (`setsid`), ignoring SIGHUP and SIGPIPE, with its whole
+output in `/var/log/confera-deploy/<UTC time>-<target>-<pid>.log` (root, 0600, 30 days kept);
+the caller only watches that log. If the SSH session drops (network, the job's timeout, a
+cancelled run), the deploy still goes on to its end or its rollback. Every line it says also goes
+to the journal: `journalctl -t confera-deploy`. A stopped dump leaves no `.partial`, and the
+nightly prune removes any a killed run left.
+
 **Rollback** is `sudo confera-deploy rollback be` (or `web`), by the operator only: the deploy
 keys and the sudo rule pass `<target> sha256:...` and nothing else. It puts back the target's
 version before its last deploy (`images.<target>.previous`), restarts and smoke-tests it, and
@@ -1368,6 +1376,15 @@ because migrations stay compatible with the previous version (expand, then contr
 release). Going back further, or undoing a migration, is a restore of the dump the deploy
 printed (a runbook step, after `stat` on the file), never a deploy of an older digest, which
 step 2 refuses.
+
+A second `rollback` goes **forward** again, because `images.<target>.previous` then holds the
+version rolled back from. For `be` a rollback therefore refuses an image **newer than the
+database** (SEC-M4I-14): when the jobs image holds a migration the database has not applied
+(after a restore of the pre-deploy dump, for example), it stops with nothing changed (exit 65).
+That version comes back only by `confera-deploy be <digest>`, which migrates first. The rule,
+both ways: an image starts on the database only when it knows every applied migration (a
+deploy refuses an older one) and the database has every migration of the image (only a deploy,
+which migrates, may start a newer one; a rollback refuses it).
 
 - **Staging:** the pipeline calls it through SSH. Each repository has its own deploy user and
   key (`confera-deploy-be`, `confera-deploy-web`). sshd forces the command
