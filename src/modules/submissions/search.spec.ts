@@ -49,12 +49,16 @@ describe('the folding of the search', () => {
     const text = searchTextOf('IT27-0003', 'Učenje', [
       { firstName: 'Đorđe', lastName: 'Anić', email: 'dj@x.example.test', institution: null },
     ]);
-    expect(text).toBe('it27-0003 | ucenje | djordje anic dj@x.example.test | dorde anic dj@x.example.test');
+    expect(text).toBe(
+      'it27-0003 | ucenje | djordje anic dj@x.example.test | dorde anic dj@x.example.test',
+    );
     expect(fold('Đorđe', 'd')).toBe('dorde');
     // A plain dj is not a đ: "Djurić" is found by dj only.
-    expect(searchTextOf('IT27-0004', null, [
-      { firstName: 'Ana', lastName: 'Djurić', email: 'a@x.example.test', institution: null },
-    ])).not.toContain('duric');
+    expect(
+      searchTextOf('IT27-0004', null, [
+        { firstName: 'Ana', lastName: 'Djurić', email: 'a@x.example.test', institution: null },
+      ]),
+    ).not.toContain('duric');
   });
 
   it('keeps the parts apart, so that no term spans a title and a name', () => {
