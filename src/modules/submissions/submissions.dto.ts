@@ -309,9 +309,11 @@ export class StatusTextsDto {
 /**
  * A change of status (POST, with the CSRF header: never a GET, ST-43). `version` is the
  * submission's; a repeat of the same request is refused (409 `version_conflict`) and sends
- * no second email. With a `message`, `previewDigest` is the one of the preview the admin saw
- * (FR-MAIL-08): the email sent is exactly that one, or the change is refused (409
- * `preview_outdated`, when the template changed in the meantime).
+ * no second email. `previewDigest` is the one of the preview the admin saw (FR-MAIL-08),
+ * required for every change whose email is on, with or without a `message`, except `open`
+ * (SEC-M4-05; 400 `validation_failed` at `previewDigest` without it): the email sent is
+ * exactly that one, or the change is refused (409 `preview_outdated`, when the template
+ * changed in the meantime).
  */
 export class StatusChangeDto extends StatusTextsDto {
   @IsInt()
@@ -333,7 +335,7 @@ export class StatusEmailPreviewDto {
   /** The HTML with its images embedded: show it in a sandboxed frame only (ST-28). */
   html!: string | null;
   text!: string | null;
-  /** Send it back with the change when it carries a `message`. */
+  /** Send it back with the change (every action but `open`, SEC-M4-05). */
   previewDigest!: string | null;
 }
 

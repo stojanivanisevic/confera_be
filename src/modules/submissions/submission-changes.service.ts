@@ -148,8 +148,10 @@ export class SubmissionChangesService {
           id: messageId,
         });
         // What the admin was shown is what goes out (FR-MAIL-08): the rendering made in
-        // this transaction must be the one of the preview, or nothing changes.
-        if (message !== null || input.previewDigest !== undefined) {
+        // this transaction must be the one of the preview, or nothing changes. Every change
+        // whose email is on needs the digest (SEC-M4-05), with or without a message; only
+        // `open` does not, which the detail screen sends on its own (UX4-08).
+        if (transition.action !== 'open' || input.previewDigest !== undefined) {
           const queued = await tx.mailMessage.findUniqueOrThrow({
             where: { id: messageId },
             select: { renderedSubject: true, renderedHtml: true, renderedText: true },

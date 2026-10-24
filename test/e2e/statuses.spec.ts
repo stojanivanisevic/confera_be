@@ -211,10 +211,9 @@ describe('statuses and status emails (M4-BE-01, M4-BE-02)', () => {
       [{ action: 'withdraw', reason: 'Autor odustao' }, 'withdrawn', 'submission_withdrawn', 8],
     ];
     for (const [body, to, kind, row] of steps) {
+      // Every change but open is sent with the digest of its preview (SEC-M4-05).
       const response =
-        body.message === undefined
-          ? await change(id, body)
-          : (await changeWithText(id, body)).response;
+        body.action === 'open' ? await change(id, body) : (await changeWithText(id, body)).response;
       expect({ body, status: response.status }).toEqual({ body, status: 200 });
       const shown = response.body as Detail;
       expect(shown.status).toBe(to);
@@ -265,16 +264,24 @@ describe('statuses and status emails (M4-BE-01, M4-BE-02)', () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(409);
     expect((await outboxOf(id)).filter((row) => row.kind === 'submission_opened')).toHaveLength(1);
-    // Two admins at once: one wins, the other is told.
+    // Two admins at once, each with the preview they saw: one wins, the other is told.
     const current = (await detail(id)).version;
+    const digestOf = async (action: string) =>
+      (
+        (await as(e2e, admin, 'post', `/api/v1/submissions/${id}/status/preview`).send({ action }))
+          .body as { previewDigest: string }
+      ).previewDigest;
+    const [acceptDigest, rejectDigest] = [await digestOf('accept'), await digestOf('reject')];
     const [a, b] = await Promise.all([
       as(e2e, admin, 'post', `/api/v1/submissions/${id}/status`).send({
         action: 'accept',
         version: current,
+        previewDigest: acceptDigest,
       }),
       as(e2e, admin, 'post', `/api/v1/submissions/${id}/status`).send({
         action: 'reject',
         version: current,
+        previewDigest: rejectDigest,
       }),
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
@@ -282,6 +289,21 @@ describe('statuses and status emails (M4-BE-01, M4-BE-02)', () => {
       ['submission_accepted', 'submission_rejected'].includes(row.kind),
     );
     expect(sent).toHaveLength(1);
+  });
+
+  it('SEC-M4-05: every change whose email is on needs the digest of its preview, with or without a text; open does not', async () => {
+    const { id } = await submitOne('en');
+    expect((await change(id, { action: 'open' })).status).toBe(200);
+    const blind = await change(id, { action: 'accept' });
+    expect(blind.status).toBe(400);
+    expect(blind.body).toEqual(
+      expect.objectContaining({ errors: [{ path: 'previewDigest', code: 'required' }] }),
+    );
+    expect((await detail(id)).status).toBe('open');
+    expect((await outboxOf(id)).map((row) => row.kind)).not.toContain('submission_accepted');
+    const { response } = await changeWithText(id, { action: 'accept' });
+    expect(response.status).toBe(200);
+    expect((await outboxOf(id)).map((row) => row.kind)).toContain('submission_accepted');
   });
 
   it('FR-MAIL-08: the email with a text is shown first and sent exactly as shown; a cancelled one changes nothing', async () => {
@@ -359,6 +381,72 @@ describe('statuses and status emails (M4-BE-01, M4-BE-02)', () => {
     const content = await mailOf(returned?.ID ?? '');
     expect(content.HTML).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(content.Text).toContain(note);
+  });
+
+  it('ST-44, SEC-M4-03: a bare domain as the name of an author never reaches a status email', async () => {
+    const address = freshAddress();
+    const { formToken } = await tokenFor(e2e, form.slug, address);
+    await ageTokens(owner, orgA());
+    const email = `evil.${String(Date.now())}@autori.example.test`;
+    const answers = abstractAnswers({
+      authors: [
+        {
+          firstName: 'evil.com',
+          lastName: 'Petrović',
+          institution: 'Univerzitet u Izmišljenom Gradu',
+          email,
+          phone: '+381 11 123 4567',
+        },
+      ],
+    });
+    const response = await submit(
+      e2e,
+      form.slug,
+      formToken,
+      { language: 'en', answers },
+      { address },
+    );
+    expect(response.status).toBe(201);
+    const [row] = await inOrganisation<{ id: string }>(
+      owner,
+      orgA(),
+      'SELECT id FROM submissions WHERE reference = $1',
+      [(response.body as { reference: string }).reference],
+    );
+    const id = row?.id ?? '';
+    // Opening sends the submission_opened mail with no decision of the office (UX4-08).
+    expect((await change(id, { action: 'open' })).status).toBe(200);
+    await worker.tick();
+    const opened = (await mailsTo(email)).find((mail) => mail.Subject.includes('being processed'));
+    expect(opened).toBeDefined();
+    const content = await mailOf(opened?.ID ?? '');
+    expect(content.Text).toContain('Dear ,');
+    expect(content.Text).not.toContain('evil.com');
+    expect(content.HTML).not.toContain('evil.com');
+    // Other shapes, planted past the form: none reaches the preview of a status email.
+    for (const name of [
+      'Ana paypal-verify.com',
+      'Ana https://phish.example.test/x',
+      'Ana x.com:8080/a',
+      'Ana PRIMER.SRB',
+      'Ana ana@napadac.example.test',
+    ]) {
+      await inOrganisation(
+        owner,
+        orgA(),
+        'UPDATE submissions SET first_author_name = $2 WHERE id = $1',
+        [id, name],
+      );
+      const preview = await as(e2e, admin, 'post', `/api/v1/submissions/${id}/status/preview`).send(
+        {
+          action: 'accept',
+        },
+      );
+      expect(preview.status).toBe(200);
+      const shown = preview.body as { html: string; text: string; subject: string };
+      expect({ name, text: shown.text.includes('Ana ') }).toEqual({ name, text: false });
+      expect(shown.html).not.toMatch(/paypal|phish|x\.com|primer\.srb|napadac/i);
+    }
   });
 
   it('FR-MAIL-07: a status email switched off for a conference sends nothing there and still does elsewhere', async () => {
