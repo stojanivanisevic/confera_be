@@ -470,6 +470,18 @@ function checkComposeConfig() {
     'the API and the worker use the same image',
     services.api?.image === services.worker?.image && services.api?.image === API_IMAGE,
   );
+  // The fake clamd of the development stack (scripts/fake-clamd.mjs) finds everything clean.
+  check(
+    'the antivirus is the real ClamAV: the clamav image, at clamav:3310 for the API and the worker',
+    /^clamav\/clamav:[0-9.]+@sha256:[0-9a-f]{64}$/.test(String(services.clamav?.image)) &&
+      services.api?.environment?.CLAMAV_ADDRESS === 'clamav:3310' &&
+      services.worker?.environment?.CLAMAV_ADDRESS === 'clamav:3310',
+    `${String(services.clamav?.image)} ${String(services.worker?.environment?.CLAMAV_ADDRESS)}`,
+  );
+  check(
+    'no service is the fake clamd of the development stack',
+    !/fake-clamd|FAKE_CLAMD/i.test(text),
+  );
 }
 
 function containerOf(service) {
@@ -594,6 +606,21 @@ function checkContainers(running) {
       reach(containerOf('worker'), 'clamav', 3310).code === 0,
     );
     check('the web container cannot reach ClamAV', reach(web, 'clamav', 3310).code !== 0);
+    // clamd's VERSION, asked by the worker: the real daemon names its signature database; the
+    // fake clamd of the development stack names itself, and is refused here.
+    const version = docker([
+      'exec',
+      containerOf('worker'),
+      'node',
+      '-e',
+      "const s=require('net').connect({host:'clamav',port:3310,timeout:5000});let a='';s.on('connect',()=>s.write('zVERSION\\0'));s.on('data',(d)=>a+=d);s.on('end',()=>{console.log(a.replace(/\\0/g,''));process.exit(0)});s.on('timeout',()=>process.exit(3));s.on('error',()=>process.exit(2))",
+    ]);
+    const answer = version.stdout.trim();
+    check(
+      'the worker scans with the real ClamAV, not the fake clamd of the development stack',
+      version.code === 0 && /^ClamAV \d+\.\d+\.\d+\/\d+\//.test(answer) && !/fake/i.test(answer),
+      answer,
+    );
   }
   check('the web container cannot reach the worker', reach(web, 'worker', 3001).code !== 0);
   const webEnv = docker(['exec', web, 'env']).stdout;

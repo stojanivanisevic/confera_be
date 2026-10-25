@@ -69,7 +69,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
   });
 
   describe('the ports', () => {
-    it('are the port of the three database addresses and the two of the mail catcher', async () => {
+    it('are the port of the three database addresses, the two of the mail catcher and the fake clamd', async () => {
       const ports = await evaluate(`
         return stack.stackPorts({
           DATABASE_URL: 'postgresql://confera_app:local-only-app@127.0.0.1:25001/confera',
@@ -77,9 +77,10 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
           MIGRATION_DATABASE_URL: 'postgresql://confera_owner:local-only-owner@127.0.0.1:25001/confera',
           CONFERA_MAIL_WEB_PORT: '26001',
           CONFERA_MAIL_SMTP_PORT: '27001',
+          CONFERA_CLAMD_PORT: '28001',
         });
       `);
-      expect(ports).toEqual({ database: 25001, mailWeb: 26001, mailSmtp: 27001 });
+      expect(ports).toEqual({ database: 25001, mailWeb: 26001, mailSmtp: 27001, clamd: 28001 });
     });
 
     it('are the standard ones of .env.example when nothing else is said', async () => {
@@ -87,6 +88,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
         database: 5432,
         mailWeb: 8025,
         mailSmtp: 1025,
+        clamd: 3310,
       });
     });
 
@@ -101,10 +103,16 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
       ],
       ['a port that is not a number', { CONFERA_MAIL_WEB_PORT: 'x' }, /CONFERA_MAIL_WEB_PORT must/],
       ['a port above 65535', { CONFERA_MAIL_SMTP_PORT: '70000' }, /CONFERA_MAIL_SMTP_PORT must/],
+      ['one port for two services', { CONFERA_MAIL_WEB_PORT: '1025' }, /need four different ports/],
       [
-        'one port for two services',
-        { CONFERA_MAIL_WEB_PORT: '1025' },
-        /need three different ports/,
+        'the port of the fake clamd for the database',
+        { CONFERA_CLAMD_PORT: '5432' },
+        /need four different ports/,
+      ],
+      [
+        'a fake clamd port that is not a number',
+        { CONFERA_CLAMD_PORT: '33x' },
+        /CONFERA_CLAMD_PORT must/,
       ],
     ])('refuse %s', async (_name, env, expected) => {
       const message = await evaluate<string>(`
@@ -115,7 +123,9 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     });
 
     it('stack:ports derives a set from the folder: the same folder the same set, two folders two sets', async () => {
-      const sets = await evaluate<{ database: number; mailWeb: number; mailSmtp: number }[]>(`
+      const sets = await evaluate<
+        { database: number; mailWeb: number; mailSmtp: number; clamd: number }[]
+      >(`
         return [
           stack.derivedPorts('D:/Code/_wt/a'),
           stack.derivedPorts('D:/Code/_wt/a'),
@@ -131,6 +141,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
         expect(set.database).toBeLessThan(26000);
         expect(set.mailWeb - set.database).toBe(1000);
         expect(set.mailSmtp - set.database).toBe(2000);
+        expect(set.clamd - set.database).toBe(3000);
       }
     });
   });
@@ -210,7 +221,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
       expect(compose).toMatch(/^name: \$\{CONFERA_STACK_NAME:\?[^}]+\}$/m);
       // Every published port comes from a variable that the stack script sets.
       const published = [...compose.matchAll(/^\s*-\s*'(127\.0\.0\.1:[^']+)'/gm)].map((m) => m[1]);
-      expect(published).toHaveLength(3);
+      expect(published).toHaveLength(4);
       for (const entry of published) {
         expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
@@ -221,6 +232,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
       expect(scripts['stack:down']).toBe('node scripts/stack.mjs down');
       expect(scripts['stack:wipe']).toBe('node scripts/stack.mjs wipe');
       expect(scripts['stack:ports']).toBe('node scripts/stack.mjs ports');
+      expect(scripts['stack:clamd']).toBe('node scripts/stack.mjs clamd');
     });
 
     it.each(['db:migrate', 'db:status', 'db:diff'])(

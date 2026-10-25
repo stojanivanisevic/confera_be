@@ -237,6 +237,28 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
       expect(refused(validProductionEnvironment({ [name]: 'anything' }))).toEqual([name]);
     });
 
+    it.each(['fake-clamd:3310', 'FAKE-CLAMD:3310', 'confera-be-m4-1a2b3c4d-fake-clamd-1:3310'])(
+      'refuses the fake clamd of the development stack as the antivirus: %s',
+      (address) => {
+        const problems = problemsOf(validProductionEnvironment({ CLAMAV_ADDRESS: address }));
+        expect(problems.map((problem) => problem.variable)).toEqual(['CLAMAV_ADDRESS']);
+        expect(problems[0]?.problem).toMatch(/fake clamd of the development stack/);
+        expect(refused(validStagingEnvironment({ CLAMAV_ADDRESS: address }))).toEqual([
+          'CLAMAV_ADDRESS',
+        ]);
+      },
+    );
+
+    it('takes the real ClamAV of the topology, and the fake clamd on a developer machine', () => {
+      expect(accepted(validProductionEnvironment({ CLAMAV_ADDRESS: 'clamav:3310' }))).toBe(true);
+      expect(accepted(validEnvironment({ STAGE: 'local', CLAMAV_ADDRESS: '127.0.0.1:3310' }))).toBe(
+        true,
+      );
+      expect(
+        accepted(validEnvironment({ STAGE: 'local', CLAMAV_ADDRESS: 'fake-clamd:3310' })),
+      ).toBe(true);
+    });
+
     it.each(TOOL_ONLY_VARIABLES)('allows %s on a developer machine', (name) => {
       expect(accepted(validEnvironment({ STAGE: 'local', [name]: 'anything' }))).toBe(true);
     });

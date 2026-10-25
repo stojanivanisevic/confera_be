@@ -170,6 +170,17 @@ describe('deploy/compose.yml, the production topology (M4-BE-07)', () => {
     expect(text).toContain("- '${CONFERA_HTTPS_PORT:-443}:8443'");
   });
 
+  it('scans with the real ClamAV, never with the fake clamd of the development stack', () => {
+    expect(value('clamav', 'image')).toMatch(/^clamav\/clamav:[0-9.]+@sha256:[0-9a-f]{64}$/);
+    expect(text).toMatch(/^ {2}CLAMAV_ADDRESS: clamav:3310$/m);
+    expect([...all.keys()]).not.toContain('fake-clamd');
+    for (const [service, body] of all) {
+      expect([service, body.some((line) => /fake-clamd|fake_clamd|FAKE_CLAMD/.test(line))]).toEqual(
+        [service, false],
+      );
+    }
+  });
+
   it('mounts the file volume into the API and the worker only', () => {
     for (const [service, body] of all) {
       const mounts = body.some((line) => line.includes('files:/var/lib/confera/files'));

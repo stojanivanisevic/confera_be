@@ -1,5 +1,5 @@
-# Development stack of Confera (ADR-24). For the developer machine only: every port is
-# bound to 127.0.0.1.
+# Development stack of Confera (ADR-24): PostgreSQL, the mail catcher and the fake clamd.
+# For the developer machine only: every port is bound to 127.0.0.1.
 #
 # One stack per checkout (M1-ISS-13): start it with `corepack pnpm stack:up` and stop it
 # with `corepack pnpm stack:down`, never with `docker compose` directly. The script gives
@@ -41,6 +41,33 @@ services:
       - '127.0.0.1:${CONFERA_MAIL_WEB_PORT:?start the stack with corepack pnpm stack:up}:8025'
       # SMTP
       - '127.0.0.1:${CONFERA_MAIL_SMTP_PORT:?start the stack with corepack pnpm stack:up}:1025'
+
+  fake-clamd:
+    # The FAKE ClamAV daemon of the development stack (scripts/fake-clamd.mjs): every stream is
+    # clean but the EICAR test string. Optional: stack:up starts it unless CONFERA_FAKE_CLAMD=off.
+    # Never on a server: deploy/compose.yml runs the real ClamAV, and the API of a server refuses
+    # this service's name as CLAMAV_ADDRESS. Node 22.23.3, the image of the Dockerfile.
+    image: node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+    profiles: [fake-clamd]
+    user: '1000:1000'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    environment:
+      # Inside its own container; Docker publishes the port on 127.0.0.1 only (below).
+      FAKE_CLAMD_HOST: 0.0.0.0
+      FAKE_CLAMD_PORT: '3310'
+    command: ['node', '/opt/confera/fake-clamd.mjs', '--in-development-stack']
+    volumes:
+      - ./scripts/fake-clamd.mjs:/opt/confera/fake-clamd.mjs:ro
+    ports:
+      - '127.0.0.1:${CONFERA_CLAMD_PORT:?start the stack with corepack pnpm stack:up}:3310'
+    healthcheck:
+      test: ['CMD', 'node', '/opt/confera/fake-clamd.mjs', '--in-development-stack', '--ping']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    mem_limit: 128m
 
 # The volume of this checkout's stack: Compose names it <project>_pgdata.
 volumes:

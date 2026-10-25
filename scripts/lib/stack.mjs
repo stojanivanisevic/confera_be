@@ -8,8 +8,8 @@
 //   - The NAME of the project is derived from the folder of the checkout
 //     (`confera-<folder>-<8 hex digits of its path>`), or set with CONFERA_STACK_NAME.
 //   - The PORTS are what .env says: the port of the three database addresses (they must
-//     agree), CONFERA_MAIL_WEB_PORT and CONFERA_MAIL_SMTP_PORT. `stack:ports` writes a free
-//     set derived from the checkout into .env.
+//     agree), CONFERA_MAIL_WEB_PORT, CONFERA_MAIL_SMTP_PORT and CONFERA_CLAMD_PORT (the fake
+//     clamd). `stack:ports` writes a free set derived from the checkout into .env.
 //   - Every command that uses the database first asks Docker which container publishes
 //     the port of its address, and refuses when that container belongs to another
 //     checkout, or to no Confera stack at all.
@@ -22,7 +22,7 @@ import path from 'node:path';
 import { repoRoot } from './process.mjs';
 
 /** The ports of a fresh `.env` (copied from .env.example): the standard ones. */
-export const STANDARD_PORTS = { database: 5432, mailWeb: 8025, mailSmtp: 1025 };
+export const STANDARD_PORTS = { database: 5432, mailWeb: 8025, mailSmtp: 1025, clamd: 3310 };
 
 /** The three database addresses of .env. The stack serves all three, so they name one port. */
 export const DATABASE_VARIABLES = ['DATABASE_URL', 'SYSTEM_DATABASE_URL', 'MIGRATION_DATABASE_URL'];
@@ -108,7 +108,7 @@ export function loopbackPortOf(address) {
 /**
  * The ports of the stack of this checkout, as .env gives them. The database port is the
  * port of the three database addresses, which must agree; the mail catcher has two
- * variables of its own.
+ * variables of its own, the fake clamd one.
  */
 export function stackPorts(env = process.env) {
   const databasePorts = new Set();
@@ -130,10 +130,11 @@ export function stackPorts(env = process.env) {
     database: [...databasePorts][0] ?? STANDARD_PORTS.database,
     mailWeb: portOf(env, 'CONFERA_MAIL_WEB_PORT', STANDARD_PORTS.mailWeb),
     mailSmtp: portOf(env, 'CONFERA_MAIL_SMTP_PORT', STANDARD_PORTS.mailSmtp),
+    clamd: portOf(env, 'CONFERA_CLAMD_PORT', STANDARD_PORTS.clamd),
   };
-  if (new Set(Object.values(ports)).size !== 3) {
+  if (new Set(Object.values(ports)).size !== 4) {
     throw new StackRefusal(
-      `PostgreSQL (${ports.database}), the web screen of the mail catcher (${ports.mailWeb}) and its SMTP port (${ports.mailSmtp}) need three different ports.`,
+      `PostgreSQL (${ports.database}), the web screen of the mail catcher (${ports.mailWeb}), its SMTP port (${ports.mailSmtp}) and the fake clamd (${ports.clamd}) need four different ports.`,
     );
   }
   return ports;
@@ -296,12 +297,13 @@ export function portIsFree(port) {
 }
 
 /**
- * A set of three ports derived from the checkout: the same folder always gets the same
+ * A set of four ports derived from the checkout: the same folder always gets the same
  * set, two folders almost never the same one. 25000 + n for PostgreSQL, 26000 + n and
- * 27000 + n for the mail catcher, with n from the SHA-256 of the path.
+ * 27000 + n for the mail catcher, 28000 + n for the fake clamd, with n from the SHA-256 of
+ * the path.
  */
 export function derivedPorts(root = repoRoot, step = 0) {
   const digest = createHash('sha256').update(comparablePath(root)).digest();
   const n = (digest.readUInt32BE(0) + step) % 1000;
-  return { database: 25000 + n, mailWeb: 26000 + n, mailSmtp: 27000 + n };
+  return { database: 25000 + n, mailWeb: 26000 + n, mailSmtp: 27000 + n, clamd: 28000 + n };
 }

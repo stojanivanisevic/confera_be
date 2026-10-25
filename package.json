@@ -35,6 +35,7 @@
     "stack:wipe": "node scripts/stack.mjs wipe",
     "stack:ports": "node scripts/stack.mjs ports",
     "stack:info": "node scripts/stack.mjs info",
+    "stack:clamd": "node scripts/stack.mjs clamd",
     "stubs": "node --env-file-if-exists=.env scripts/stubs.mjs",
     "seed:e2e": "node --env-file-if-exists=.env scripts/seed-e2e.mjs",
     "seed:production": "node --env-file-if-exists=.env scripts/seed-production.mjs",

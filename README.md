@@ -75,14 +75,35 @@ corepack pnpm check
 
 It ends with `check passed`.
 
-**Step 4. Start the development stack** (PostgreSQL and Mailpit in Docker). The first
-time it downloads two images.
+**Step 4. Start the development stack** (PostgreSQL, Mailpit and the fake clamd in Docker).
+The first time it downloads three images.
 
 ```
 corepack pnpm stack:up
 ```
 
 It ends with `The stack of this checkout is up.` and its name, folder and ports.
+
+**The fake clamd** is the virus scanner of the development stack. The API serves an uploaded
+file and shows an email image only once ClamAV has said "clean" (fail closed), and the real
+ClamAV needs about 1.2 GB of memory and a signature download. So the stack runs
+`scripts/fake-clamd.mjs` instead, in a small Node container on `127.0.0.1:3310`: it speaks
+clamd's protocol and answers "clean" for every file except one that holds the EICAR test
+string, which it reports as infected, like the test double of the tests
+(`test/support/fake-clamd.ts`). `.env.example` points `CLAMAV_ADDRESS` at it, so it is the
+default for local development and for the browser tests of `confera_fe` against this API.
+
+- It is optional: `CONFERA_FAKE_CLAMD=off` in `.env` leaves it out of `stack:up`, and every
+  file then stays "scan pending", as on a server whose ClamAV is down. `corepack pnpm
+stack:clamd` runs it in a terminal instead of Docker.
+- An `.env` copied before 0.4.0 has no `CLAMAV_ADDRESS`: `stack:up` then ends with a note.
+  Add `CLAMAV_ADDRESS=127.0.0.1:3310` (or the `CONFERA_CLAMD_PORT` of this checkout) and
+  restart the API.
+- It never reaches a server: no image holds the file, the production topology
+  (`deploy/compose.yml`) runs the real ClamAV, the API on `STAGE=prod` refuses the fake's
+  service name as `CLAMAV_ADDRESS`, the script refuses `STAGE=prod`, and
+  `deploy/checks/topology.mjs` asks the scanner of the topology for its version and refuses
+  the fake's answer.
 
 **Step 5. Create the database roles and the database, then the schema.**
 
@@ -110,6 +131,21 @@ A database that an interrupted `DROP DATABASE` left invalid is dropped and creat
 again, and a run whose connection breaks (PostgreSQL restarted) starts again by itself,
 up to three times. A failure says in one sentence what happened.
 
+**Then the invented people and their organisations**, so that there is someone to sign in
+as (the web application of `confera_fe` and its browser tests against this API need them):
+
+```
+corepack pnpm seed:e2e
+```
+
+It ends with
+`seed:e2e: 2 organisations and 4 invented people on example.test are in the database "confera" (STAGE=local).`
+The admin of organisation A is `zivana.djordjevic@a.example.test`; every person's invented
+password is in `test/e2e/seed/e2e-seed.json` (section 9). It is safe to run again, and it
+refuses to run unless `STAGE` is `local` or `test`. It creates no mail server: to receive
+the mails of organisation A in the mail catcher, add one in the admin (Mail servers: host
+`127.0.0.1`, port `1025`, encryption none, default).
+
 **Step 6. Start the API.**
 
 ```
@@ -119,14 +155,15 @@ corepack pnpm start
 
 The log is JSON lines and ends with `"msg":"api.started"`. In a second terminal:
 
-| Open                                 | You get                                       |
-| ------------------------------------ | --------------------------------------------- |
-| <http://localhost:3001/health>       | `{"status":"ok"}`                             |
-| <http://localhost:3001/health/ready> | `{"status":"ok"}` (the database answers)      |
-| <http://localhost:3001/api/v1/meta>  | `{"name":"confera-api","version":"…"}`        |
-| <http://127.0.0.1:3001/api/v1/meta>  | **404** `not_found`. That is right: section 5 |
+| Open                                 | You get                                                |
+| ------------------------------------ | ------------------------------------------------------ |
+| <http://localhost:3001/health>       | `{"status":"ok"}`                                      |
+| <http://localhost:3001/health/ready> | `{"status":"ok"}` (the database answers)               |
+| <http://localhost:3001/api/v1/meta>  | `{"name":"confera-api","version":"…","instance":null}` |
+| <http://127.0.0.1:3001/api/v1/meta>  | **404** `not_found`. That is right: section 5          |
 
-`version` is the version of this checkout, the `version` of `package.json`.
+`version` is the version of this checkout, the `version` of `package.json`; `instance` is
+`null` on a developer machine (`staging` or `production` on a server: the staging banner).
 
 Stop the API with Ctrl+C.
 
@@ -172,14 +209,15 @@ can stop, empty or drop the database of the other.
 - **The name** of the project is derived from the folder of the checkout:
   `confera-<folder>-<8 hex digits of its path>`, for example `confera-be-m2-c62fdd52`.
   Set `CONFERA_STACK_NAME` in `.env` to choose another. `corepack pnpm stack:info` shows
-  name, folder and ports. The containers are `<name>-postgres-1` and `<name>-mailpit-1`,
-  the volume `<name>_pgdata`.
+  name, folder and ports. The containers are `<name>-postgres-1`, `<name>-mailpit-1` and
+  `<name>-fake-clamd-1`, the volume `<name>_pgdata`.
 - **The ports** are what `.env` says: PostgreSQL listens on the port of the three database
   addresses (`DATABASE_URL`, `SYSTEM_DATABASE_URL`, `MIGRATION_DATABASE_URL`, which must
   name the same port), the mail catcher on `CONFERA_MAIL_WEB_PORT` and
-  `CONFERA_MAIL_SMTP_PORT`. A fresh `.env` has 5432, 8025 and 1025. **On a second checkout
-  run `corepack pnpm stack:ports`**: it writes a free set derived from the folder (25000 +
-  n, 26000 + n, 27000 + n) into those lines of `.env` and changes nothing else. The API
+  `CONFERA_MAIL_SMTP_PORT`, the fake clamd on `CONFERA_CLAMD_PORT`. A fresh `.env` has 5432,
+  8025, 1025 and 3310. **On a second checkout run `corepack pnpm stack:ports`**: it writes a
+  free set derived from the folder (25000 + n, 26000 + n, 27000 + n, 28000 + n) into those
+  lines of `.env` and into `CLAMAV_ADDRESS`, and changes nothing else. The API
   port (3001) stays; only one checkout runs `pnpm start` at a time.
 - **The refusals.** `stack:up` refuses a port that the stack of another checkout publishes,
   or that another program listens on, before Docker starts anything. `db:provision`,
@@ -214,7 +252,8 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
 | `corepack pnpm start:dev`                                       | Development: compiles into `dist-dev/` (with the dev-tools module), recompiles and restarts on every change.                                                                                                                                                                                          |
 | `corepack pnpm lint` / `format`                                 | ESLint; Prettier (writes).                                                                                                                                                                                                                                                                            |
 | `corepack pnpm typecheck`                                       | `tsc --noEmit` over sources and tests.                                                                                                                                                                                                                                                                |
-| `corepack pnpm stack:up` / `stack:down`                         | Starts and stops PostgreSQL and Mailpit in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                                                                                                                  |
+| `corepack pnpm stack:up` / `stack:down`                         | Starts and stops PostgreSQL, Mailpit and the fake clamd in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                                                                                                  |
+| `corepack pnpm stack:clamd`                                     | Runs the fake clamd (section 2, step 4) in this terminal instead of Docker, on `CONFERA_CLAMD_PORT`. Stop with Ctrl+C.                                                                                                                                                                                |
 | `corepack pnpm stack:wipe`                                      | Stops the stack of this checkout and removes its database volume.                                                                                                                                                                                                                                     |
 | `corepack pnpm stack:ports`                                     | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                                                                                                                          |
 | `corepack pnpm stack:info`                                      | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                                                                                                                                |
@@ -585,9 +624,12 @@ the two equal. The OpenAPI document carries the declaration of every operation
   attached file to ClamAV's daemon at `CLAMAV_ADDRESS` (INSTREAM). Fail closed: no answer, an
   error or a timeout (120 s) leaves the file pending with its attempts counted and tries again
   after 1, 2, 4 ... minutes, and the admins are told once an hour; limits exceeded count as not
-  clean. **The development stack has no ClamAV** (about 1.2 GB of memory and a signature
-  download): without `CLAMAV_ADDRESS` every file stays "scan pending" and is never served.
-  The tests use a fake daemon that speaks the same protocol (`test/support/fake-clamd.ts`).
+  clean. **The development stack has no real ClamAV** (about 1.2 GB of memory and a
+  signature download): it runs the fake clamd (`scripts/fake-clamd.mjs`, section 2, step 4),
+  which `.env.example` names in `CLAMAV_ADDRESS` and which finds every file clean except the
+  EICAR test string. Without a scanner at `CLAMAV_ADDRESS` every file stays "scan pending"
+  and is never served. The tests start their own fake daemon of the same protocol
+  (`test/support/fake-clamd.ts`); a server runs the real ClamAV and refuses the fake.
 - **Submissions** (M3-BE-07): `GET /api/v1/submissions` (paged, newest first, at most 100 a
   page; `fileSigns`: the flags of its files and whether a scan is pending) and
   `GET /api/v1/submissions/{id}` (answers, authors, files with their scan state and, while one
@@ -839,7 +881,7 @@ This repository owns the development stack and the seed (ADR-24); the end-to-end
 fresh clone, after steps 1 and 2 of section 2:
 
 ```
-corepack pnpm stack:up       PostgreSQL and the mail catcher (Mailpit), in Docker
+corepack pnpm stack:up       PostgreSQL, the mail catcher (Mailpit) and the fake clamd, in Docker
 corepack pnpm db:provision   the three database roles and the database
 corepack pnpm db:migrate     the schema
 corepack pnpm seed:e2e       the invented organisations and people
@@ -851,6 +893,9 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
 - **The mail catcher** shows every mail the stack sends at <http://localhost:8025>; it
   listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine. (On a checkout with
   ports of its own: `CONFERA_MAIL_WEB_PORT` and `CONFERA_MAIL_SMTP_PORT` of `.env`.)
+- **The fake clamd** on `127.0.0.1:3310` scans the uploads and email images (section 2,
+  step 4): without it they stay "scan pending", and the "To show" flow and the image preview
+  of the browser tests of `confera_fe` fail.
 - **The stub slot** is where the stand-ins for outside services run: the PayPal stub
   arrives with 0.7.0, the fixture rate provider with 0.5.0. Until then it is empty:
   `GET http://127.0.0.1:4010/health` answers `{"status":"ok","stubs":[]}` and everything

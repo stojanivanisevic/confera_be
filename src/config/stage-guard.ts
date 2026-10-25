@@ -63,7 +63,29 @@ const PROBLEM = {
     'is required with INSTANCE=staging: a staging server sends every message to its mail catcher and never to a recipient (ADR-27, ST-50)',
   catcherForbidden:
     'must not be set unless STAGE=prod and INSTANCE=staging: only a staging server diverts its mail to a catcher (ADR-27, ST-50)',
+  fakeClamd:
+    'names the fake clamd of the development stack, which finds every file clean: a server scans with the real ClamAV (deploy/compose.yml, clamav:3310)',
 } as const;
+
+/**
+ * The service name of the fake clamd in docker-compose.yml (scripts/fake-clamd.mjs). On
+ * STAGE=prod an antivirus address with this host is refused: the fake answers "clean" for
+ * everything but EICAR. deploy/checks/topology.mjs also asks the running scanner of the
+ * topology for its version and refuses the fake's answer.
+ */
+export const FAKE_CLAMD_HOST = 'fake-clamd';
+
+function namesFakeClamd(address: string | undefined): boolean {
+  if (address === undefined) {
+    return false;
+  }
+  const host = address.trim().toLowerCase().replace(/:\d*$/, '');
+  return (
+    host === FAKE_CLAMD_HOST ||
+    host.startsWith(`${FAKE_CLAMD_HOST}.`) ||
+    /[-_]fake-clamd(-\d+)?$/.test(host)
+  );
+}
 
 /**
  * An address to listen on that only this machine can reach: 127.0.0.0/8, ::1 or
@@ -165,6 +187,9 @@ export function stageGuardProblems(env: RawEnvironment): ConfigProblem[] {
       if (env[name] === undefined || env[name] === '') {
         add(name, PROBLEM.requiredOnProd);
       }
+    }
+    if (namesFakeClamd(env.CLAMAV_ADDRESS)) {
+      add('CLAMAV_ADDRESS', PROBLEM.fakeClamd);
     }
   } else {
     if (env.INSTANCE !== undefined) {
