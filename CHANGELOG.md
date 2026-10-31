@@ -33,6 +33,7 @@ Statuses, status emails, template management, email images and the mail log (0.4
 - The first author's name passes the filter of the title in every email (one line, no address, no bare domain, else empty; SEC-M4-03).
 - Every status change whose email is on, except `open`, needs the `previewDigest` of its preview (400 at `previewDigest` without it; SEC-M4-05).
 - The audit entry of a discard of held mail lists the ids discarded (`detail.ids`, SEC-M4-08).
+- Staging under congresa.com shares the registrable domain of production (SEC-STG-05): the proxy's HSTS stays exactly `max-age=31536000`, without `includeSubDomains` and `preload`. `deploy/checks/topology.mjs` requires that exact value of the running proxy, and a test of `pnpm check` holds every file of `deploy/proxy` to it; the Caddyfile says at the header that changing it needs the Security reviewer.
 
 ### Fixed (0.4.0 fix round)
 

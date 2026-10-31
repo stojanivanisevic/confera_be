@@ -1355,7 +1355,10 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
   51 MB (the largest file a form may take, 50 MB, and the envelope); every other route 1 MB. A
   declared `Content-Length` above the limit is refused with 413 before anything is forwarded.
   The proxy overwrites `X-Forwarded-For` (it trusts no proxy in front of it), passes `Host`
-  unchanged, adds HSTS and no other security header, and answers no other host name. It writes
+  unchanged, adds HSTS and no other security header, and answers no other host name. HSTS is
+  exactly `max-age=31536000`, without `includeSubDomains` and `preload` (SEC-STG-05: staging
+  shares the registrable domain of production); a test of `pnpm check` holds every proxy file
+  to it, and changing it needs the Security reviewer. It writes
   **no access log** (no `log` directive): only Caddy's own events. An access log would hold
   client addresses (personal data) and needs a retention period first: decided at Gate 4.
 - **The staging gate** (`deploy/proxy/gate-staging.caddy`) asks for the gate's credentials on

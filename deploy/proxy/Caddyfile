@@ -48,6 +48,7 @@
 
 (congresa_headers) {
 	header {
+		# Deliberately without includeSubDomains and preload (SEC-STG-05); changing it needs the Security reviewer.
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 		-Via

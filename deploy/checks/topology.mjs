@@ -942,8 +942,9 @@ async function checkProxy(ports, gate, catcher, proxyEnv) {
     `${String(signIn.status)}`,
   );
   check(
-    'the proxy adds HSTS',
-    String(signIn.headers['strict-transport-security']).startsWith('max-age='),
+    'SEC-STG-05: the proxy adds HSTS of exactly max-age=31536000 (no includeSubDomains, no preload)',
+    signIn.headers['strict-transport-security'] === 'max-age=31536000',
+    String(signIn.headers['strict-transport-security']),
   );
   check(
     'the proxy adds no frame policy and no server name of its own',
