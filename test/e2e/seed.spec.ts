@@ -334,7 +334,7 @@ describe('seed:e2e', () => {
       const result = await runNode([SEED], {
         env: {
           STAGE: 'test',
-          MIGRATION_DATABASE_URL: 'postgresql://confera_owner:invented-gone@127.0.0.1:1/x',
+          MIGRATION_DATABASE_URL: 'postgresql://congresa_owner:invented-gone@127.0.0.1:1/x',
         },
       });
       expect(result.exitCode).toBe(1);

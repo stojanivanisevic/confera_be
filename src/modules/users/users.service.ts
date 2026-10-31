@@ -411,7 +411,7 @@ export class UsersService {
     if (user.status !== 'active' || toDto(user).role !== 'admin') {
       return;
     }
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera admins ${organisationId}`}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`congresa admins ${organisationId}`}, 0))`;
     const others = await tx.user.count({
       where: { id: { not: user.id }, status: 'active', roles: { some: { role: 'admin' } } },
     });

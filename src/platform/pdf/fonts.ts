@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 /**
- * The fonts that every Confera PDF embeds (ADR-16).
+ * The fonts that every Congresa PDF embeds (ADR-16).
  *
  * - Manrope is the typeface of the UdEkoM design system. It covers Serbian Latin
  *   (š č ć ž đ), Serbian Cyrillic and monotonic Greek.

@@ -17,7 +17,7 @@ const repoRoot = join(__dirname, '..', '..', '..', '..');
  * in its own process.
  */
 export function readPdf(pdf: Buffer): Promise<PdfContent> {
-  const directory = mkdtempSync(join(tmpdir(), 'confera-pdf-'));
+  const directory = mkdtempSync(join(tmpdir(), 'congresa-pdf-'));
   const file = join(directory, 'document.pdf');
   writeFileSync(file, pdf);
   return new Promise((resolve, reject) => {

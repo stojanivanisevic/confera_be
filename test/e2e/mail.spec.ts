@@ -20,8 +20,8 @@ import { MailWorker as MailWorkerClass } from '../../src/modules/mail/mail-worke
  * (STAGE=prod): the rules of a target. The second runs on a developer's stage against the
  * mail catcher of the stack (Mailpit): what arrives, and how often.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 const SERBIAN = 'Đorđe Šćepanović, Čačak, Žabalj';
 const SERVER_PASSWORD = 'invented-mail-server-password-1';
 

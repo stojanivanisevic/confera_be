@@ -8,7 +8,7 @@ import { Factories } from './support/factories';
 /**
  * E2-14 (ADR-03, ST-23, M2-BE-11): the command that creates the first admin has an address
  * rule of its own, a looser one than "ONE plain address, ASCII, a dot-atom" of the
- * application (src/common/validation/mail-address.ts, "an address that Confera stores or
+ * application (src/common/validation/mail-address.ts, "an address that Congresa stores or
  * sends to"). The first admin, who receives every security notice of the organisation, can
  * be created with an address that the application would refuse for anybody else.
  */
@@ -27,7 +27,7 @@ describe('the first admin command and the address rule (E2-14)', () => {
   const env = () => ({
     STAGE: 'prod',
     MIGRATION_DATABASE_URL: e2eDatabase.ownerUrl,
-    ADMIN_ORIGIN: 'https://admin.confera.test',
+    ADMIN_ORIGIN: 'https://admin.congresa.test',
   });
 
   async function users(): Promise<QueryResultRow[]> {

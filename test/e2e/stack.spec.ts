@@ -15,8 +15,8 @@ import { connect, e2eDatabase, rows } from './support/e2e-database';
  */
 
 /** The ports of the mail catcher of THIS checkout's stack (.env; README, section 2). */
-const MAILPIT = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const SMTP_PORT = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const SMTP_PORT = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 
 /** One SMTP conversation: each line is sent after the server's answer to the one before. */
 function smtp(lines: readonly string[]): Promise<string[]> {
@@ -54,9 +54,9 @@ describe('the development stack', () => {
 
   describe('PostgreSQL', () => {
     it.each([
-      ['application', () => e2eDatabase.applicationUrl, 'confera_app'],
-      ['system', () => e2eDatabase.systemUrl, 'confera_system'],
-      ['owner', () => e2eDatabase.ownerUrl, 'confera_owner'],
+      ['application', () => e2eDatabase.applicationUrl, 'congresa_app'],
+      ['system', () => e2eDatabase.systemUrl, 'congresa_system'],
+      ['owner', () => e2eDatabase.ownerUrl, 'congresa_owner'],
     ])('accepts the %s role of db:provision', async (_kind, address, name) => {
       const client = await connect(address());
       try {
@@ -72,7 +72,7 @@ describe('the development stack', () => {
 
     it('is reachable on the loopback address only, as docker-compose.yml publishes it', () => {
       const compose = readFileSync(join(repoRoot, 'docker-compose.yml'), 'utf8');
-      // `- '127.0.0.1:${CONFERA_DB_PORT:?...}:5432'`: the host port is this checkout's own
+      // `- '127.0.0.1:${CONGRESA_DB_PORT:?...}:5432'`: the host port is this checkout's own
       // (M1-ISS-13), the address in front of it is always the loopback address.
       const published = [...compose.matchAll(/^\s*-\s*'([^']+)'/gm)]
         .map((match) => match[1] ?? '')
@@ -83,7 +83,7 @@ describe('the development stack', () => {
         '8025',
       ]);
       for (const entry of published) {
-        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
+        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONGRESA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
     });
 
@@ -139,14 +139,14 @@ describe('the development stack', () => {
       const marker = `e2e-${randomBytes(6).toString('hex')}`;
       const body = 'Poštovana Živana, vaš predračun je spreman. Đorđe Čolić, ćošak.';
       const answers = await smtp([
-        'HELO confera.test',
-        'MAIL FROM:<no-reply@confera.example.test>',
+        'HELO congresa.test',
+        'MAIL FROM:<no-reply@congresa.example.test>',
         'RCPT TO:<zivana.djordjevic@a.example.test>',
         'DATA',
         [
-          'From: Confera <no-reply@confera.example.test>',
+          'From: Congresa <no-reply@congresa.example.test>',
           'To: zivana.djordjevic@a.example.test',
-          `Subject: Confera stack test ${marker}`,
+          `Subject: Congresa stack test ${marker}`,
           'MIME-Version: 1.0',
           'Content-Type: text/plain; charset=utf-8',
           'Content-Transfer-Encoding: 8bit',

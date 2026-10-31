@@ -9,9 +9,9 @@
 //
 // The four roles (ADR-05); this script creates the first three, the backup role arrives
 // with the backup tooling (M10-BE-01):
-//   confera_owner   owns the schema, runs migrations, exists only in the migration job
-//   confera_app     the running API: no schema rights, bound by row-level security
-//   confera_system  the resolvers: may bypass the policies, no schema rights, few grants
+//   congresa_owner   owns the schema, runs migrations, exists only in the migration job
+//   congresa_app     the running API: no schema rights, bound by row-level security
+//   congresa_system  the resolvers: may bypass the policies, no schema rights, few grants
 //
 // Role names are fixed, because the committed migrations grant to them by name. Passwords
 // come from the addresses in the environment (.env on a developer machine) and are never
@@ -22,9 +22,9 @@ import { scramVerifier } from './lib/scram.mjs';
 import { DATABASE_VARIABLES, refuseUnlessOwnDatabase } from './lib/stack.mjs';
 
 const ROLES = {
-  owner: { name: 'confera_owner', variable: 'MIGRATION_DATABASE_URL', bypass: false },
-  application: { name: 'confera_app', variable: 'DATABASE_URL', bypass: false },
-  system: { name: 'confera_system', variable: 'SYSTEM_DATABASE_URL', bypass: true },
+  owner: { name: 'congresa_owner', variable: 'MIGRATION_DATABASE_URL', bypass: false },
+  application: { name: 'congresa_app', variable: 'DATABASE_URL', bypass: false },
+  system: { name: 'congresa_system', variable: 'SYSTEM_DATABASE_URL', bypass: true },
 };
 
 /** A runaway statement of the API is stopped by the database (ADR-05). */
@@ -34,10 +34,10 @@ const APPLICATION_SETTINGS = {
   lock_timeout: '10s',
 };
 
-const RESETTABLE_DATABASE = /^confera_[a-z0-9_]*test[a-z0-9_]*$/;
+const RESETTABLE_DATABASE = /^congresa_[a-z0-9_]*test[a-z0-9_]*$/;
 
 /** The name of the advisory lock that lets one provisioning run at a time on a server. */
-const LOCK_NAME = 'confera db:provision';
+const LOCK_NAME = 'congresa db:provision';
 
 function fail(message) {
   process.stderr.write(`db:provision failed: ${message}\n`);
@@ -204,7 +204,7 @@ async function main() {
     );
   }
   if (reset && !RESETTABLE_DATABASE.test(database)) {
-    fail(`--reset is only for test databases (confera_..._test); "${database}" is not one.`);
+    fail(`--reset is only for test databases (congresa_..._test); "${database}" is not one.`);
   }
 
   const superuser = superuserConnection(owner.url);

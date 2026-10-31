@@ -20,7 +20,7 @@ export function digestOf(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-const CSRF_PURPOSE = 'confera.csrf.v1';
+const CSRF_PURPOSE = 'congresa.csrf.v1';
 
 /**
  * The CSRF value of a session (ADR-03: "a session-bound CSRF header"): an HMAC of a fixed

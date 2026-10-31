@@ -53,7 +53,7 @@ describe('tenant isolation by row-level security, as the application role', () =
 
   it('the fixture has rows of two organisations, and the connection is the application role', async () => {
     const [who] = await rows<{ current_user: string }>(app, 'SELECT current_user');
-    expect(who?.current_user).toBe('confera_app');
+    expect(who?.current_user).toBe('congresa_app');
     const [count] = await rows<{ n: string }>(superuser, 'SELECT count(*) AS n FROM users');
     expect(Number(count?.n)).toBe(orgs.a.users.length + orgs.b.users.length);
   });

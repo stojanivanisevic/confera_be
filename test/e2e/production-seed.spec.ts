@@ -50,7 +50,7 @@ describe('the production seed and the first admin (ST-27)', () => {
   const env = (stage = 'prod') => ({
     STAGE: stage,
     MIGRATION_DATABASE_URL: e2eDatabase.ownerUrl,
-    ADMIN_ORIGIN: 'https://admin.confera.test',
+    ADMIN_ORIGIN: 'https://admin.congresa.test',
   });
   const seed = (stage = 'prod') => runNode([SEED], { env: env(stage) });
   const firstAdmin = (args: string[], stage = 'prod') =>
@@ -159,7 +159,7 @@ describe('the production seed and the first admin (ST-27)', () => {
       });
       const links = [
         ...result.stdout.matchAll(
-          /https:\/\/admin\.confera\.test\/invitations\/([A-Za-z0-9_-]{43})/g,
+          /https:\/\/admin\.congresa\.test\/invitations\/([A-Za-z0-9_-]{43})/g,
         ),
       ];
       expect(links).toHaveLength(1);

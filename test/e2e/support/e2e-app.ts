@@ -22,8 +22,8 @@ import { traceLog } from './trace';
  * `STAGE=prod`) and where the log goes (into memory, so a test can read it).
  */
 
-export const ADMIN_HOST = 'admin.confera.test';
-export const PUBLIC_HOST = 'forms.confera.test';
+export const ADMIN_HOST = 'admin.congresa.test';
+export const PUBLIC_HOST = 'forms.congresa.test';
 
 export interface LogEntry {
   readonly level: string;

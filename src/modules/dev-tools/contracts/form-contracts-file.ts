@@ -49,7 +49,7 @@ export function formConfigurationSchemaDocument(): Record<string, unknown> {
   };
 }
 
-const POW_CHALLENGES = ['confera-vector-1', 'confera-vector-2'];
+const POW_CHALLENGES = ['congresa-vector-1', 'congresa-vector-2'];
 const POW_VECTOR_DIFFICULTY = 10;
 
 export function formRuleVectorsDocument(): Record<string, unknown> {

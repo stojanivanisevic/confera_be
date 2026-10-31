@@ -16,7 +16,7 @@ import { repoRoot, runNode } from '../support/run-node';
 
 const SEED = join('scripts', 'seed-e2e.mjs');
 const EXIT_CONFIGURATION = 78;
-const NOWHERE = 'postgresql://confera_owner:invented-nowhere@127.0.0.1:1/confera';
+const NOWHERE = 'postgresql://congresa_owner:invented-nowhere@127.0.0.1:1/congresa';
 
 const run = (env: Record<string, string | undefined>) =>
   runNode([SEED], { env: { MIGRATION_DATABASE_URL: NOWHERE, ...env }, timeoutMs: 30_000 });
@@ -54,8 +54,8 @@ describe('seed:e2e refuses to run outside local and test', () => {
       const result = await run({
         STAGE: 'prod',
         INSTANCE: instance,
-        ADMIN_ORIGIN: 'https://admin.confera.test',
-        PUBLIC_ORIGIN: 'https://forms.confera.test',
+        ADMIN_ORIGIN: 'https://admin.congresa.test',
+        PUBLIC_ORIGIN: 'https://forms.congresa.test',
       });
       expect(result.exitCode).toBe(EXIT_CONFIGURATION);
       expect(result.stderr).not.toContain('cannot connect');
@@ -87,7 +87,7 @@ describe('seed:e2e refuses to run outside local and test', () => {
     const canary = 'canary-5eed-91';
     const result = await run({
       STAGE: canary,
-      MIGRATION_DATABASE_URL: `postgresql://confera_owner:${canary}@db.confera.test:5432/confera`,
+      MIGRATION_DATABASE_URL: `postgresql://congresa_owner:${canary}@db.congresa.test:5432/congresa`,
     });
     expect(result.exitCode).toBe(EXIT_CONFIGURATION);
     expect(result.output).not.toContain(canary);
@@ -123,7 +123,7 @@ describe('seed:e2e refuses to run outside local and test', () => {
     });
 
     it('a STAGE of the environment wins over the one in .env: a server stays refused', async () => {
-      const directory = mkdtempSync(join(tmpdir(), 'confera-seed-env-'));
+      const directory = mkdtempSync(join(tmpdir(), 'congresa-seed-env-'));
       try {
         const envFile = join(directory, '.env');
         writeFileSync(envFile, `STAGE=local\nMIGRATION_DATABASE_URL=${NOWHERE}\n`);

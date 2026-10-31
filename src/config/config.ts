@@ -161,7 +161,7 @@ function sortProblems(problems: readonly ConfigProblem[]): ConfigProblem[] {
 export function formatProblems(problems: readonly ConfigProblem[]): string {
   const lines = problems.map(({ variable, problem }) => `  - ${variable}: ${problem}`);
   return [
-    'Confera API did not start: the configuration is not valid.',
+    'Congresa API did not start: the configuration is not valid.',
     ...lines,
     'See .env.example for every variable.',
     '',

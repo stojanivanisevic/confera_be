@@ -32,7 +32,7 @@ interface PdfInformation {
 
 /** The document information as a PDF reader shows it, read with pdf.js in its own process. */
 async function readInformation(pdf: Buffer): Promise<PdfInformation> {
-  const directory = mkdtempSync(join(tmpdir(), 'confera-pdf-info-'));
+  const directory = mkdtempSync(join(tmpdir(), 'congresa-pdf-info-'));
   try {
     const file = join(directory, 'document.pdf');
     writeFileSync(file, pdf);

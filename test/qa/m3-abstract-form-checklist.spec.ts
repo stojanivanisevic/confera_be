@@ -12,7 +12,7 @@ import { repoRoot } from '../support/run-node';
  * M3-QA-02, the checklist of FR-FORM-01: the seeded abstract form, field by field, against the
  * current abstract form of the conference sites (ITEMA 2026, read on 2026-10-12: vault
  * "UDEKOM Conference Submission Forms 2026-10-12"). Each `it` is one line of that page. Where
- * Confera differs on purpose, the line says so and the test holds the decided form.
+ * Congresa differs on purpose, the line says so and the test holds the decided form.
  */
 const definition: FormDefinition = buildDefinition('abstract', {});
 
@@ -60,7 +60,7 @@ describe('M3-QA-02: the seeded abstract form against the ITEMA 2026 form (FR-FOR
     expect(field('email').kind).toBe('email');
   });
 
-  it('authors: ITEMA offers 1 to 3 and charges each one beyond three; Confera takes up to 10 (D7) and says so from the fourth', () => {
+  it('authors: ITEMA offers 1 to 3 and charges each one beyond three; Congresa takes up to 10 (D7) and says so from the fourth', () => {
     const authors = sectionOf('email')?.repeat;
     expect(authors?.min).toBe(1);
     expect(authors?.max).toBe(10);
@@ -80,7 +80,7 @@ describe('M3-QA-02: the seeded abstract form against the ITEMA 2026 form (FR-FOR
     });
   });
 
-  it('file: biographies with photos of all authors; ITEMA asks for doc or docx under 5 MB, Confera takes PDF too, up to 20 MB (FR-FILE-01)', () => {
+  it('file: biographies with photos of all authors; ITEMA asks for doc or docx under 5 MB, Congresa takes PDF too, up to 20 MB (FR-FILE-01)', () => {
     expect(field('biographies').kind).toBe('file');
     expect(field('biographies').label.en).toMatch(/photos of all authors/);
     expect(field('biographies').rules.file).toEqual({
@@ -139,7 +139,7 @@ describe('M3-QA-02: the seeded abstract form against the ITEMA 2026 form (FR-FOR
     expect(field('comments').kind).toBe('longText');
   });
 
-  it('consent: ITEMA has an agree/disagree radio; Confera has one required box with the privacy notice linked (D6)', () => {
+  it('consent: ITEMA has an agree/disagree radio; Congresa has one required box with the privacy notice linked (D6)', () => {
     expect(field('consent').kind).toBe('consent');
     expect(field('consent').required).toBe(true);
     expect(definition.texts.consent.en).toMatch(/\[privacy notice\]\(privacy\)/);

@@ -55,7 +55,7 @@ export interface Delivery {
 /** The address every message of a staging instance goes to, inside the catcher (ST-50). */
 export const CATCHER_RECIPIENT = 'catcher@staging.invalid';
 /** The header that keeps the original recipient of a message diverted to the catcher. */
-export const ORIGINAL_RECIPIENT_HEADER = 'X-Confera-Original-Recipient';
+export const ORIGINAL_RECIPIENT_HEADER = 'X-Congresa-Original-Recipient';
 /** The mark of every subject of a staging instance. */
 export const STAGING_MARK = '[STAGING]';
 

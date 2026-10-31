@@ -9,7 +9,7 @@ import { connectAsSuperuser, rows } from './support/database';
  * creates what is missing failed on it for ever, with a message about the stack.
  */
 
-const DATABASE = 'confera_recovery_test';
+const DATABASE = 'congresa_recovery_test';
 
 describe('db:provision after an interrupted DROP DATABASE', () => {
   jest.setTimeout(120_000);

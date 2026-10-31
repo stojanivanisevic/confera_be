@@ -108,7 +108,7 @@ export class MailImagesService {
       return await this.database.transaction(async (tx) => {
         // Counted again under a lock of the organisation's images (SEC-M4-04): uploads at
         // the same moment cannot pass the quota together.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera mail images ${actor.organisationId}`}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`congresa mail images ${actor.organisationId}`}, 0))`;
         const now = await tx.storedFile.count({ where: { kind: 'email_image' } });
         if (now >= MAX_IMAGES_PER_ORGANISATION) {
           throw new ProblemException(409, 'image_quota_reached');

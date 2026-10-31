@@ -32,12 +32,12 @@ describe('configuration', () => {
     expect(result.config.stage).toBe('test');
     expect(result.config.http.port).toBe(4321);
     expect(result.config.origins).toEqual({
-      admin: 'http://admin.confera.test',
-      public: 'http://forms.confera.test',
+      admin: 'http://admin.congresa.test',
+      public: 'http://forms.congresa.test',
     });
     expect(result.config.logLevel).toBe('warn');
-    expect(result.config.database.applicationUrl.reveal()).toContain('confera_app');
-    expect(result.config.database.systemUrl.reveal()).toContain('confera_system');
+    expect(result.config.database.applicationUrl.reveal()).toContain('congresa_app');
+    expect(result.config.database.systemUrl.reveal()).toContain('congresa_system');
   });
 
   it('uses the documented defaults for the optional variables', () => {
@@ -80,19 +80,19 @@ describe('configuration', () => {
       ['PORT', '-1'],
       ['PORT', '3001.5'],
       ['LISTEN_HOST', 'not a host'],
-      ['ADMIN_ORIGIN', 'admin.confera.test'],
-      ['ADMIN_ORIGIN', 'http://admin.confera.test/'],
-      ['ADMIN_ORIGIN', 'http://admin.confera.test/path'],
-      ['ADMIN_ORIGIN', 'http://user:pw@admin.confera.test'],
-      ['ADMIN_ORIGIN', 'ftp://admin.confera.test'],
-      ['ADMIN_ORIGIN', 'HTTP://ADMIN.CONFERA.TEST'],
-      ['ADMIN_ORIGIN', 'http://admin_host.confera.test'],
-      ['PUBLIC_ORIGIN', 'http://-forms.confera.test'],
-      ['PUBLIC_ORIGIN', 'http://forms.confera.test?x=1'],
-      ['DATABASE_URL', 'mysql://confera_app:pw@127.0.0.1:3306/confera'],
-      ['DATABASE_URL', 'postgresql://127.0.0.1:5432/confera'],
-      ['DATABASE_URL', 'postgresql://confera_app@127.0.0.1:5432/confera'],
-      ['DATABASE_URL', 'postgresql://confera_app:pw@127.0.0.1:5432'],
+      ['ADMIN_ORIGIN', 'admin.congresa.test'],
+      ['ADMIN_ORIGIN', 'http://admin.congresa.test/'],
+      ['ADMIN_ORIGIN', 'http://admin.congresa.test/path'],
+      ['ADMIN_ORIGIN', 'http://user:pw@admin.congresa.test'],
+      ['ADMIN_ORIGIN', 'ftp://admin.congresa.test'],
+      ['ADMIN_ORIGIN', 'HTTP://ADMIN.CONGRESA.TEST'],
+      ['ADMIN_ORIGIN', 'http://admin_host.congresa.test'],
+      ['PUBLIC_ORIGIN', 'http://-forms.congresa.test'],
+      ['PUBLIC_ORIGIN', 'http://forms.congresa.test?x=1'],
+      ['DATABASE_URL', 'mysql://congresa_app:pw@127.0.0.1:3306/congresa'],
+      ['DATABASE_URL', 'postgresql://127.0.0.1:5432/congresa'],
+      ['DATABASE_URL', 'postgresql://congresa_app@127.0.0.1:5432/congresa'],
+      ['DATABASE_URL', 'postgresql://congresa_app:pw@127.0.0.1:5432'],
       ['SYSTEM_DATABASE_URL', 'not a url'],
       ['LOG_LEVEL', 'verbose'],
       ['LOG_LEVEL', 'INFO'],
@@ -148,8 +148,8 @@ describe('configuration', () => {
       const canary = 'canary-51b0aa';
       const result = parseEnvironment(
         validEnvironment({
-          DATABASE_URL: `postgresql://confera_app:${canary}@127.0.0.1:5432/confera_unit`,
-          SYSTEM_DATABASE_URL: `postgresql://confera_system:${canary}@127.0.0.1:5432/confera_unit`,
+          DATABASE_URL: `postgresql://congresa_app:${canary}@127.0.0.1:5432/congresa_unit`,
+          SYSTEM_DATABASE_URL: `postgresql://congresa_system:${canary}@127.0.0.1:5432/congresa_unit`,
         }),
       );
       if (!result.ok) {

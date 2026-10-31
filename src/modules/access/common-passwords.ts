@@ -296,7 +296,7 @@ export const COMMON_PASSWORDS: readonly string[] = [
   // The field of the association and the application itself.
   'udekom',
   'udekombalkans',
-  'confera',
+  'congresa',
   'conference',
   'konferencija',
   'association',

@@ -26,7 +26,7 @@ export const CSRF_HEADER = 'x-csrf-token';
  * (a background refetch), says so with this header; it does not renew the session
  * (ADR-03: "background refetches do not renew").
  */
-export const BACKGROUND_HEADER = 'x-confera-background';
+export const BACKGROUND_HEADER = 'x-congresa-background';
 
 const READING = new Set(['GET', 'HEAD']);
 

@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Confera admin API",
+    "title": "Congresa admin API",
     "description": "The API of the admin surface. It answers only under the admin host name.",
     "version": "0.3.0"
   },
@@ -39,7 +39,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       }
@@ -77,7 +77,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       }
@@ -228,7 +228,7 @@
         "tags": [
           "Audit"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "audit.read"
         }
       }
@@ -277,7 +277,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.read"
         }
       },
@@ -319,7 +319,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.manage"
         }
       }
@@ -362,7 +362,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.read"
         }
       },
@@ -413,7 +413,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.manage"
         }
       }
@@ -467,7 +467,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.manage"
         }
       }
@@ -510,7 +510,7 @@
         "tags": [
           "Deadlines"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.read"
         }
       }
@@ -572,7 +572,7 @@
         "tags": [
           "Deadlines"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.manage"
         }
       }
@@ -625,7 +625,7 @@
         "tags": [
           "ConferenceForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.manage"
         }
       }
@@ -678,7 +678,7 @@
         "tags": [
           "Conferences"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "conferences.manage"
         }
       }
@@ -721,7 +721,7 @@
         "tags": [
           "StatusEmails"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       },
@@ -773,7 +773,7 @@
         "tags": [
           "StatusEmails"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.manage"
         }
       }
@@ -817,7 +817,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       },
@@ -852,7 +852,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -896,7 +896,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.read"
         }
       }
@@ -939,7 +939,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.read"
         }
       }
@@ -993,7 +993,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.manage"
         }
       }
@@ -1047,7 +1047,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.manage"
         }
       }
@@ -1101,7 +1101,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.manage"
         }
       }
@@ -1153,7 +1153,7 @@
         "tags": [
           "Forms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "forms.read"
         }
       }
@@ -1218,7 +1218,7 @@
         "tags": [
           "HeldMail"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "held_mail.manage"
         }
       }
@@ -1263,7 +1263,7 @@
         "tags": [
           "HeldMail"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "held_mail.manage"
         }
       }
@@ -1308,7 +1308,7 @@
         "tags": [
           "HeldMail"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "held_mail.manage"
         }
       }
@@ -1353,7 +1353,7 @@
         "tags": [
           "HeldMail"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "held_mail.manage"
         }
       }
@@ -1397,7 +1397,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       },
@@ -1442,7 +1442,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -1496,7 +1496,7 @@
         "tags": [
           "MailImages"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.manage"
         }
       },
@@ -1529,7 +1529,7 @@
         "tags": [
           "MailImages"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       }
@@ -1566,7 +1566,7 @@
         "tags": [
           "MailImages"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       }
@@ -1686,7 +1686,7 @@
         "tags": [
           "MailLog"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_log.read"
         }
       }
@@ -1721,7 +1721,7 @@
         "tags": [
           "MailLog"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_log.read"
         }
       },
@@ -1764,7 +1764,7 @@
         "tags": [
           "MailLog"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_log.manage"
         }
       }
@@ -1807,7 +1807,7 @@
         "tags": [
           "MailLog"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_log.read"
         }
       }
@@ -1851,7 +1851,7 @@
         "tags": [
           "MailLog"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_log.manage"
         }
       }
@@ -1885,7 +1885,7 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.read"
         }
       },
@@ -1927,10 +1927,10 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/mail-servers/{id}": {
@@ -1971,7 +1971,7 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.read"
         }
       },
@@ -2023,10 +2023,10 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       },
       "delete": {
         "operationId": "deleteMailServer",
@@ -2068,10 +2068,10 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/mail-servers/{id}/test-message": {
@@ -2123,7 +2123,7 @@
         "tags": [
           "MailServers"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "mail_servers.manage"
         }
       }
@@ -2205,7 +2205,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       },
@@ -2248,7 +2248,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.manage"
         }
       }
@@ -2283,7 +2283,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       }
@@ -2329,7 +2329,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       }
@@ -2374,7 +2374,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       }
@@ -2417,7 +2417,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.read"
         }
       },
@@ -2469,7 +2469,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.manage"
         }
       },
@@ -2504,7 +2504,7 @@
         "tags": [
           "Templates"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "templates.manage"
         }
       }
@@ -2539,7 +2539,7 @@
         "tags": [
           "Meta"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -2573,7 +2573,7 @@
         "tags": [
           "Organisation"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "organisation.read"
         }
       },
@@ -2616,7 +2616,7 @@
         "tags": [
           "Organisation"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "organisation.manage"
         }
       }
@@ -2661,10 +2661,10 @@
         "tags": [
           "Organisation"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "organisation.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/password-resets": {
@@ -2700,7 +2700,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -2744,7 +2744,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       },
@@ -2789,7 +2789,7 @@
         "tags": [
           "Account"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -2834,7 +2834,7 @@
         "tags": [
           "Session"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       },
@@ -2863,11 +2863,11 @@
             }
           }
         },
-        "summary": "The signed-in user, the organisation and the CSRF value of the session. A request with\nthe header `X-Confera-Background` (a refetch the person did not ask for) does not renew\nthe session.",
+        "summary": "The signed-in user, the organisation and the CSRF value of the session. A request with\nthe header `X-Congresa-Background` (a refetch the person did not ask for) does not renew\nthe session.",
         "tags": [
           "Session"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       },
@@ -2893,7 +2893,7 @@
         "tags": [
           "Session"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       }
@@ -2938,7 +2938,7 @@
         "tags": [
           "Session"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       }
@@ -2966,7 +2966,7 @@
         "tags": [
           "Session"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "account.manage"
         }
       }
@@ -3107,7 +3107,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.read"
         }
       }
@@ -3151,7 +3151,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.read"
         }
       },
@@ -3203,7 +3203,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.manage"
         }
       }
@@ -3248,7 +3248,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.read"
         }
       }
@@ -3302,7 +3302,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.manage"
         }
       }
@@ -3356,7 +3356,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.manage"
         }
       }
@@ -3410,7 +3410,7 @@
         "tags": [
           "Submissions"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "submissions.manage"
         }
       }
@@ -3505,7 +3505,7 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.read"
         }
       },
@@ -3548,10 +3548,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}": {
@@ -3592,7 +3592,7 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.read"
         }
       },
@@ -3643,10 +3643,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       },
       "delete": {
         "operationId": "removeUser",
@@ -3688,10 +3688,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}/deactivation": {
@@ -3743,10 +3743,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}/invitation": {
@@ -3788,10 +3788,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}/reactivation": {
@@ -3842,10 +3842,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}/role": {
@@ -3897,10 +3897,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     },
     "/api/v1/users/{id}/sessions": {
@@ -3935,10 +3935,10 @@
         "tags": [
           "Users"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "permission": "users.manage"
         },
-        "x-confera-fresh-password": true
+        "x-congresa-fresh-password": true
       }
     }
   },

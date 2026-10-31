@@ -39,7 +39,7 @@ async function start(entry: string, env: Env): Promise<Refusal> {
 function expectRefusal(result: Refusal, ...variables: string[]): void {
   expect({ exitCode: result.exitCode, output: result.output }).toEqual({
     exitCode: EXIT_CONFIGURATION,
-    output: expect.stringContaining('Confera API did not start'),
+    output: expect.stringContaining('Congresa API did not start'),
   });
   for (const variable of variables) {
     expect(result.output).toContain(`  - ${variable}: `);
@@ -172,7 +172,7 @@ describe('the built application refuses to start on a bad stage (ADR-24)', () =>
       expectRefusal(
         await start(
           PRODUCTION_ENTRY,
-          validProductionEnvironment({ PUBLIC_ORIGIN: 'http://forms.confera.test' }),
+          validProductionEnvironment({ PUBLIC_ORIGIN: 'http://forms.congresa.test' }),
         ),
         'PUBLIC_ORIGIN',
       );
@@ -193,9 +193,9 @@ describe('the built application refuses to start on a bad stage (ADR-24)', () =>
       const env: Env = validProductionEnvironment({
         INSTANCE: `${canary}-instance`,
         LOG_LEVEL: `${canary}-level`,
-        ADMIN_ORIGIN: `http://${canary}.confera.test`,
+        ADMIN_ORIGIN: `http://${canary}.congresa.test`,
         DEV_LOGIN: `${canary}-dev`,
-        MIGRATION_DATABASE_URL: `postgresql://confera_owner:${canary}@db.confera.test:5432/confera`,
+        MIGRATION_DATABASE_URL: `postgresql://congresa_owner:${canary}@db.congresa.test:5432/congresa`,
       });
       for (const name of SECRET_VARIABLE_NAMES) {
         env[name] = `${canary}-${name}`;
@@ -245,9 +245,9 @@ describe('the built application refuses to start on a bad stage (ADR-24)', () =>
       const result = await loadedBy(
         PRODUCTION_ENTRY,
         validEnvironment({
-          DATABASE_URL: 'postgresql://confera_app:invented-nowhere@127.0.0.1:1/confera_unit',
+          DATABASE_URL: 'postgresql://congresa_app:invented-nowhere@127.0.0.1:1/congresa_unit',
           SYSTEM_DATABASE_URL:
-            'postgresql://confera_system:invented-nowhere@127.0.0.1:1/confera_unit',
+            'postgresql://congresa_system:invented-nowhere@127.0.0.1:1/congresa_unit',
         }),
         150_000,
       );

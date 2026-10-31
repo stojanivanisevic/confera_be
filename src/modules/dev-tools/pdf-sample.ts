@@ -11,7 +11,7 @@ import { PdfRenderer } from '../../platform/pdf/pdf-renderer';
 async function main(): Promise<void> {
   const directory = resolve('tmp');
   mkdirSync(directory, { recursive: true });
-  const file = join(directory, 'confera-pdf-sample.pdf');
+  const file = join(directory, 'congresa-pdf-sample.pdf');
 
   const started = performance.now();
   const pdf = await new PdfRenderer().render(BILINGUAL_SAMPLE);

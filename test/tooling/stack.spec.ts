@@ -44,26 +44,26 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
           stack.stackName({}, 'D:/Code/_wt/confera_be-m2'),
         ];
       `);
-      expect(names[0]).toMatch(/^confera-be-[0-9a-f]{8}$/);
+      expect(names[0]).toMatch(/^congresa-be-[0-9a-f]{8}$/);
       expect(names[1]).toBe(names[0]);
-      expect(names[2]).toMatch(/^confera-be-[0-9a-f]{8}$/);
+      expect(names[2]).toMatch(/^congresa-be-[0-9a-f]{8}$/);
       expect(names[2]).not.toBe(names[0]);
-      expect(names[3]).toMatch(/^confera-be-m2-[0-9a-f]{8}$/);
+      expect(names[3]).toMatch(/^congresa-be-m2-[0-9a-f]{8}$/);
       // Never the shared name of 0.1.0, whose containers, volume and port every checkout used.
-      expect(names).not.toContain('confera');
+      expect(names).not.toContain('congresa');
     });
 
     it('can be set in .env, and is refused when Compose could not use it', async () => {
       const verdicts = await evaluate<string[]>(`
         const verdict = (value) => {
-          try { return stack.stackName({ CONFERA_STACK_NAME: value }, 'D:/x'); }
+          try { return stack.stackName({ CONGRESA_STACK_NAME: value }, 'D:/x'); }
           catch (error) { return 'refused: ' + error.message; }
         };
-        return ['confera-mine', 'Confera', 'a b', '../x', '-x', 'x'.repeat(70)].map(verdict);
+        return ['congresa-mine', 'Congresa', 'a b', '../x', '-x', 'x'.repeat(70)].map(verdict);
       `);
-      expect(verdicts[0]).toBe('confera-mine');
+      expect(verdicts[0]).toBe('congresa-mine');
       for (const verdict of verdicts.slice(1)) {
-        expect(verdict).toMatch(/^refused: CONFERA_STACK_NAME must be/);
+        expect(verdict).toMatch(/^refused: CONGRESA_STACK_NAME must be/);
       }
     });
   });
@@ -72,12 +72,12 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     it('are the port of the three database addresses, the two of the mail catcher and the fake clamd', async () => {
       const ports = await evaluate(`
         return stack.stackPorts({
-          DATABASE_URL: 'postgresql://confera_app:local-only-app@127.0.0.1:25001/confera',
-          SYSTEM_DATABASE_URL: 'postgresql://confera_system:local-only-system@127.0.0.1:25001/confera',
-          MIGRATION_DATABASE_URL: 'postgresql://confera_owner:local-only-owner@127.0.0.1:25001/confera',
-          CONFERA_MAIL_WEB_PORT: '26001',
-          CONFERA_MAIL_SMTP_PORT: '27001',
-          CONFERA_CLAMD_PORT: '28001',
+          DATABASE_URL: 'postgresql://congresa_app:local-only-app@127.0.0.1:25001/congresa',
+          SYSTEM_DATABASE_URL: 'postgresql://congresa_system:local-only-system@127.0.0.1:25001/congresa',
+          MIGRATION_DATABASE_URL: 'postgresql://congresa_owner:local-only-owner@127.0.0.1:25001/congresa',
+          CONGRESA_MAIL_WEB_PORT: '26001',
+          CONGRESA_MAIL_SMTP_PORT: '27001',
+          CONGRESA_CLAMD_PORT: '28001',
         });
       `);
       expect(ports).toEqual({ database: 25001, mailWeb: 26001, mailSmtp: 27001, clamd: 28001 });
@@ -96,23 +96,31 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
       [
         'database addresses that name two ports',
         {
-          DATABASE_URL: 'postgresql://a:local-only-a@127.0.0.1:25001/confera',
-          MIGRATION_DATABASE_URL: 'postgresql://o:local-only-o@127.0.0.1:25002/confera',
+          DATABASE_URL: 'postgresql://a:local-only-a@127.0.0.1:25001/congresa',
+          MIGRATION_DATABASE_URL: 'postgresql://o:local-only-o@127.0.0.1:25002/congresa',
         },
         /name different ports \(25001, 25002\)/,
       ],
-      ['a port that is not a number', { CONFERA_MAIL_WEB_PORT: 'x' }, /CONFERA_MAIL_WEB_PORT must/],
-      ['a port above 65535', { CONFERA_MAIL_SMTP_PORT: '70000' }, /CONFERA_MAIL_SMTP_PORT must/],
-      ['one port for two services', { CONFERA_MAIL_WEB_PORT: '1025' }, /need four different ports/],
+      [
+        'a port that is not a number',
+        { CONGRESA_MAIL_WEB_PORT: 'x' },
+        /CONGRESA_MAIL_WEB_PORT must/,
+      ],
+      ['a port above 65535', { CONGRESA_MAIL_SMTP_PORT: '70000' }, /CONGRESA_MAIL_SMTP_PORT must/],
+      [
+        'one port for two services',
+        { CONGRESA_MAIL_WEB_PORT: '1025' },
+        /need four different ports/,
+      ],
       [
         'the port of the fake clamd for the database',
-        { CONFERA_CLAMD_PORT: '5432' },
+        { CONGRESA_CLAMD_PORT: '5432' },
         /need four different ports/,
       ],
       [
         'a fake clamd port that is not a number',
-        { CONFERA_CLAMD_PORT: '33x' },
-        /CONFERA_CLAMD_PORT must/,
+        { CONGRESA_CLAMD_PORT: '33x' },
+        /CONGRESA_CLAMD_PORT must/,
       ],
     ])('refuse %s', async (_name, env, expected) => {
       const message = await evaluate<string>(`
@@ -150,14 +158,14 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     const here = 'D:/Code/_wt/here';
     const containers = [
       {
-        name: 'confera-here-postgres-1',
-        project: 'confera-here-1',
+        name: 'congresa-here-postgres-1',
+        project: 'congresa-here-1',
         workingDir: 'd:\\code\\_wt\\here\\',
         ports: [25001],
       },
       {
-        name: 'confera-other-postgres-1',
-        project: 'confera-other-2',
+        name: 'congresa-other-postgres-1',
+        project: 'congresa-other-2',
         workingDir: 'D:\\Code\\confera_be',
         ports: [5432],
       },
@@ -188,18 +196,18 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     it('is refused when the stack of another checkout publishes it, with that checkout named', async () => {
       const message = await verdict(5432);
       expect(message).toContain(
-        'the database of DATABASE_URL at 127.0.0.1:5432 belongs to the stack "confera-other-2" of another checkout, D:\\Code\\confera_be',
+        'the database of DATABASE_URL at 127.0.0.1:5432 belongs to the stack "congresa-other-2" of another checkout, D:\\Code\\confera_be',
       );
     });
 
-    it('is refused when a container that is no Confera stack publishes it', async () => {
+    it('is refused when a container that is no Congresa stack publishes it', async () => {
       expect(await verdict(5433)).toContain('is served by the container "nudge-postgres"');
     });
 
     it('an address that is not on this machine is not the development stack, and is not judged', async () => {
       const result = await evaluate<boolean>(`
         stack.assertOwnDatabase(['DATABASE_URL'], {
-          DATABASE_URL: 'postgresql://confera_app:x@db.confera.example:5432/confera',
+          DATABASE_URL: 'postgresql://congresa_app:x@db.congresa.example:5432/congresa',
         });
         return true;
       `);
@@ -217,13 +225,13 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
 
     it('docker-compose.yml fixes no container name, no volume name and no host port', () => {
       expect(compose).not.toMatch(/^\s*container_name:/m);
-      expect(compose).not.toMatch(/confera_pgdata/);
-      expect(compose).toMatch(/^name: \$\{CONFERA_STACK_NAME:\?[^}]+\}$/m);
+      expect(compose).not.toMatch(/congresa_pgdata/);
+      expect(compose).toMatch(/^name: \$\{CONGRESA_STACK_NAME:\?[^}]+\}$/m);
       // Every published port comes from a variable that the stack script sets.
       const published = [...compose.matchAll(/^\s*-\s*'(127\.0\.0\.1:[^']+)'/gm)].map((m) => m[1]);
       expect(published).toHaveLength(4);
       for (const entry of published) {
-        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
+        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONGRESA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
     });
 

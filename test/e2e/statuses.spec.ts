@@ -22,8 +22,8 @@ import {
  * submission, the preview that is what is sent, the switch per conference, notes,
  * corrections with kept revisions, and the withdrawal.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 
 interface MailpitMessage {
   ID: string;
@@ -175,7 +175,7 @@ describe('statuses and status emails (M4-BE-01, M4-BE-02)', () => {
     const forged = await e2e
       .http()
       .post(`/api/v1/submissions/${id}/status`)
-      .set('Host', 'admin.confera.test')
+      .set('Host', 'admin.congresa.test')
       .set('Origin', e2e.config.origins.admin)
       .set('Cookie', admin.cookie)
       .send({ action: 'open', version });

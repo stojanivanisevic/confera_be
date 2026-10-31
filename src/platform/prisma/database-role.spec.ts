@@ -3,7 +3,7 @@ import { type DatabaseRole, REFUSED_PREDEFINED_ROLES, roleProblems } from './dat
 /** ST-08: which database roles the start-up check refuses. The check against a real database is an integration test. */
 
 const SAFE: DatabaseRole = {
-  name: 'confera_app',
+  name: 'congresa_app',
   timeZone: 'UTC',
   superuser: false,
   bypassRls: false,
@@ -79,9 +79,9 @@ describe('roleProblems: memberships (edge case E1 of M1-REV-01)', () => {
   });
 
   it('refuses an application role that is a member of a role that may bypass the policies', () => {
-    const role = { ...SAFE, memberOfBypassRls: ['confera_system'] };
+    const role = { ...SAFE, memberOfBypassRls: ['congresa_system'] };
     expect(roleProblems('application', role)).toEqual([
-      'is a member of a role that may bypass row-level security (confera_system) and may become it with SET ROLE',
+      'is a member of a role that may bypass row-level security (congresa_system) and may become it with SET ROLE',
     ]);
     // The system role bypasses them itself; a membership changes nothing for it.
     expect(roleProblems('system', role)).toEqual([]);

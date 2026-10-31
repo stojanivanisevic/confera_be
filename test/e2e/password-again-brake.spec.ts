@@ -80,7 +80,7 @@ describe('the brake of the password asked again (SEC-M2-02)', () => {
       await e2e
         .http()
         .post('/api/v1/session')
-        .set('Host', 'admin.confera.test')
+        .set('Host', 'admin.congresa.test')
         .set('Origin', e2e.config.origins.admin)
         .send({ email: `nobody.${String(attempt)}@a.example.test`, password: 'invented-x' });
     }

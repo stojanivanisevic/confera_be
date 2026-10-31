@@ -1,5 +1,5 @@
 // Times the type detection of the given files in a fresh Node process, as a process of
-// Confera reads an upload, and prints one line of JSON: the best of three runs per file, in
+// Congresa reads an upload, and prints one line of JSON: the best of three runs per file, in
 // milliseconds.
 //
 //   node test/support/docx-inspection-timing.cjs <file>...   (needs `pnpm build:dev`)

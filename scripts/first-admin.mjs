@@ -102,7 +102,7 @@ async function main() {
       }
       // Two runs at once are taken one after the other.
       await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('confera first admin ' || $1, 0))",
+        "SELECT pg_advisory_xact_lock(hashtextextended('congresa first admin ' || $1, 0))",
         [organisationId],
       );
       const admins = await client.query(

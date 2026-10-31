@@ -24,8 +24,8 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export const ADMIN_HOST = 'admin.confera.test';
-export const PUBLIC_HOST = 'forms.confera.test';
+export const ADMIN_HOST = 'admin.congresa.test';
+export const PUBLIC_HOST = 'forms.congresa.test';
 
 export function configFrom(env: RawEnvironment): AppConfig {
   const result = parseEnvironment(env);

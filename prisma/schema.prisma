@@ -1,4 +1,4 @@
-// Confera data model (ADR-06).
+// Congresa data model (ADR-06).
 // The schema changes only through committed migrations in prisma/migrations (NFR-OPS-02):
 // `prisma migrate deploy` applies them, `prisma db push` is never used.
 // Row-level security, grants and composite foreign keys are written by hand in the
@@ -9,7 +9,7 @@
 //   that has both the read and the write check;
 // - a unique key on (organisation_id, id), so that other tables can point at it;
 // - a foreign key to another tenant table is composite on (organisation_id, id);
-// - explicit grants to confera_app, and to confera_system only what a resolver reads.
+// - explicit grants to congresa_app, and to congresa_system only what a resolver reads.
 //
 // Two reviewed kinds of table have no organisation (test/integration/support/catalogue.ts):
 // - reference tables (roles, role_permissions): seeded by migration, the same for every

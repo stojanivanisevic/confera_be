@@ -4,4 +4,4 @@
  */
 export const APP_VERSION = '0.3.0';
 
-export const SERVICE_NAME = 'confera-api';
+export const SERVICE_NAME = 'congresa-api';

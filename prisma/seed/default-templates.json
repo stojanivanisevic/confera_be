@@ -28,7 +28,7 @@
               { "type": "placeholder", "key": "inviterName" },
               { "type": "text", "text": " has invited you to " },
               { "type": "placeholder", "key": "organisationName" },
-              { "type": "text", "text": " on Confera. Choose your password through this link:" }
+              { "type": "text", "text": " on Congresa. Choose your password through this link:" }
             ]
           },
           {
@@ -590,7 +590,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Confera test message from " },
+          { "type": "text", "text": "Congresa test message from " },
           { "type": "placeholder", "key": "serverName" }
         ]
       },
@@ -619,7 +619,7 @@
       "subject": {
         "type": "subject",
         "children": [
-          { "type": "text", "text": "Confera probna poruka – server: " },
+          { "type": "text", "text": "Congresa probna poruka – server: " },
           { "type": "placeholder", "key": "serverName" }
         ]
       },

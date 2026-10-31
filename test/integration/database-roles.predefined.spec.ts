@@ -27,14 +27,15 @@ describe('the predefined roles of PostgreSQL in the start-up role check', () => 
 
   const password = randomPassword();
   const REFUSED = Object.keys(REFUSED_PREDEFINED_ROLES);
-  /** One login role per predefined role and kind: confera_test_pre_<a|s>_<n>. */
-  const loginRole = (kind: 'a' | 's', index: number) => `confera_test_pre_${kind}_${String(index)}`;
+  /** One login role per predefined role and kind: congresa_test_pre_<a|s>_<n>. */
+  const loginRole = (kind: 'a' | 's', index: number) =>
+    `congresa_test_pre_${kind}_${String(index)}`;
   let superuser: Client;
 
   const drop = async (): Promise<void> => {
     const existing = await rows<{ rolname: string }>(
       superuser,
-      "SELECT rolname FROM pg_roles WHERE rolname LIKE 'confera_test_pre_%'",
+      "SELECT rolname FROM pg_roles WHERE rolname LIKE 'congresa_test_pre_%'",
     );
     for (const { rolname } of existing) {
       await superuser.query(`REVOKE ALL ON DATABASE ${testDatabase.name} FROM ${rolname}`);
@@ -48,8 +49,8 @@ describe('the predefined roles of PostgreSQL in the start-up role check', () => 
     const pw = superuser.escapeLiteral(password);
     for (const [index, predefined] of REFUSED.entries()) {
       for (const [kind, runtime] of [
-        ['a', 'confera_app'],
-        ['s', 'confera_system'],
+        ['a', 'congresa_app'],
+        ['s', 'congresa_system'],
       ] as const) {
         const role = loginRole(kind, index);
         await superuser.query(

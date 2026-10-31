@@ -29,10 +29,10 @@ import {
 
 const CANARY = `canary-${Math.random().toString(16).slice(2, 14)}`;
 const CANARY_ROLES = {
-  DATABASE_URL: { role: 'confera_canary_app', memberOf: 'confera_app', attributes: '' },
+  DATABASE_URL: { role: 'congresa_canary_app', memberOf: 'congresa_app', attributes: '' },
   SYSTEM_DATABASE_URL: {
-    role: 'confera_canary_system',
-    memberOf: 'confera_system',
+    role: 'congresa_canary_system',
+    memberOf: 'congresa_system',
     attributes: 'BYPASSRLS',
   },
 } as const;
@@ -46,8 +46,8 @@ const CANARY_VALUES: Readonly<Record<string, string>> = {
 
 const canaryOf = (name: string): string => `${CANARY}-${name.toLowerCase()}`;
 
-const ADMIN_HOST = 'admin.confera.test';
-const PUBLIC_HOST = 'forms.confera.test';
+const ADMIN_HOST = 'admin.congresa.test';
+const PUBLIC_HOST = 'forms.congresa.test';
 
 const PATHS = [
   '/health',
@@ -226,7 +226,7 @@ describe('a clean production start', () => {
       const response = await api.request('/api/v1/meta', { headers: { host: ADMIN_HOST } });
       expect(response.status).toBe(200);
       expect(JSON.parse(response.text)).toEqual({
-        name: 'confera-api',
+        name: 'congresa-api',
         version: expect.stringMatching(/^\d+\.\d+\.\d+/),
         instance: 'production',
       });

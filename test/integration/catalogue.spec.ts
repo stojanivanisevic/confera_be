@@ -93,7 +93,7 @@ describe('catalogue of the migrated database (ST-07)', () => {
   it('the system role reads exactly the reviewed columns', async () => {
     const granted = await rows<{ table_name: string; column_name: string }>(
       superuser,
-      "SELECT table_name, column_name FROM information_schema.column_privileges WHERE grantee = 'confera_system' AND table_schema = 'public' ORDER BY 1, 2",
+      "SELECT table_name, column_name FROM information_schema.column_privileges WHERE grantee = 'congresa_system' AND table_schema = 'public' ORDER BY 1, 2",
     );
     const byTable: Record<string, string[]> = {};
     for (const { table_name, column_name } of granted) {
@@ -202,17 +202,17 @@ describe('catalogue of the migrated database (ST-07)', () => {
       ],
       [
         'a table grant to the system role',
-        ['GRANT SELECT ON user_roles TO confera_system'],
+        ['GRANT SELECT ON user_roles TO congresa_system'],
         /user_roles: the system role has SELECT on the whole table/,
       ],
       [
         'a column grant to the system role that is not on the list',
-        ['GRANT SELECT (password_hash) ON users TO confera_system'],
+        ['GRANT SELECT (password_hash) ON users TO congresa_system'],
         /users\.password_hash: the system role has SELECT/,
       ],
       [
         'TRUNCATE for the application role',
-        ['GRANT TRUNCATE ON users TO confera_app'],
+        ['GRANT TRUNCATE ON users TO congresa_app'],
         /users: the application role has TRUNCATE/,
       ],
       [
@@ -222,17 +222,17 @@ describe('catalogue of the migrated database (ST-07)', () => {
       ],
       [
         'a grant on the migration history',
-        ['GRANT SELECT ON _prisma_migrations TO confera_app'],
-        /_prisma_migrations: confera_app has SELECT on an owner-only table/,
+        ['GRANT SELECT ON _prisma_migrations TO congresa_app'],
+        /_prisma_migrations: congresa_app has SELECT on an owner-only table/,
       ],
       [
         'the application role as a member of the owner role',
-        ['GRANT confera_owner TO confera_app'],
-        /confera_app is a member of confera_owner/,
+        ['GRANT congresa_owner TO congresa_app'],
+        /congresa_app is a member of congresa_owner/,
       ],
       [
         'a write grant to the application role on a reference table',
-        ['GRANT INSERT ON role_permissions TO confera_app'],
+        ['GRANT INSERT ON role_permissions TO congresa_app'],
         /role_permissions: the application role has INSERT on a reference table/,
       ],
       [
@@ -263,12 +263,12 @@ describe('catalogue of the migrated database (ST-07)', () => {
       ],
       [
         'a grant to the system role on the instance table',
-        ['GRANT SELECT ON security_events TO confera_system'],
+        ['GRANT SELECT ON security_events TO congresa_system'],
         /security_events: the system role has SELECT on the whole table/,
       ],
       [
         'TRUNCATE for the application role on the audit log',
-        ['GRANT TRUNCATE ON audit_entries TO confera_app'],
+        ['GRANT TRUNCATE ON audit_entries TO congresa_app'],
         /audit_entries: the application role has TRUNCATE/,
       ],
     ])('%s', async (_name, statements, expected) => {

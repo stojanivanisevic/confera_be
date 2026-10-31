@@ -3,7 +3,7 @@ import { sendProblem, toProblem, ProblemException } from './problem';
 import { currentTraceId } from './trace';
 
 /**
- * Confera's APIs are same-origin only (ADR-07, ADR-08): no route ever grants
+ * Congresa's APIs are same-origin only (ADR-07, ADR-08): no route ever grants
  * cross-origin access, so no browser preflight can succeed.
  *
  * Express would answer an OPTIONS request for an existing path with 200 and an `Allow`

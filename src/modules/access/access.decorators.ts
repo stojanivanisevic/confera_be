@@ -16,13 +16,13 @@ import type { Access } from './access';
  *   @Permission('users.manage')   a signed-in user whose role holds the permission
  *   @Public()                     anyone: sign-in, password reset, a secure link
  *
- * Both are written into the OpenAPI document as `x-confera-access`, from which the
+ * Both are written into the OpenAPI document as `x-congresa-access`, from which the
  * authorisation matrix of the end-to-end tests is generated.
  */
-export const ROUTE_ACCESS_METADATA = 'confera:access';
+export const ROUTE_ACCESS_METADATA = 'congresa:access';
 
 /** `@FreshPassword()`: the password was asked again in this session less than 5 minutes ago. */
-export const FRESH_PASSWORD_KEY = 'confera:fresh-password';
+export const FRESH_PASSWORD_KEY = 'congresa:fresh-password';
 
 export type RouteAccess =
   | { readonly kind: 'permission'; readonly permission: PermissionName }
@@ -40,7 +40,7 @@ export function Permission(permission: PermissionName): MethodDecorator & ClassD
   const access: RouteAccess = { kind: 'permission', permission };
   return applyDecorators(
     SetMetadata(ROUTE_ACCESS_METADATA, access),
-    ApiExtension('x-confera-access', { permission }),
+    ApiExtension('x-congresa-access', { permission }),
   );
 }
 
@@ -48,7 +48,7 @@ export function Public(options: { anyOrigin?: boolean } = {}): MethodDecorator &
   const access: RouteAccess = { kind: 'public', origin: options.anyOrigin ? 'any' : 'surface' };
   return applyDecorators(
     SetMetadata(ROUTE_ACCESS_METADATA, access),
-    ApiExtension('x-confera-access', { public: true }),
+    ApiExtension('x-congresa-access', { public: true }),
   );
 }
 
@@ -60,7 +60,7 @@ export function Public(options: { anyOrigin?: boolean } = {}): MethodDecorator &
 export function FreshPassword(): MethodDecorator {
   return applyDecorators(
     SetMetadata(FRESH_PASSWORD_KEY, true),
-    ApiExtension('x-confera-fresh-password', true),
+    ApiExtension('x-congresa-fresh-password', true),
   );
 }
 

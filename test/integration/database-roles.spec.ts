@@ -56,9 +56,9 @@ const SCHEMA_CHANGES: readonly [name: string, sql: string][] = [
   ['CREATE POLICY', 'CREATE POLICY zz_open ON users USING (true)'],
   ['ALTER POLICY', 'ALTER POLICY tenant_isolation ON users USING (true)'],
   ['GRANT on a table it has no right on', 'GRANT SELECT ON _prisma_migrations TO CURRENT_USER'],
-  ['become the owner', 'SET ROLE confera_owner'],
+  ['become the owner', 'SET ROLE congresa_owner'],
   ['become the superuser', 'SET ROLE postgres'],
-  ['SET SESSION AUTHORIZATION', 'SET SESSION AUTHORIZATION confera_owner'],
+  ['SET SESSION AUTHORIZATION', 'SET SESSION AUTHORIZATION congresa_owner'],
   ['give itself BYPASSRLS', 'ALTER ROLE CURRENT_USER BYPASSRLS'],
   ['CREATE ROLE', 'CREATE ROLE zz_role'],
   ['read the migration history', 'SELECT * FROM _prisma_migrations'],
@@ -79,8 +79,8 @@ describe('database roles', () => {
   });
 
   describe.each([
-    ['application', () => testDatabase.applicationUrl, 'confera_app'],
-    ['system', () => testDatabase.systemUrl, 'confera_system'],
+    ['application', () => testDatabase.applicationUrl, 'congresa_app'],
+    ['system', () => testDatabase.systemUrl, 'congresa_system'],
   ])('the %s role cannot change the schema (ST-65, ST-08)', (_kind, address, expectedName) => {
     let client: Client;
 
@@ -165,7 +165,7 @@ describe('database roles', () => {
       try {
         const role = await describeRole(client);
         expect(role).toEqual({
-          name: 'confera_app',
+          name: 'congresa_app',
           timeZone: 'UTC',
           superuser: false,
           bypassRls: false,
@@ -205,7 +205,7 @@ describe('database roles', () => {
         const role = await describeRole(client);
         expect(role).toEqual(
           expect.objectContaining({
-            name: 'confera_system',
+            name: 'congresa_system',
             bypassRls: true,
             superuser: false,
             owner: false,
@@ -246,13 +246,13 @@ describe('database roles', () => {
   describe('the API refuses to start on a role that is too powerful (ST-08)', () => {
     const password = randomPassword();
     const roles = {
-      superuser: 'confera_test_superuser',
-      bypass: 'confera_test_bypass',
-      ownerMember: 'confera_test_owner_member',
-      creator: 'confera_test_creator',
-      temp: 'confera_test_temp',
-      createDb: 'confera_test_createdb',
-      plain: 'confera_test_plain',
+      superuser: 'congresa_test_superuser',
+      bypass: 'congresa_test_bypass',
+      ownerMember: 'congresa_test_owner_member',
+      creator: 'congresa_test_creator',
+      temp: 'congresa_test_temp',
+      createDb: 'congresa_test_createdb',
+      plain: 'congresa_test_plain',
     } as const;
 
     const drop = async (): Promise<void> => {
@@ -269,25 +269,25 @@ describe('database roles', () => {
     beforeAll(async () => {
       await drop();
       const pw = superuser.escapeLiteral(password);
-      // Each role is the application role (member of confera_app, so it has its grants)
+      // Each role is the application role (member of congresa_app, so it has its grants)
       // plus exactly one thing the application role must not have.
       await superuser.query(`CREATE ROLE ${roles.superuser} LOGIN SUPERUSER PASSWORD ${pw}`);
       await superuser.query(
-        `CREATE ROLE ${roles.bypass} LOGIN BYPASSRLS PASSWORD ${pw} IN ROLE confera_app`,
+        `CREATE ROLE ${roles.bypass} LOGIN BYPASSRLS PASSWORD ${pw} IN ROLE congresa_app`,
       );
       await superuser.query(
-        `CREATE ROLE ${roles.ownerMember} LOGIN PASSWORD ${pw} IN ROLE confera_app, confera_owner`,
+        `CREATE ROLE ${roles.ownerMember} LOGIN PASSWORD ${pw} IN ROLE congresa_app, congresa_owner`,
       );
       await superuser.query(
-        `CREATE ROLE ${roles.creator} LOGIN PASSWORD ${pw} IN ROLE confera_app`,
+        `CREATE ROLE ${roles.creator} LOGIN PASSWORD ${pw} IN ROLE congresa_app`,
       );
       await superuser.query(`GRANT CREATE ON SCHEMA public TO ${roles.creator}`);
-      await superuser.query(`CREATE ROLE ${roles.temp} LOGIN PASSWORD ${pw} IN ROLE confera_app`);
+      await superuser.query(`CREATE ROLE ${roles.temp} LOGIN PASSWORD ${pw} IN ROLE congresa_app`);
       await superuser.query(`GRANT TEMPORARY ON DATABASE ${testDatabase.name} TO ${roles.temp}`);
       await superuser.query(
-        `CREATE ROLE ${roles.createDb} LOGIN CREATEDB PASSWORD ${pw} IN ROLE confera_app`,
+        `CREATE ROLE ${roles.createDb} LOGIN CREATEDB PASSWORD ${pw} IN ROLE congresa_app`,
       );
-      await superuser.query(`CREATE ROLE ${roles.plain} LOGIN PASSWORD ${pw} IN ROLE confera_app`);
+      await superuser.query(`CREATE ROLE ${roles.plain} LOGIN PASSWORD ${pw} IN ROLE congresa_app`);
       for (const role of Object.values(roles)) {
         await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${role}`);
       }
@@ -361,19 +361,19 @@ describe('database roles', () => {
     it.each([
       [
         'a wrong password',
-        () => addressFor(testDatabase.applicationUrl, 'confera_app', `${password}-wrong`),
+        () => addressFor(testDatabase.applicationUrl, 'congresa_app', `${password}-wrong`),
       ],
       [
         'a role that does not exist',
-        () => addressFor(testDatabase.applicationUrl, 'confera_nobody', password),
+        () => addressFor(testDatabase.applicationUrl, 'congresa_nobody', password),
       ],
       [
         'a database that does not exist',
-        () => testDatabase.applicationUrl.replace(testDatabase.name, 'confera_missing_test'),
+        () => testDatabase.applicationUrl.replace(testDatabase.name, 'congresa_missing_test'),
       ],
       [
         'a server that does not answer',
-        () => 'postgresql://confera_app:invented-unreachable@127.0.0.1:1/confera',
+        () => 'postgresql://congresa_app:invented-unreachable@127.0.0.1:1/congresa',
       ],
     ])('when the database cannot be reached: %s', async (_name, address) => {
       const result = await start({ DATABASE_URL: address() });

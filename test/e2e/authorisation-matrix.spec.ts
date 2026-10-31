@@ -19,7 +19,7 @@ import { Factories } from './support/factories';
 /**
  * The authorisation matrix (M2-BE-01, M2-QA-01; ADR-05, ADR-24; FR-USR-01, NFR-SEC-01):
  * generated from the committed OpenAPI file, every operation of the admin API for five
- * actors. The operation's own declaration (`x-confera-access`: a permission, or public)
+ * actors. The operation's own declaration (`x-congresa-access`: a permission, or public)
  * says what each actor must get:
  *
  *   anonymous   401 on every route with a permission; never 401 or 403 on a public one
@@ -30,7 +30,7 @@ import { Factories } from './support/factories';
  *   adminA      never 401, 403 or 404 on the objects of A (a 400 or 409 may follow from
  *               the empty body sent here; what matters is that the door opened)
  *
- * The password asked again (`x-confera-fresh-password`) is a 403 of its own for an admin
+ * The password asked again (`x-congresa-fresh-password`) is a 403 of its own for an admin
  * who has not given it, so the matrix gives it first.
  */
 interface Operation {
@@ -54,13 +54,13 @@ const OPERATIONS: Operation[] = Object.entries(document.paths).flatMap(([path, i
   Object.entries(item)
     .filter(([method]) => ['get', 'post', 'put', 'patch', 'delete'].includes(method))
     .map(([method, operation]) => {
-      const access = operation['x-confera-access'] as { permission?: string; public?: boolean };
+      const access = operation['x-congresa-access'] as { permission?: string; public?: boolean };
       return {
         id: String(operation.operationId),
         method: method as Operation['method'],
         path,
         permission: access.permission ?? null,
-        freshPassword: operation['x-confera-fresh-password'] === true,
+        freshPassword: operation['x-congresa-fresh-password'] === true,
         hasBody: operation.requestBody !== undefined,
       };
     }),
@@ -352,7 +352,7 @@ describe('the authorisation matrix of the admin API', () => {
   it('every operation of the document declares who may call it', () => {
     expect(OPERATIONS.length).toBeGreaterThan(20);
     for (const operation of OPERATIONS) {
-      const access = document.paths[operation.path]?.[operation.method]?.['x-confera-access'];
+      const access = document.paths[operation.path]?.[operation.method]?.['x-congresa-access'];
       expect({ operation, declared: access !== undefined }).toEqual({ operation, declared: true });
     }
   });

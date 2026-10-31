@@ -25,7 +25,7 @@ export const LINK_SENTINEL = `${String.fromCharCode(1)}link${String.fromCharCode
 
 /** The content id of an email image inside a message (an inline part, ADR-12). */
 export function contentIdOf(fileId: string): string {
-  return `${fileId}@confera`;
+  return `${fileId}@congresa`;
 }
 
 /** What a message is, as far as its composition needs it: a row of the outbox, or one about to be. */

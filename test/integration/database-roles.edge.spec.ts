@@ -26,7 +26,7 @@ import {
  * `SET ROLE`, and then the attributes of that role apply: row-level security is gone for
  * the rest of the session, and the session is a pooled connection.
  *
- * So `GRANT confera_system TO confera_app` (or a grant of any superuser role), which is
+ * So `GRANT congresa_system TO congresa_app` (or a grant of any superuser role), which is
  * exactly the kind of mistake the check exists for, leaves an application role that the
  * check accepts and that reads every organisation.
  */
@@ -39,13 +39,13 @@ describe('edge cases of the start-up role check (M1-REV-01)', () => {
   const password = randomPassword();
   const roles = {
     /** NOLOGIN, SUPERUSER: stands for `postgres` or any other superuser role of a server. */
-    superuser: 'confera_test_edge_superuser',
+    superuser: 'congresa_test_edge_superuser',
     /** The application role plus membership in the system role, which may bypass the policies. */
-    appInSystem: 'confera_test_edge_app_in_system',
+    appInSystem: 'congresa_test_edge_app_in_system',
     /** The application role plus membership in a superuser role. */
-    appInSuperuser: 'confera_test_edge_app_in_superuser',
+    appInSuperuser: 'congresa_test_edge_app_in_superuser',
     /** The system role plus membership in a superuser role. */
-    systemInSuperuser: 'confera_test_edge_system_in_superuser',
+    systemInSuperuser: 'congresa_test_edge_system_in_superuser',
   } as const;
 
   let superuser: Client;
@@ -67,13 +67,13 @@ describe('edge cases of the start-up role check (M1-REV-01)', () => {
     const pw = superuser.escapeLiteral(password);
     await superuser.query(`CREATE ROLE ${roles.superuser} NOLOGIN SUPERUSER`);
     await superuser.query(
-      `CREATE ROLE ${roles.appInSystem} LOGIN PASSWORD ${pw} IN ROLE confera_app, confera_system`,
+      `CREATE ROLE ${roles.appInSystem} LOGIN PASSWORD ${pw} IN ROLE congresa_app, congresa_system`,
     );
     await superuser.query(
-      `CREATE ROLE ${roles.appInSuperuser} LOGIN PASSWORD ${pw} IN ROLE confera_app, ${roles.superuser}`,
+      `CREATE ROLE ${roles.appInSuperuser} LOGIN PASSWORD ${pw} IN ROLE congresa_app, ${roles.superuser}`,
     );
     await superuser.query(
-      `CREATE ROLE ${roles.systemInSuperuser} LOGIN PASSWORD ${pw} IN ROLE confera_system, ${roles.superuser}`,
+      `CREATE ROLE ${roles.systemInSuperuser} LOGIN PASSWORD ${pw} IN ROLE congresa_system, ${roles.superuser}`,
     );
     for (const role of [roles.appInSystem, roles.appInSuperuser, roles.systemInSuperuser]) {
       await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${role}`);
@@ -93,7 +93,7 @@ describe('edge cases of the start-up role check (M1-REV-01)', () => {
       // As the application role: no organisation set, no rows (the backstop holds) ...
       expect(await rows(client, 'SELECT id FROM users')).toHaveLength(0);
       // ... until it becomes the role it is a member of.
-      await client.query('SET ROLE confera_system');
+      await client.query('SET ROLE congresa_system');
       expect(await rows(client, 'SELECT id, organisation_id, email FROM users')).toHaveLength(5);
     } finally {
       await client.end();

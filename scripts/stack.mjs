@@ -8,7 +8,7 @@
 //   corepack pnpm stack:info      says the name, the ports and the folder of this checkout's stack
 //   corepack pnpm stack:clamd     runs the fake clamd in this terminal instead of in Docker
 //
-// The fake clamd (scripts/fake-clamd.mjs) is optional: CONFERA_FAKE_CLAMD=off in .env leaves it
+// The fake clamd (scripts/fake-clamd.mjs) is optional: CONGRESA_FAKE_CLAMD=off in .env leaves it
 // out of stack:up, and then every uploaded file stays "scan pending" (fail closed). It is on by
 // default, and .env.example points CLAMAV_ADDRESS at it.
 //
@@ -46,16 +46,16 @@ function refuse(command, message) {
 /** The Compose profile of the fake clamd, an optional service of docker-compose.yml. */
 const CLAMD_PROFILE = 'fake-clamd';
 
-/** Whether stack:up starts the fake clamd: on unless CONFERA_FAKE_CLAMD=off. */
+/** Whether stack:up starts the fake clamd: on unless CONGRESA_FAKE_CLAMD=off. */
 function fakeClamdWanted(env = process.env) {
-  const value = env.CONFERA_FAKE_CLAMD;
+  const value = env.CONGRESA_FAKE_CLAMD;
   if (value === undefined || value === '' || value === 'on') {
     return true;
   }
   if (value === 'off') {
     return false;
   }
-  throw new StackRefusal('CONFERA_FAKE_CLAMD must be "on" or "off".');
+  throw new StackRefusal('CONGRESA_FAKE_CLAMD must be "on" or "off".');
 }
 
 /** The variables docker-compose.yml needs, for this checkout. */
@@ -65,11 +65,11 @@ function composeEnvironment(name, ports, withClamd) {
   return {
     ...environment,
     ...(withClamd ? { COMPOSE_PROFILES: CLAMD_PROFILE } : {}),
-    CONFERA_STACK_NAME: name,
-    CONFERA_DB_PORT: String(ports.database),
-    CONFERA_MAIL_WEB_PORT: String(ports.mailWeb),
-    CONFERA_MAIL_SMTP_PORT: String(ports.mailSmtp),
-    CONFERA_CLAMD_PORT: String(ports.clamd),
+    CONGRESA_STACK_NAME: name,
+    CONGRESA_DB_PORT: String(ports.database),
+    CONGRESA_MAIL_WEB_PORT: String(ports.mailWeb),
+    CONGRESA_MAIL_SMTP_PORT: String(ports.mailSmtp),
+    CONGRESA_CLAMD_PORT: String(ports.clamd),
   };
 }
 
@@ -96,7 +96,7 @@ function describe(name, ports, withClamd = fakeClamdWanted()) {
     `  mail catcher http://127.0.0.1:${ports.mailWeb} (web), 127.0.0.1:${ports.mailSmtp} (SMTP)`,
     withClamd
       ? `  fake clamd   127.0.0.1:${ports.clamd} (every file clean but EICAR; development only)`
-      : '  fake clamd   off (CONFERA_FAKE_CLAMD=off): uploaded files stay "scan pending"',
+      : '  fake clamd   off (CONGRESA_FAKE_CLAMD=off): uploaded files stay "scan pending"',
   ].join('\n');
 }
 
@@ -222,15 +222,15 @@ async function ports() {
         throw new StackRefusal(`${variable} in .env is not a valid address.`);
       }
     }
-    if (variable === 'CONFERA_MAIL_WEB_PORT') {
+    if (variable === 'CONGRESA_MAIL_WEB_PORT') {
       found.add(variable);
       return `${variable}=${chosen.mailWeb}`;
     }
-    if (variable === 'CONFERA_MAIL_SMTP_PORT') {
+    if (variable === 'CONGRESA_MAIL_SMTP_PORT') {
       found.add(variable);
       return `${variable}=${chosen.mailSmtp}`;
     }
-    if (variable === 'CONFERA_CLAMD_PORT') {
+    if (variable === 'CONGRESA_CLAMD_PORT') {
       found.add(variable);
       return `${variable}=${chosen.clamd}`;
     }
@@ -244,17 +244,17 @@ async function ports() {
       throw new StackRefusal(`${variable} is missing in .env. Compare .env with .env.example.`);
     }
   }
-  if (!found.has('CONFERA_MAIL_WEB_PORT')) {
+  if (!found.has('CONGRESA_MAIL_WEB_PORT')) {
     changed.push('# Port of the web screen of the mail catcher (written by stack:ports).');
-    changed.push(`CONFERA_MAIL_WEB_PORT=${chosen.mailWeb}`);
+    changed.push(`CONGRESA_MAIL_WEB_PORT=${chosen.mailWeb}`);
   }
-  if (!found.has('CONFERA_MAIL_SMTP_PORT')) {
+  if (!found.has('CONGRESA_MAIL_SMTP_PORT')) {
     changed.push('# SMTP port of the mail catcher (written by stack:ports).');
-    changed.push(`CONFERA_MAIL_SMTP_PORT=${chosen.mailSmtp}`);
+    changed.push(`CONGRESA_MAIL_SMTP_PORT=${chosen.mailSmtp}`);
   }
-  if (!found.has('CONFERA_CLAMD_PORT')) {
+  if (!found.has('CONGRESA_CLAMD_PORT')) {
     changed.push('# Port of the fake clamd on 127.0.0.1 (written by stack:ports).');
-    changed.push(`CONFERA_CLAMD_PORT=${chosen.clamd}`);
+    changed.push(`CONGRESA_CLAMD_PORT=${chosen.clamd}`);
   }
   writeFileSync(ENV_FILE, changed.join('\n'));
   process.stdout.write(

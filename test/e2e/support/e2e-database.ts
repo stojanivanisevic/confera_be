@@ -19,19 +19,19 @@ function required(name: string): string {
 
 export const e2eDatabase = {
   get name(): string {
-    return required('CONFERA_E2E_DATABASE');
+    return required('CONGRESA_E2E_DATABASE');
   },
-  /** Address as confera_app: what the application under test uses. */
+  /** Address as congresa_app: what the application under test uses. */
   get applicationUrl(): string {
-    return required('CONFERA_E2E_APPLICATION_URL');
+    return required('CONGRESA_E2E_APPLICATION_URL');
   },
-  /** Address as confera_system: the resolvers of the application under test. */
+  /** Address as congresa_system: the resolvers of the application under test. */
   get systemUrl(): string {
-    return required('CONFERA_E2E_SYSTEM_URL');
+    return required('CONGRESA_E2E_SYSTEM_URL');
   },
-  /** Address as confera_owner: fixtures and the seed. */
+  /** Address as congresa_owner: fixtures and the seed. */
   get ownerUrl(): string {
-    return required('CONFERA_E2E_OWNER_URL');
+    return required('CONGRESA_E2E_OWNER_URL');
   },
 };
 

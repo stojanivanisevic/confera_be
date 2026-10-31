@@ -29,8 +29,8 @@ import {
  * 15, FR-SUB-01, 02, 04, FR-DL-01 to 03, FR-MAIL-04; ST-31, ST-34, ST-35, ST-41), on a
  * developer stage so that the confirmation travels through Mailpit.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 
 interface MailpitMessage {
   ID: string;
@@ -268,7 +268,7 @@ describe('forms and intake (M3)', () => {
         e2e
           .http()
           .post(path)
-          .set('Host', 'forms.confera.test')
+          .set('Host', 'forms.congresa.test')
           .set('Content-Type', 'application/json'),
       ];
       for (const attempt of attempts) {
@@ -287,7 +287,7 @@ describe('forms and intake (M3)', () => {
       const options = await e2e
         .http()
         .options(path)
-        .set('Host', 'forms.confera.test')
+        .set('Host', 'forms.congresa.test')
         .set('Origin', harness);
       expect(options.status).toBe(405);
       // An admin's session cookie on /public is not read: the request is anonymous.
@@ -675,7 +675,7 @@ describe('forms and intake (M3)', () => {
         e2e,
         form.slug,
         trapped.formToken,
-        { language: 'en', answers: abstractAnswers(), confera_hp: 'https://spam.example.test' },
+        { language: 'en', answers: abstractAnswers(), congresa_hp: 'https://spam.example.test' },
         { address },
       );
       expect(trap.status).toBe(201);
@@ -900,7 +900,7 @@ describe('forms and intake (M3)', () => {
           e2e,
           form.slug,
           trapped.formToken,
-          { language: 'en', answers: abstractAnswers(), confera_hp: 'x' },
+          { language: 'en', answers: abstractAnswers(), congresa_hp: 'x' },
           { address },
         );
       }
@@ -934,7 +934,7 @@ describe('forms and intake (M3)', () => {
       const trapped = await tokenFor(e2e, form.slug, address);
       await ageTokens(owner, orgA());
       const key = randomUUID();
-      const body = { language: 'en', answers: abstractAnswers(), confera_hp: 'x' };
+      const body = { language: 'en', answers: abstractAnswers(), congresa_hp: 'x' };
       const references = new Set<string>();
       // The page keeps its key per form instance: Send, Send, Send. The repeats answer the
       // first fake success, and each is an act of a script as the first was.

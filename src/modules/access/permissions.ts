@@ -1,5 +1,5 @@
 /**
- * The permissions of Confera (ADR-05, FR-USR-01): code constants. A route names the one
+ * The permissions of Congresa (ADR-05, FR-USR-01): code constants. A route names the one
  * it needs (`@Permission(...)`), or says that it is public (`@Public()`); a route that
  * does neither stops the start (route-access.ts).
  *

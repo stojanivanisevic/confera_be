@@ -2,15 +2,15 @@ import type { Request, Response } from 'express';
 import { isToken } from './tokens';
 
 /**
- * The two cookies of Confera (ADR-03, SEC-A-50, ST-13, ST-66). Both carry the `__Host-`
+ * The two cookies of Congresa (ADR-03, SEC-A-50, ST-13, ST-66). Both carry the `__Host-`
  * prefix, which a browser accepts only from the host itself, with `Secure`, `Path=/` and
  * no `Domain`: a page of the public host (or any other host of the parent domain) cannot
  * set or overwrite them. The API reads exactly these names and nothing else, so a cookie
  * planted for the parent domain under another name is ignored. No CSRF value lives in a
  * cookie.
  */
-export const SESSION_COOKIE = '__Host-confera_session';
-export const DEVICE_COOKIE = '__Host-confera_device';
+export const SESSION_COOKIE = '__Host-congresa_session';
+export const DEVICE_COOKIE = '__Host-congresa_device';
 
 /** A known device stays known for a year after its last sign-in. */
 export const DEVICE_COOKIE_SECONDS = 365 * 24 * 60 * 60;

@@ -6,13 +6,13 @@
 // neither can stop, empty or drop the database of the other.
 //
 //   - The NAME of the project is derived from the folder of the checkout
-//     (`confera-<folder>-<8 hex digits of its path>`), or set with CONFERA_STACK_NAME.
+//     (`congresa-<folder>-<8 hex digits of its path>`), or set with CONGRESA_STACK_NAME.
 //   - The PORTS are what .env says: the port of the three database addresses (they must
-//     agree), CONFERA_MAIL_WEB_PORT, CONFERA_MAIL_SMTP_PORT and CONFERA_CLAMD_PORT (the fake
+//     agree), CONGRESA_MAIL_WEB_PORT, CONGRESA_MAIL_SMTP_PORT and CONGRESA_CLAMD_PORT (the fake
 //     clamd). `stack:ports` writes a free set derived from the checkout into .env.
 //   - Every command that uses the database first asks Docker which container publishes
 //     the port of its address, and refuses when that container belongs to another
-//     checkout, or to no Confera stack at all.
+//     checkout, or to no Congresa stack at all.
 //
 // Plain Node, no dependencies; the Docker command line is the only thing it calls.
 import { execFileSync } from 'node:child_process';
@@ -50,16 +50,16 @@ export function comparablePath(value) {
 }
 
 /**
- * The name of the Compose project of a checkout: CONFERA_STACK_NAME when it is set, else
- * `confera-<folder>-<the first 8 hex digits of the SHA-256 of its path>`. Two checkouts in
+ * The name of the Compose project of a checkout: CONGRESA_STACK_NAME when it is set, else
+ * `congresa-<folder>-<the first 8 hex digits of the SHA-256 of its path>`. Two checkouts in
  * two folders get two names, also when the folders have the same name.
  */
 export function stackName(env = process.env, root = repoRoot) {
-  const chosen = env.CONFERA_STACK_NAME;
+  const chosen = env.CONGRESA_STACK_NAME;
   if (chosen !== undefined && chosen !== '') {
     if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(chosen)) {
       throw new StackRefusal(
-        'CONFERA_STACK_NAME must be lower-case letters, digits, "-" and "_", starting with a letter or a digit.',
+        'CONGRESA_STACK_NAME must be lower-case letters, digits, "-" and "_", starting with a letter or a digit.',
       );
     }
     return chosen;
@@ -70,11 +70,12 @@ export function stackName(env = process.env, root = repoRoot) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
+      // The repository, and so the folder of a checkout, keeps the name confera_be.
       .replace(/^confera-?/, '')
       .slice(0, 24)
       .replace(/-+$/, '') || 'checkout';
   const digest = createHash('sha256').update(comparablePath(root)).digest('hex').slice(0, 8);
-  return `confera-${folder}-${digest}`;
+  return `congresa-${folder}-${digest}`;
 }
 
 /** A port number written in a variable, or the standard one when the variable is not set. */
@@ -128,9 +129,9 @@ export function stackPorts(env = process.env) {
   }
   const ports = {
     database: [...databasePorts][0] ?? STANDARD_PORTS.database,
-    mailWeb: portOf(env, 'CONFERA_MAIL_WEB_PORT', STANDARD_PORTS.mailWeb),
-    mailSmtp: portOf(env, 'CONFERA_MAIL_SMTP_PORT', STANDARD_PORTS.mailSmtp),
-    clamd: portOf(env, 'CONFERA_CLAMD_PORT', STANDARD_PORTS.clamd),
+    mailWeb: portOf(env, 'CONGRESA_MAIL_WEB_PORT', STANDARD_PORTS.mailWeb),
+    mailSmtp: portOf(env, 'CONGRESA_MAIL_SMTP_PORT', STANDARD_PORTS.mailSmtp),
+    clamd: portOf(env, 'CONGRESA_CLAMD_PORT', STANDARD_PORTS.clamd),
   };
   if (new Set(Object.values(ports)).size !== 4) {
     throw new StackRefusal(
@@ -239,7 +240,7 @@ export function foreignOwner({ port, containers, root = repoRoot, what }) {
 
 /**
  * Refuses when the database a variable points at belongs to the stack of another checkout,
- * or to a container that is not a Confera stack at all. An address that is not on this
+ * or to a container that is not a Congresa stack at all. An address that is not on this
  * machine (a server, PROVISION_DATABASE_URL) is not the development stack and is not judged.
  */
 export function assertOwnDatabase(variables, env = process.env, root = repoRoot) {

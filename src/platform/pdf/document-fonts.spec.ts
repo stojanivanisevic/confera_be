@@ -357,7 +357,7 @@ describe('rendered documents', () => {
     // path and not about the picture.
     const PIXEL =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-    const directory = mkdtempSync(join(tmpdir(), 'confera-pdf-image-'));
+    const directory = mkdtempSync(join(tmpdir(), 'congresa-pdf-image-'));
     const file = join(directory, 'pixel.png');
     const DENIED = /denied by resource access policy/;
 

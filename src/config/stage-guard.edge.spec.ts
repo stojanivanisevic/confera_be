@@ -40,7 +40,7 @@ describe('edge cases of the STAGE guard (M1-REV-01)', () => {
         ['every IPv6 address', '::'],
         ['an address of the local network', '192.168.1.20'],
         ['a private address of a server', '10.0.0.5'],
-        ['a public host name', 'confera.example.org'],
+        ['a public host name', 'congresa.example.org'],
       ])('refuses LISTEN_HOST set to %s', (_what, listenHost) => {
         expect(refused(onDeveloperMachine(listenHost))).toEqual(['LISTEN_HOST']);
       });
