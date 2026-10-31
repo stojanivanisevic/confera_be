@@ -1,6 +1,6 @@
 # confera_be
 
-The API of **Confera**, the web application for the conferences and membership of the
+The API of **Congresa**, the web application for the conferences and membership of the
 association UdEkoM Balkans. NestJS 12, Prisma 7 and PostgreSQL 18, written in strict
 TypeScript. The web application lives in the repository `confera_fe`.
 
@@ -93,11 +93,11 @@ string, which it reports as infected, like the test double of the tests
 (`test/support/fake-clamd.ts`). `.env.example` points `CLAMAV_ADDRESS` at it, so it is the
 default for local development and for the browser tests of `confera_fe` against this API.
 
-- It is optional: `CONFERA_FAKE_CLAMD=off` in `.env` leaves it out of `stack:up`, and every
+- It is optional: `CONGRESA_FAKE_CLAMD=off` in `.env` leaves it out of `stack:up`, and every
   file then stays "scan pending", as on a server whose ClamAV is down. `corepack pnpm
 stack:clamd` runs it in a terminal instead of Docker.
 - An `.env` copied before 0.4.0 has no `CLAMAV_ADDRESS`: `stack:up` then ends with a note.
-  Add `CLAMAV_ADDRESS=127.0.0.1:3310` (or the `CONFERA_CLAMD_PORT` of this checkout) and
+  Add `CLAMAV_ADDRESS=127.0.0.1:3310` (or the `CONGRESA_CLAMD_PORT` of this checkout) and
   restart the API.
 - It never reaches a server: no image holds the file, the production topology
   (`deploy/compose.yml`) runs the real ClamAV, the API on `STAGE=prod` refuses the fake's
@@ -115,10 +115,10 @@ corepack pnpm db:migrate
 `db:provision` ends with these lines:
 
 ```
-Database "confera" is provisioned.
-  owner        confera_owner  (migrations only)
-  application  confera_app  (no schema rights, bound by row-level security)
-  system       confera_system  (resolvers only, may bypass row-level security)
+Database "congresa" is provisioned.
+  owner        congresa_owner  (migrations only)
+  application  congresa_app  (no schema rights, bound by row-level security)
+  system       congresa_system  (resolvers only, may bypass row-level security)
 Next: corepack pnpm db:migrate
 ```
 
@@ -139,7 +139,7 @@ corepack pnpm seed:e2e
 ```
 
 It ends with
-`seed:e2e: 2 organisations and 4 invented people on example.test are in the database "confera" (STAGE=local).`
+`seed:e2e: 2 organisations and 4 invented people on example.test are in the database "congresa" (STAGE=local).`
 The admin of organisation A is `zivana.djordjevic@a.example.test`; every person's invented
 password is in `test/e2e/seed/e2e-seed.json` (section 9). It is safe to run again, and it
 refuses to run unless `STAGE` is `local` or `test`. It creates no mail server: to receive
@@ -155,12 +155,12 @@ corepack pnpm start
 
 The log is JSON lines and ends with `"msg":"api.started"`. In a second terminal:
 
-| Open                                 | You get                                                |
-| ------------------------------------ | ------------------------------------------------------ |
-| <http://localhost:3001/health>       | `{"status":"ok"}`                                      |
-| <http://localhost:3001/health/ready> | `{"status":"ok"}` (the database answers)               |
-| <http://localhost:3001/api/v1/meta>  | `{"name":"confera-api","version":"…","instance":null}` |
-| <http://127.0.0.1:3001/api/v1/meta>  | **404** `not_found`. That is right: section 5          |
+| Open                                 | You get                                                 |
+| ------------------------------------ | ------------------------------------------------------- |
+| <http://localhost:3001/health>       | `{"status":"ok"}`                                       |
+| <http://localhost:3001/health/ready> | `{"status":"ok"}` (the database answers)                |
+| <http://localhost:3001/api/v1/meta>  | `{"name":"congresa-api","version":"…","instance":null}` |
+| <http://127.0.0.1:3001/api/v1/meta>  | **404** `not_found`. That is right: section 5           |
 
 `version` is the version of this checkout, the `version` of `package.json`; `instance` is
 `null` on a developer machine (`staging` or `production` on a server: the staging banner).
@@ -168,7 +168,7 @@ The log is JSON lines and ends with `"msg":"api.started"`. In a second terminal:
 Stop the API with Ctrl+C.
 
 **Step 7. Run the tests that need the database.** They build the application, create a
-database of their own (`confera_integration_test`) with the same two commands as step 5,
+database of their own (`congresa_integration_test`) with the same two commands as step 5,
 and leave your development database alone. `test:int` takes about 4 minutes on a quiet
 machine and about 12 minutes on a loaded one (0.3.0).
 
@@ -179,7 +179,7 @@ corepack pnpm test:int
 It ends with `Tests: ... passed` and no failure.
 
 **Step 8. Run the end-to-end tests.** They start the real application on a database of
-their own (`confera_e2e_test`), created with the same two commands as step 5, and send
+their own (`congresa_e2e_test`), created with the same two commands as step 5, and send
 HTTP requests to it. They also talk to the mail catcher. About 8 minutes on a quiet
 machine and about 22 minutes on a loaded one (0.3.0).
 
@@ -207,14 +207,14 @@ volume and ports. Two checkouts can run their test suites at the same time, and 
 can stop, empty or drop the database of the other.
 
 - **The name** of the project is derived from the folder of the checkout:
-  `confera-<folder>-<8 hex digits of its path>`, for example `confera-be-m2-c62fdd52`.
-  Set `CONFERA_STACK_NAME` in `.env` to choose another. `corepack pnpm stack:info` shows
+  `congresa-<folder>-<8 hex digits of its path>`, for example `congresa-be-m2-c62fdd52`.
+  Set `CONGRESA_STACK_NAME` in `.env` to choose another. `corepack pnpm stack:info` shows
   name, folder and ports. The containers are `<name>-postgres-1`, `<name>-mailpit-1` and
   `<name>-fake-clamd-1`, the volume `<name>_pgdata`.
 - **The ports** are what `.env` says: PostgreSQL listens on the port of the three database
   addresses (`DATABASE_URL`, `SYSTEM_DATABASE_URL`, `MIGRATION_DATABASE_URL`, which must
-  name the same port), the mail catcher on `CONFERA_MAIL_WEB_PORT` and
-  `CONFERA_MAIL_SMTP_PORT`, the fake clamd on `CONFERA_CLAMD_PORT`. A fresh `.env` has 5432,
+  name the same port), the mail catcher on `CONGRESA_MAIL_WEB_PORT` and
+  `CONGRESA_MAIL_SMTP_PORT`, the fake clamd on `CONGRESA_CLAMD_PORT`. A fresh `.env` has 5432,
   8025, 1025 and 3310. **On a second checkout run `corepack pnpm stack:ports`**: it writes a
   free set derived from the folder (25000 + n, 26000 + n, 27000 + n, 28000 + n) into those
   lines of `.env` and into `CLAMAV_ADDRESS`, and changes nothing else. The API
@@ -224,8 +224,8 @@ can stop, empty or drop the database of the other.
   `db:migrate`, `db:status`, `db:diff`, `seed:e2e`, `start`, `start:dev`, `test:int` and
   `test:e2e` first ask Docker which container publishes the port of their database
   address, and refuse when it belongs to the stack of another checkout, or to a container
-  that is no Confera stack at all: `... did not run: the database of DATABASE_URL at
-127.0.0.1:5432 belongs to the stack "confera-be-1a2b3c4d" of another checkout,
+  that is no Congresa stack at all: `... did not run: the database of DATABASE_URL at
+127.0.0.1:5432 belongs to the stack "congresa-be-1a2b3c4d" of another checkout,
 D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisioned or
   dropped. An address that is not on this machine is not the development stack and is
   not judged.
@@ -235,6 +235,13 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
   `confera-mailpit` and the volume `confera_pgdata`. When no checkout of 0.1.0 needs them
   any more: `docker rm -f confera-postgres confera-mailpit` and
   `docker volume rm confera_pgdata`.
+- Stacks started before the rename to Congresa (0.4.0) are named `confera-<folder>-<hash>`,
+  and `stack:down` and `stack:wipe` no longer see them. Stop the old one before `stack:up`
+  (`docker rm -f <old name>-postgres-1 <old name>-mailpit-1 <old name>-fake-clamd-1`); its
+  volume `<old name>_pgdata` holds the database of the old role names. Remove it with
+  `docker volume rm` when nothing needs it any more. A `.env` copied before the rename names
+  the old roles and `CONFERA_*` variables: copy `.env.example` again (and run `stack:ports`
+  again on a second checkout).
 
 ## 3. Commands
 
@@ -253,7 +260,7 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
 | `corepack pnpm lint` / `format`                                 | ESLint; Prettier (writes).                                                                                                                                                                                                                                                                            |
 | `corepack pnpm typecheck`                                       | `tsc --noEmit` over sources and tests.                                                                                                                                                                                                                                                                |
 | `corepack pnpm stack:up` / `stack:down`                         | Starts and stops PostgreSQL, Mailpit and the fake clamd in Docker: the stack of this checkout (section 2, "One stack per checkout").                                                                                                                                                                  |
-| `corepack pnpm stack:clamd`                                     | Runs the fake clamd (section 2, step 4) in this terminal instead of Docker, on `CONFERA_CLAMD_PORT`. Stop with Ctrl+C.                                                                                                                                                                                |
+| `corepack pnpm stack:clamd`                                     | Runs the fake clamd (section 2, step 4) in this terminal instead of Docker, on `CONGRESA_CLAMD_PORT`. Stop with Ctrl+C.                                                                                                                                                                               |
 | `corepack pnpm stack:wipe`                                      | Stops the stack of this checkout and removes its database volume.                                                                                                                                                                                                                                     |
 | `corepack pnpm stack:ports`                                     | Writes a free set of ports, derived from the folder of the checkout, into `.env`. For a second checkout on the same machine.                                                                                                                                                                          |
 | `corepack pnpm stack:info`                                      | Says the name, the folder and the ports of the stack of this checkout.                                                                                                                                                                                                                                |
@@ -268,7 +275,7 @@ D:\Code\confera_be, not to this checkout, ...`. Nothing is connected to, provisi
 | `corepack pnpm db:diff`                                         | Prints the SQL that would take the development database to `prisma/schema.prisma`: the start of a new migration.                                                                                                                                                                                      |
 | `corepack pnpm openapi:generate`                                | Writes `openapi/openapi.json` and `openapi/openapi.public.json` from the code.                                                                                                                                                                                                                        |
 | `corepack pnpm openapi:check`                                   | Fails when those files differ from the code, or a response property is named like a secret.                                                                                                                                                                                                           |
-| `corepack pnpm pdf:sample`                                      | Writes the bilingual sample PDF to `tmp/confera-pdf-sample.pdf`.                                                                                                                                                                                                                                      |
+| `corepack pnpm pdf:sample`                                      | Writes the bilingual sample PDF to `tmp/congresa-pdf-sample.pdf`.                                                                                                                                                                                                                                     |
 | `corepack pnpm supply-chain`                                    | Pinned versions, frozen lockfile, `pnpm audit` (fails on high), secret scan, image digests.                                                                                                                                                                                                           |
 
 ## 4. Configuration, STAGE and INSTANCE
@@ -320,7 +327,7 @@ not contain their code, and a test of the built application proves it.
 
 ## 5. Two surfaces, two host names
 
-Confera has an **admin** surface (`/api/v1/...`) and a **public** surface
+Congresa has an **admin** surface (`/api/v1/...`) and a **public** surface
 (`/public/v1/...`), each under its own host name (ADR-02). The API enforces it itself: a
 route asked under the other host name is answered `404 not_found`, exactly like a route
 that does not exist. `/health` answers under any name.
@@ -346,18 +353,18 @@ permission, `@Public()` for sign-in, a password reset, a secure link, a browser'
 The permissions are the code constants of `src/modules/access/permissions.ts`; which role
 holds which is seeded by migration (`role_permissions`), and an integration test keeps
 the two equal. The OpenAPI document carries the declaration of every operation
-(`x-confera-access`, `x-confera-fresh-password`); the authorisation matrix of
+(`x-congresa-access`, `x-congresa-fresh-password`); the authorisation matrix of
 `test/e2e/authorisation-matrix.spec.ts` is generated from it for five actors.
 
 - **Sign-in** (`POST /api/v1/session`, ADR-03): the session is a random token in the
-  cookie `__Host-confera_session` (HttpOnly, Secure, SameSite=Lax, Path=/, no Domain);
+  cookie `__Host-congresa_session` (HttpOnly, Secure, SameSite=Lax, Path=/, no Domain);
   the table holds its SHA-256. A new token at every sign-in. The answer holds the user,
   the organisation, the permissions and the **CSRF value** of the session, which every
   changing request sends in `X-CSRF-Token`; it is bound to the session and never in a
   cookie. A changing request must also carry an `Origin` equal to the origin of its
   surface, exactly; the public host's origin is refused on the admin surface.
 - **Lifetime:** a session ends 24 hours after its last use, and at the latest 7 days
-  after sign-in (G2-24). Use renews it; a request with the header `X-Confera-Background`
+  after sign-in (G2-24). Use renews it; a request with the header `X-Congresa-Background`
   (a refetch the person did not ask for) does not. Sign-out, "sign out everywhere", an
   own password change (the other sessions), a reset or an email change (all), a change of
   role, a deactivation, a removal and an admin's "end this user's sessions" end sessions
@@ -371,7 +378,7 @@ the two equal. The OpenAPI document carries the declaration of every operation
 - **The brake** (`src/modules/access/brake.service.ts`, SEC-A-14): failed sign-ins slow
   an account and an address down, never lock them: 5 free failures per account and 20 per
   address in an hour, then a wait of 30 s that doubles up to 15 minutes. A browser that
-  signed in before (the cookie `__Host-confera_device`, bound to the account) is exempt
+  signed in before (the cookie `__Host-congresa_device`, bound to the account) is exempt
   from the account's brake only. The owner is told by mail at most once a day. Sign-in and
   a reset request answer every failure alike, and not sooner than 300 ms.
 - **The client address** is what the one proxy in front of the API writes into
@@ -427,7 +434,7 @@ the two equal. The OpenAPI document carries the declaration of every operation
   it. Every message then goes to the catcher only, in clear and without a login: the rules
   of the configured server are still checked, but it is neither resolved nor reached; the
   envelope and the `To` address are `catcher@staging.invalid` (the original recipient is
-  the display name and the header `X-Confera-Original-Recipient`), the subject starts with
+  the display name and the header `X-Congresa-Original-Recipient`), the subject starts with
   `[STAGING]`, and the mail log keeps the original recipient with `diverted: true`.
   `GET /api/v1/meta` says `instance` (`staging`, `production`, or null on a developer
   machine) for the staging banner of the web application.
@@ -540,14 +547,14 @@ the two equal. The OpenAPI document carries the declaration of every operation
   | `GET /public/v1/forms/{slug}/frame-sites`  | the conference's listed sites for `frame-ancestors` of the frame page, each checked again; none unless the conference is open (ADR-07) |
   | `POST /public/v1/forms/{slug}/tokens`      | a single-use form token (JSON body `{}`), valid 6 hours; under load with a proof-of-work                                               |
   | `POST /public/v1/forms/{slug}/uploads`     | one file: multipart, parts `field` then `file`; header `X-Form-Token`                                                                  |
-  | `POST /public/v1/forms/{slug}/submissions` | JSON `{ language, answers, confera_hp, proofOfWork? }`; headers `X-Form-Token` and `Idempotency-Key` (a UUID per form instance)        |
+  | `POST /public/v1/forms/{slug}/submissions` | JSON `{ language, answers, congresa_hp, proofOfWork? }`; headers `X-Form-Token` and `Idempotency-Key` (a UUID per form instance)       |
 
   Every POST needs `Origin` equal to `PUBLIC_ORIGIN`, `Sec-Fetch-Site: same-origin` where the
   browser sends it, and exactly its content type (415 otherwise); `/public` never reads the
   session cookie and no response carries a CORS grant. The token is random, only its SHA-256
   is stored, it works for one submit (409 `form_token_used`), and its uploads are bound to it
   (as many as the version has file fields, plus two). A repeat with the same idempotency key
-  returns the first result (409 `idempotency_key_reused` with other answers). `confera_hp` is
+  returns the first result (409 `idempotency_key_reused` with other answers). `congresa_hp` is
   the trap field, a name no autofill fills (SEC-M3-07; the 0.3.0 alias `website` is gone since
   0.4.0, M3-ISS-19): filled, or a submit within 3 s of the token, is answered
   with a fake success and stores nothing. **A refused token is renewed**: after 403 `form_token_invalid`
@@ -699,9 +706,9 @@ sessions and secure links.
 | Secret                             | Where it lives                         | Who holds it                     | Backup                             | Rotation                                                           |
 | ---------------------------------- | -------------------------------------- | -------------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
 | `DATA_KEY`                         | the API's environment on the server    | the operator; two people offline | a sealed copy off the server       | a new key with a new key id; stored secrets sealed again (runbook) |
-| `confera_owner` password           | the migration job's environment only   | the operator                     | the association's password manager | `ALTER ROLE` and the job's environment                             |
-| `confera_app` password             | `DATABASE_URL` of the API              | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
-| `confera_system` password          | `SYSTEM_DATABASE_URL` of the API       | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
+| `congresa_owner` password          | the migration job's environment only   | the operator                     | the association's password manager | `ALTER ROLE` and the job's environment                             |
+| `congresa_app` password            | `DATABASE_URL` of the API              | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
+| `congresa_system` password         | `SYSTEM_DATABASE_URL` of the API       | the operator                     | the association's password manager | `ALTER ROLE`, then restart the API                                 |
 | Backup encryption password (1.0.0) | the backup job                         | the operator; two people         | offline                            | new backups with the new password; old ones keep theirs            |
 | Registry credential                | the pipeline's secret store            | the maintainer                   | none needed                        | revoke and issue a new one                                         |
 | Mail server passwords              | `mail_servers.password_sealed`, sealed | the admins who type them         | the database backup (sealed)       | an admin sets a new one; a changed target clears it                |
@@ -728,11 +735,11 @@ sessions and secure links.
 `db:provision` creates three PostgreSQL roles (ADR-05). Their names are fixed, because
 the migrations grant to them by name; their passwords come from the addresses in `.env`.
 
-| Role             | Variable                 | May                                                                          |
-| ---------------- | ------------------------ | ---------------------------------------------------------------------------- |
-| `confera_owner`  | `MIGRATION_DATABASE_URL` | Owns the schema. Used by `db:migrate` only; never given to the running API.  |
-| `confera_app`    | `DATABASE_URL`           | Read and write rows through row-level security. No schema right of any kind. |
-| `confera_system` | `SYSTEM_DATABASE_URL`    | Bypass row-level security, with grants on the few columns a resolver reads.  |
+| Role              | Variable                 | May                                                                          |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `congresa_owner`  | `MIGRATION_DATABASE_URL` | Owns the schema. Used by `db:migrate` only; never given to the running API.  |
+| `congresa_app`    | `DATABASE_URL`           | Read and write rows through row-level security. No schema right of any kind. |
+| `congresa_system` | `SYSTEM_DATABASE_URL`    | Bypass row-level security, with grants on the few columns a resolver reads.  |
 
 `db:provision` connects as the superuser `postgres` of the development stack (password
 `POSTGRES_PASSWORD`). For another server set `PROVISION_DATABASE_URL` to a superuser
@@ -805,7 +812,7 @@ To add one:
 4. **For a new table, add by hand** what Prisma cannot express, as in the first
    migration: `ENABLE` and `FORCE ROW LEVEL SECURITY`, the policy `tenant_isolation`
    with `USING` and `WITH CHECK`, a unique key on `(organisation_id, id)`, composite
-   foreign keys to other tenant tables, and the `GRANT`s to `confera_app`.
+   foreign keys to other tenant tables, and the `GRANT`s to `congresa_app`.
 5. `corepack pnpm db:migrate`, then `corepack pnpm test:int`: the catalogue test finds a
    table that falls short of these rules.
 
@@ -892,7 +899,7 @@ corepack pnpm stubs          the stub slot on http://127.0.0.1:4010  (its own te
 
 - **The mail catcher** shows every mail the stack sends at <http://localhost:8025>; it
   listens for SMTP on `127.0.0.1:1025`. Nothing leaves your machine. (On a checkout with
-  ports of its own: `CONFERA_MAIL_WEB_PORT` and `CONFERA_MAIL_SMTP_PORT` of `.env`.)
+  ports of its own: `CONGRESA_MAIL_WEB_PORT` and `CONGRESA_MAIL_SMTP_PORT` of `.env`.)
 - **The fake clamd** on `127.0.0.1:3310` scans the uploads and email images (section 2,
   step 4): without it they stay "scan pending", and the "To show" flow and the image preview
   of the browser tests of `confera_fe` fail.
@@ -924,8 +931,8 @@ it instead of their stub. In `..\confera_fe`:
 corepack pnpm api:check --sibling     the contract vendored there is the one of this checkout
 ```
 
-- PowerShell: `$env:CONFERA_E2E_API_ORIGIN = 'http://127.0.0.1:3001'; corepack pnpm e2e`
-- Git Bash, macOS, Linux: `CONFERA_E2E_API_ORIGIN=http://127.0.0.1:3001 corepack pnpm e2e`
+- PowerShell: `$env:CONGRESA_E2E_API_ORIGIN = 'http://127.0.0.1:3001'; corepack pnpm e2e`
+- Git Bash, macOS, Linux: `CONGRESA_E2E_API_ORIGIN=http://127.0.0.1:3001 corepack pnpm e2e`
 
 Add `--project=real-api` for the short form (about two minutes). **Start the API first**
 and leave it running: the run of `confera_fe` builds and starts its own servers (about
@@ -1273,10 +1280,10 @@ only after Gate 4a. No workflow of this repository can reach a server before the
 
 ### The images
 
-| Image                                      | Target    | What it holds                                                                                                                                                     |
-| ------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ghcr.io/stojanivanisevic/confera-be`      | `runtime` | `dist/` (the production build, without the dev-tools module), the production dependencies, `package.json`. The API **and** the worker run it, by the same digest. |
-| `ghcr.io/stojanivanisevic/confera-be-jobs` | `jobs`    | The one-shot jobs: `prisma migrate deploy` (its default), `db-provision`, `seed-production`, `first-admin`. Never serves a request.                               |
+| Image                                       | Target    | What it holds                                                                                                                                                     |
+| ------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ghcr.io/stojanivanisevic/congresa-be`      | `runtime` | `dist/` (the production build, without the dev-tools module), the production dependencies, `package.json`. The API **and** the worker run it, by the same digest. |
+| `ghcr.io/stojanivanisevic/congresa-be-jobs` | `jobs`    | The one-shot jobs: `prisma migrate deploy` (its default), `db-provision`, `seed-production`, `first-admin`. Never serves a request.                               |
 
 - Every stage of `Dockerfile` starts from Node 22.23.3 (Debian bookworm, slim) **by digest**.
 - The runtime image holds no source, no test, no script, no development dependency and no
@@ -1285,7 +1292,7 @@ only after Gate 4a. No workflow of this repository can reach a server before the
 - The jobs image needs the Prisma command line, a development dependency, so it carries the
   full installation; it holds no source, no build and no test tool (`seed:e2e`, the stubs).
 - The runtime image names its jobs image **by digest** in the label
-  `org.udekom.confera.jobs-image`, so a deploy names one digest and the migration that goes
+  `org.udekom.congresa.jobs-image`, so a deploy names one digest and the migration that goes
   with it follows from the content of that image.
 - **Secrets are files** (`/run/secrets/<name>`), never `ENV` lines, build arguments or
   `docker inspect` entries. `deploy/image/entrypoint.sh` turns the files a service is given
@@ -1293,31 +1300,31 @@ only after Gate 4a. No workflow of this repository can reach a server before the
   start on any other file.
 
 ```
-docker build --target runtime -t confera-be .
-docker build --target jobs -t confera-be-jobs .
+docker build --target runtime -t congresa-be .
+docker build --target jobs -t congresa-be-jobs .
 ```
 
 ### The topology of a server: `deploy/`
 
-| File                                                                                          | What it is                                                                                                      |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `deploy/compose.yml`                                                                          | proxy, web, api, worker, postgres, clamav, and the jobs `migrate` and `provision`; staging and production alike |
-| `deploy/compose.env.example`                                                                  | the settings of the topology: instance, the two host names, where settings and secrets live, the two ports      |
-| `deploy/api.env.example`                                                                      | the settings of the API and the worker (no secret)                                                              |
-| `deploy/web.env.example`                                                                      | the settings of the web application: its two origins, nothing else (it must never get a secret)                 |
-| `deploy/proxy.env.example`                                                                    | the ACME address, and on staging the gate's user and password hash                                              |
-| `deploy/proxy/Caddyfile`                                                                      | the reverse proxy (Caddy 2.11.7): TLS, routing by host and path, body limits, HSTS                              |
-| `deploy/proxy/gate-staging.caddy`                                                             | the access gate of staging (every path, noindex); `gate-production.caddy` adds nothing                          |
-| `deploy/server/confera-deploy`                                                                | the deploy script (root): one target and one digest, nothing else                                               |
-| `deploy/server/confera-deploy-gate`                                                           | the forced command of the deploy keys                                                                           |
-| `deploy/server/sshd-confera-deploy.conf`, `sudoers-confera-deploy`, `authorized_keys.example` | how sshd and sudo are set up for the deploy keys                                                                |
-| `deploy/server/deploy.conf.example`                                                           | the settings of the deploy and backup scripts: instance, the fixed image repositories, the database             |
-| `deploy/compose.staging.yml`                                                                  | STAGING only: the mail catcher (Mailpit), the network `catcher`, `STAGING_MAIL_CATCHER` for api and worker      |
-| `deploy/proxy/mail-staging.caddy`                                                             | STAGING only: the catcher's screen on its own host, behind its own credentials                                  |
-| `deploy/server/sshd-confera-hardening.conf`                                                   | the SSH server: keys only, no root, only the group `confera-ssh`, no forwarding                                 |
-| `deploy/server/docker-daemon.json`                                                            | Docker's settings: log limits, no new privileges, live restore, no userland proxy                               |
-| `deploy/server/ufw-docker-user.rules`                                                         | the `DOCKER-USER` block: no container reaches a mail port outside the server                                    |
-| `deploy/server/confera-backup`, `confera-backup.service`, `confera-backup.timer`              | the nightly backup (database dump and file volume, checked, 7 days kept) and its systemd timer                  |
+| File                                                                                            | What it is                                                                                                      |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `deploy/compose.yml`                                                                            | proxy, web, api, worker, postgres, clamav, and the jobs `migrate` and `provision`; staging and production alike |
+| `deploy/compose.env.example`                                                                    | the settings of the topology: instance, the two host names, where settings and secrets live, the two ports      |
+| `deploy/api.env.example`                                                                        | the settings of the API and the worker (no secret)                                                              |
+| `deploy/web.env.example`                                                                        | the settings of the web application: its two origins, nothing else (it must never get a secret)                 |
+| `deploy/proxy.env.example`                                                                      | the ACME address, and on staging the gate's user and password hash                                              |
+| `deploy/proxy/Caddyfile`                                                                        | the reverse proxy (Caddy 2.11.7): TLS, routing by host and path, body limits, HSTS                              |
+| `deploy/proxy/gate-staging.caddy`                                                               | the access gate of staging (every path, noindex); `gate-production.caddy` adds nothing                          |
+| `deploy/server/congresa-deploy`                                                                 | the deploy script (root): one target and one digest, nothing else                                               |
+| `deploy/server/congresa-deploy-gate`                                                            | the forced command of the deploy keys                                                                           |
+| `deploy/server/sshd-congresa-deploy.conf`, `sudoers-congresa-deploy`, `authorized_keys.example` | how sshd and sudo are set up for the deploy keys                                                                |
+| `deploy/server/deploy.conf.example`                                                             | the settings of the deploy and backup scripts: instance, the fixed image repositories, the database             |
+| `deploy/compose.staging.yml`                                                                    | STAGING only: the mail catcher (Mailpit), the network `catcher`, `STAGING_MAIL_CATCHER` for api and worker      |
+| `deploy/proxy/mail-staging.caddy`                                                               | STAGING only: the catcher's screen on its own host, behind its own credentials                                  |
+| `deploy/server/sshd-congresa-hardening.conf`                                                    | the SSH server: keys only, no root, only the group `congresa-ssh`, no forwarding                                |
+| `deploy/server/docker-daemon.json`                                                              | Docker's settings: log limits, no new privileges, live restore, no userland proxy                               |
+| `deploy/server/ufw-docker-user.rules`                                                           | the `DOCKER-USER` block: no container reaches a mail port outside the server                                    |
+| `deploy/server/congresa-backup`, `congresa-backup.service`, `congresa-backup.timer`             | the nightly backup (database dump and file volume, checked, 7 days kept) and its systemd timer                  |
 
 What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` proves:
 
@@ -1327,8 +1334,8 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
   Mailpit, pinned by digest and hardened like the others, relaying nothing, on `backend` (the API
   and the worker deliver to `mailpit:1025`, set as `STAGING_MAIL_CATCHER` for both) and on a
   third, internal network `catcher` that it shares with the proxy only. The web container is on
-  neither. The proxy serves its screen on `CONFERA_MAIL_HOST` behind the catcher's own
-  credentials (`CONFERA_CATCHER_USER`, `CONFERA_CATCHER_PASSWORD_HASH`); the gate's do not open it.
+  neither. The proxy serves its screen on `CONGRESA_MAIL_HOST` behind the catcher's own
+  credentials (`CONGRESA_CATCHER_USER`, `CONGRESA_CATCHER_PASSWORD_HASH`); the gate's do not open it.
 - **Secrets per service.** api and worker: `database_url`, `system_database_url`, `data_key`.
   migrate: `migration_database_url` (the owner role exists only there). postgres:
   `postgres_password`. provision: the four database ones. web, proxy, clamav and mailpit: none.
@@ -1353,7 +1360,7 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
   client addresses (personal data) and needs a retention period first: decided at Gate 4.
 - **The staging gate** (`deploy/proxy/gate-staging.caddy`) asks for the gate's credentials on
   every path of both hosts (phase 1). Phase 2, the embed trial after M4-QA-03, is
-  `CONFERA_GATE_PUBLIC_PATHS=open` in `proxy.env` and a recreated proxy: then exactly the paths
+  `CONGRESA_GATE_PUBLIC_PATHS=open` in `proxy.env` and a recreated proxy: then exactly the paths
   below answer without the gate, on the public host only. The list is kept in
   `gate-staging.caddy`; `topology.mjs` fails when this line and that file differ, and proves both
   phases against the running proxy. The runbook copies this line.
@@ -1362,39 +1369,39 @@ What the topology guarantees (ADR-26), and what `deploy/checks/topology.mjs` pro
 
 #### The files on a server
 
-| Path                                                                                             | Owner, mode            | Holds                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/srv/confera/deploy/`                                                                           | root, 0755             | a copy of this repository's `deploy/` folder, put there by the operator                                                                                 |
-| `/srv/confera/compose.env`                                                                       | root, 0644             | from `compose.env.example`                                                                                                                              |
-| `/srv/confera/images.env`                                                                        | root, 0644             | `CONFERA_API_IMAGE`, `CONFERA_JOBS_IMAGE`, `CONFERA_WEB_IMAGE`, each `repository@sha256:...`; the deploy script writes it (by hand for the first start) |
-| `/srv/confera/config/api.env`, `web.env`                                                         | root, 0644             | from the templates                                                                                                                                      |
-| `/srv/confera/config/proxy.env`                                                                  | root, 0640             | from the template (the gate's hash in single quotes)                                                                                                    |
-| `/srv/confera/secrets/`                                                                          | root:root, 0700        | the secret files; no account of the host but root can reach them                                                                                        |
-| `/srv/confera/secrets/database_url`, `system_database_url`, `data_key`, `migration_database_url`, `postgres_password` | root:root, 0444 | one value each, nothing else (no trailing newline needed)                                                                          |
-| `/srv/confera/images.be.previous`, `images.web.previous`                                         | root, 0644             | the target's lines before its last deploy; the deploy script writes them, `confera-deploy rollback` reads them                                          |
-| `/srv/confera/backups/`                                                                          | root:root, 0700        | `pre-deploy-*.dump` (before each migration), `nightly-*.dump`, `files-*.tar`; each root 0600; kept 7 days; NOT encrypted                                |
-| `/srv/confera/proxy-data/`                                                                       | uid 10002, 0700        | the proxy's certificates and ACME account                                                                                                               |
-| `/etc/confera/deploy.conf`                                                                       | root, 0644             | from `deploy/server/deploy.conf.example`                                                                                                                |
-| `/usr/local/sbin/confera-deploy`, `confera-backup`                                               | root, 0700             | from `deploy/server/`                                                                                                                                   |
-| `/usr/local/sbin/confera-deploy-gate`                                                            | root, 0755             | from `deploy/server/`                                                                                                                                   |
-| `/etc/ssh/sshd_config.d/00-confera-hardening.conf`, `50-confera-deploy.conf`                     | root, 0644             | `sshd-confera-hardening.conf`, `sshd-confera-deploy.conf`                                                                                               |
-| `/etc/ssh/confera-deploy/confera-deploy-be.keys`, `confera-deploy-web.keys`                      | root, 0644             | one key line each, as `authorized_keys.example`                                                                                                         |
-| `/etc/sudoers.d/confera-deploy`                                                                  | root, 0440             | `sudoers-confera-deploy`                                                                                                                                |
-| `/etc/docker/daemon.json`                                                                        | root, 0644             | `docker-daemon.json`                                                                                                                                    |
-| end of `/etc/ufw/after.rules` and `/etc/ufw/after6.rules`                                        | as ufw ships them      | the block of `ufw-docker-user.rules`                                                                                                                    |
-| `/etc/systemd/system/confera-backup.service`, `confera-backup.timer`                             | root, 0644             | from `deploy/server/`; `systemctl enable --now confera-backup.timer`                                                                                    |
+| Path                                                                                                                   | Owner, mode       | Holds                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/srv/congresa/deploy/`                                                                                                | root, 0755        | a copy of this repository's `deploy/` folder, put there by the operator                                                                                    |
+| `/srv/congresa/compose.env`                                                                                            | root, 0644        | from `compose.env.example`                                                                                                                                 |
+| `/srv/congresa/images.env`                                                                                             | root, 0644        | `CONGRESA_API_IMAGE`, `CONGRESA_JOBS_IMAGE`, `CONGRESA_WEB_IMAGE`, each `repository@sha256:...`; the deploy script writes it (by hand for the first start) |
+| `/srv/congresa/config/api.env`, `web.env`                                                                              | root, 0644        | from the templates                                                                                                                                         |
+| `/srv/congresa/config/proxy.env`                                                                                       | root, 0640        | from the template (the gate's hash in single quotes)                                                                                                       |
+| `/srv/congresa/secrets/`                                                                                               | root:root, 0700   | the secret files; no account of the host but root can reach them                                                                                           |
+| `/srv/congresa/secrets/database_url`, `system_database_url`, `data_key`, `migration_database_url`, `postgres_password` | root:root, 0444   | one value each, nothing else (no trailing newline needed)                                                                                                  |
+| `/srv/congresa/images.be.previous`, `images.web.previous`                                                              | root, 0644        | the target's lines before its last deploy; the deploy script writes them, `congresa-deploy rollback` reads them                                            |
+| `/srv/congresa/backups/`                                                                                               | root:root, 0700   | `pre-deploy-*.dump` (before each migration), `nightly-*.dump`, `files-*.tar`; each root 0600; kept 7 days; NOT encrypted                                   |
+| `/srv/congresa/proxy-data/`                                                                                            | uid 10002, 0700   | the proxy's certificates and ACME account                                                                                                                  |
+| `/etc/congresa/deploy.conf`                                                                                            | root, 0644        | from `deploy/server/deploy.conf.example`                                                                                                                   |
+| `/usr/local/sbin/congresa-deploy`, `congresa-backup`                                                                   | root, 0700        | from `deploy/server/`                                                                                                                                      |
+| `/usr/local/sbin/congresa-deploy-gate`                                                                                 | root, 0755        | from `deploy/server/`                                                                                                                                      |
+| `/etc/ssh/sshd_config.d/00-congresa-hardening.conf`, `50-congresa-deploy.conf`                                         | root, 0644        | `sshd-congresa-hardening.conf`, `sshd-congresa-deploy.conf`                                                                                                |
+| `/etc/ssh/congresa-deploy/congresa-deploy-be.keys`, `congresa-deploy-web.keys`                                         | root, 0644        | one key line each, as `authorized_keys.example`                                                                                                            |
+| `/etc/sudoers.d/congresa-deploy`                                                                                       | root, 0440        | `sudoers-congresa-deploy`                                                                                                                                  |
+| `/etc/docker/daemon.json`                                                                                              | root, 0644        | `docker-daemon.json`                                                                                                                                       |
+| end of `/etc/ufw/after.rules` and `/etc/ufw/after6.rules`                                                              | as ufw ships them | the block of `ufw-docker-user.rules`                                                                                                                       |
+| `/etc/systemd/system/congresa-backup.service`, `congresa-backup.timer`                                                 | root, 0644        | from `deploy/server/`; `systemctl enable --now congresa-backup.timer`                                                                                      |
 
 Compose bind-mounts the secret files read-only, so their owner and mode on the host are what the
 container sees. That is why they belong to root and are 0444 inside a root-only folder: dockerd
 (root) mounts them, the service's own user reads them inside its container, and no account of
 the host can read or change them, whichever account happens to have uid 1000 or gid 999 there
 (SEC-M4I-07). Make each one empty first, then write the value into it:
-`sudo install -m 0444 -o root -g root /dev/null /srv/confera/secrets/data_key`, then
-`openssl rand -base64 32 | tr -d '\n' | sudo tee /srv/confera/secrets/data_key >/dev/null`.
+`sudo install -m 0444 -o root -g root /dev/null /srv/congresa/secrets/data_key`, then
+`openssl rand -base64 32 | tr -d '\n' | sudo tee /srv/congresa/secrets/data_key >/dev/null`.
 
 The first start, once the files are in place (`C` stands for
-`docker compose --project-name confera --env-file /srv/confera/compose.env --env-file /srv/confera/images.env --file /srv/confera/deploy/compose.yml`,
-on staging followed by `--file /srv/confera/deploy/compose.staging.yml`):
+`docker compose --project-name congresa --env-file /srv/congresa/compose.env --env-file /srv/congresa/images.env --file /srv/congresa/deploy/compose.yml`,
+on staging followed by `--file /srv/congresa/deploy/compose.staging.yml`):
 
 ```
 C up --detach --wait postgres
@@ -1405,16 +1412,16 @@ C up --detach --wait
 
 ### The deploy by digest (ADR-27)
 
-A deploy is `confera-deploy <be|web> sha256:<64 hex>`. It pulls `<fixed repository>@<digest>`
-(the repositories are in root's `/etc/confera/deploy.conf`, never in the request), for `be`
+A deploy is `congresa-deploy <be|web> sha256:<64 hex>`. It pulls `<fixed repository>@<digest>`
+(the repositories are in root's `/etc/congresa/deploy.conf`, never in the request), for `be`
 also the jobs image the API image names. For `be` it then:
 
-1. refuses when the disk of `/srv/confera/backups` is more than 85 % full;
+1. refuses when the disk of `/srv/congresa/backups` is more than 85 % full;
 2. **refuses an image older than the database**: when `_prisma_migrations` lists a migration
    that the jobs image's `prisma/migrations` does not hold, the image would run on a schema it
    does not know, and migrations never run backwards. Nothing is changed (exit 65);
 3. **dumps the database before migrating** (`pg_dump -Fc` in the postgres container) into
-   `/srv/confera/backups/pre-deploy-<UTC time>-<12 hex of the digest>.dump` (root, 0600), reads
+   `/srv/congresa/backups/pre-deploy-<UTC time>-<12 hex of the digest>.dump` (root, 0600), reads
    the dump back with `pg_restore --list`, and stops before the migration, with nothing changed,
    when the dump fails, is empty or does not read back (exit 74). It prints the dump's path;
 4. runs the migration (a failed one restarts nothing and names the dump).
@@ -1427,13 +1434,13 @@ backup (both take the same lock).
 
 A dropped session cannot stop a deploy halfway (SEC-M4I-13): once the request is checked, the
 script runs on in a session of its own (`setsid`), ignoring SIGHUP and SIGPIPE, with its whole
-output in `/var/log/confera-deploy/<UTC time>-<target>-<pid>.log` (root, 0600, 30 days kept);
+output in `/var/log/congresa-deploy/<UTC time>-<target>-<pid>.log` (root, 0600, 30 days kept);
 the caller only watches that log. If the SSH session drops (network, the job's timeout, a
 cancelled run), the deploy still goes on to its end or its rollback. Every line it says also goes
-to the journal: `journalctl -t confera-deploy`. A stopped dump leaves no `.partial`, and the
+to the journal: `journalctl -t congresa-deploy`. A stopped dump leaves no `.partial`, and the
 nightly prune removes any a killed run left.
 
-**Rollback** is `sudo confera-deploy rollback be` (or `web`), by the operator only: the deploy
+**Rollback** is `sudo congresa-deploy rollback be` (or `web`), by the operator only: the deploy
 keys and the sudo rule pass `<target> sha256:...` and nothing else. It puts back the target's
 version before its last deploy (`images.<target>.previous`), restarts and smoke-tests it, and
 **runs no migration**: the schema stays as it is. That is safe for exactly one version back,
@@ -1446,18 +1453,18 @@ A second `rollback` goes **forward** again, because `images.<target>.previous` t
 version rolled back from. For `be` a rollback therefore refuses an image **newer than the
 database** (SEC-M4I-14): when the jobs image holds a migration the database has not applied
 (after a restore of the pre-deploy dump, for example), it stops with nothing changed (exit 65).
-That version comes back only by `confera-deploy be <digest>`, which migrates first. The rule,
+That version comes back only by `congresa-deploy be <digest>`, which migrates first. The rule,
 both ways: an image starts on the database only when it knows every applied migration (a
 deploy refuses an older one) and the database has every migration of the image (only a deploy,
 which migrates, may start a newer one; a rollback refuses it).
 
 - **Staging:** the pipeline calls it through SSH. Each repository has its own deploy user and
-  key (`confera-deploy-be`, `confera-deploy-web`). sshd forces the command
-  `/usr/local/sbin/confera-deploy-gate <target>` for that user, whatever the client asks; the
+  key (`congresa-deploy-be`, `congresa-deploy-web`). sshd forces the command
+  `/usr/local/sbin/congresa-deploy-gate <target>` for that user, whatever the client asks; the
   key line carries `restrict` as well. The gate accepts exactly one digest and hands it to the
   deploy script through a sudo rule that allows that script and that target only. No shell, no
   terminal, no forwarding, no sftp or scp, no membership of the docker group.
-- **Production:** the server pulls. The operator runs `sudo confera-deploy be <digest>` (and
+- **Production:** the server pulls. The operator runs `sudo congresa-deploy be <digest>` (and
   `web`) by hand with the digest staging ran, after Stojan's approval (Gate 4).
 
 ### The pipeline: `.github/workflows/`
@@ -1465,11 +1472,11 @@ which migrates, may start a newer one; a rollback refuses it).
 Every third-party action is pinned by commit hash (its version in a comment), every image by
 digest (BuildKit v0.33.1 included). The default token is read-only.
 
-| Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                                                                                                                  |
+| Workflow             | When it runs                                                                   | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`             | every pull request to develop or main; every push to develop, main, release/** | `pnpm check`; the integration and end-to-end tests on the development stack; ST-63 (`deploy/checks/deploy-gate.mjs`). No secret, no push, no server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `image.yml`          | every push to develop, every `v*` tag, or by hand                              | **build** (runs project code, holds no credential): both images as OCI archives with their digests (`deploy/ci/build-images.sh`), ST-02 and ST-04 on exactly those images. **publish** (no checkout, so no project code; may write packages): only when `IMAGE_PUBLISH_ENABLED` is `true` (Gate 4a), the ref is `develop` or a `v*` tag, and the run was started by Stojan (`github.actor` and `github.triggering_actor`); copies the archives to ghcr.io with `skopeo --preserve-digests`, checks the digests, writes them into the summary. A run that would publish but was started by anyone else fails loudly. |
-| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Deploys only from `develop` and only when Stojan started the run; anyone else's run fails loudly before the environment's secret is loaded. Refuses until `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command. |
+| `deploy-staging.yml` | **by hand only** (`workflow_dispatch`), with a digest                          | Runs no project code. Deploys only from `develop` and only when Stojan started the run; anyone else's run fails loudly before the environment's secret is loaded. Refuses until `STAGING_DEPLOY_ENABLED` is `true`. Checks the input is a digest and hands it over SSH to the forced command.                                                                                                                                                                                                                                                                                                                       |
 
 **What protects a staging deploy on GitHub Pro.** "Required reviewers" on an environment (an
 approval GitHub enforces before each run) needs GitHub Enterprise for a private repository, so
@@ -1515,18 +1522,18 @@ node deploy/checks/workflows.mjs [../confera_fe]           who may deploy and pu
   foreign or tagged jobs image and an unsafe configuration, and changes nothing on a failed
   migration; it dumps and reads back the database before every migration and stops on a failed,
   empty or unreadable dump or a full disk; it refuses an image older than the database; a new
-  version that is not healthy is rolled back; `confera-deploy rollback` goes one version back
+  version that is not healthy is rolled back; `congresa-deploy rollback` goes one version back
   without migrating, and no deploy key or deploy user can start it; root, users outside
-  `confera-ssh` and passwords cannot log in; `confera-backup` writes a checked dump and tar, root
+  `congresa-ssh` and passwords cannot log in; `congresa-backup` writes a checked dump and tar, root
   0600, prunes only after a good run, and shares the deploy's lock.
 - `topology.mjs` builds both images (or takes them with `--no-build`), takes the web image
-  `confera-m4-infra-web:check` (built from `../confera_fe` when it is missing), and starts
-  `deploy/compose.yml` as a staging instance (project `confera-m4-infra`, host names under
+  `congresa-m4-infra-web:check` (built from `../confera_fe` when it is missing), and starts
+  `deploy/compose.yml` as a staging instance (project `congresa-m4-infra`, host names under
   `.localhost`, random secrets in files, free ports): provision, migrate, every service healthy,
   then every guarantee listed above. `--without-clamav` saves about 1.5 GB of memory; `--keep`
   leaves the stack up for a look by hand.
-- Both remove everything they create (names start with `confera-m4-infra`, or with
-  `CONFERA_CHECK_PREFIX` when it is set, for example `confera-gate4a`). Logs:
+- Both remove everything they create (names start with `congresa-m4-infra`, or with
+  `CONGRESA_CHECK_PREFIX` when it is set, for example `congresa-gate4a`). Logs:
   `.artifacts/deploy-checks/`. On Windows the large uploads are sent from a container on the
   edge network: WSL's localhost relay stalls large bodies on a published port.
 
@@ -1547,7 +1554,7 @@ On GitHub, in each repository:
 - [ ] A tag ruleset on `v*`: only Stojan may create, update or delete such a tag.
 - [ ] The repository variable `IMAGE_PUBLISH_ENABLED=true` in both repositories: until then `image.yml`
       builds and checks the images but publishes nothing.
-- [ ] The packages `confera-be`, `confera-be-jobs` and `confera-web` private; the server pulls
+- [ ] The packages `congresa-be`, `congresa-be-jobs` and `congresa-web` private; the server pulls
       with a read-only token of its own.
 - [ ] The event that starts a staging deploy named in the reduced runbook (here: by hand, with
       the digest from the summary of `image.yml`).
@@ -1568,8 +1575,8 @@ On the staging server (M4-OPS-01, M4-QA-03), proved there and not here:
 - [ ] Open for the reduced runbook: request-rate and concurrent-upload limits at the proxy
       (ADR-26). The official Caddy image has no rate-limit module; until it is decided the API's
       own limits apply.
-- [ ] The mail catcher from outside: `CONFERA_MAIL_HOST` answers 401 without the catcher's
+- [ ] The mail catcher from outside: `CONGRESA_MAIL_HOST` answers 401 without the catcher's
       credentials and with the gate's; a staging invitation arrives there (ST-50).
 - [ ] After the first reboot: `sudo iptables -S DOCKER-USER` and `sudo ip6tables -S DOCKER-USER`
-      show the mail-port REJECT before RETURN; `systemctl list-timers confera-backup.timer`
+      show the mail-port REJECT before RETURN; `systemctl list-timers congresa-backup.timer`
       shows the next run.
