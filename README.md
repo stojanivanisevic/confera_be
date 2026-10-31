@@ -1506,11 +1506,11 @@ database tests about 10, ST-63 about 3, the three jobs run side by side); one `i
 node deploy/checks/deploy-gate.mjs                         ST-63, the part that needs no server
 node deploy/checks/topology.mjs                            ST-02, ST-04, ST-53, M3-ISS-06 on the real images and compose file
 node deploy/checks/topology.mjs --images-only --no-build   ST-02 and ST-04 only, nothing started (the pipeline)
-node deploy/checks/workflows.mjs [../confera_fe]           who may deploy and publish: the workflows' conditions, no Docker
+node deploy/checks/workflows.mjs [. ../confera_fe]         who may deploy and publish: the workflows' conditions, no Docker
 ```
 
-- `workflows.mjs` evaluates the `if` of every deploy and publish job, of this repository and of
-  any other checkout named, for 300 combinations of actor, re-run actor, ref and setting: the job
+- `workflows.mjs` evaluates the `if` of every deploy and publish job of the checkouts named (this
+  repository when none is named; name `.` too to check it with the frontend), for 300 combinations of actor, re-run actor, ref and setting: the job
   runs only in a run Stojan started, from `develop` (deploy) or `develop` and `v*` tags
   (publish); wherever it is skipped although asked for, another job fails loudly; and the
   job's first step, "Refuse anyone but the owner", is run with bash for Stojan and others.

@@ -79,6 +79,7 @@ describe('the development stack', () => {
         .filter((entry) => /:\d+$/.test(entry) && !entry.includes('/'));
       expect(published.map((entry) => /:(\d+)$/.exec(entry)?.[1]).sort()).toEqual([
         '1025',
+        '3310',
         '5432',
         '8025',
       ]);
