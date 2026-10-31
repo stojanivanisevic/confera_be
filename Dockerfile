@@ -76,7 +76,7 @@ COPY --from=build --chown=root:root /build/node_modules ./node_modules
 COPY --chown=root:root package.json prisma.config.ts ./
 COPY --chown=root:root prisma prisma
 COPY --chown=root:root scripts/db-provision.mjs scripts/seed-production.mjs scripts/first-admin.mjs scripts/
-COPY --chown=root:root scripts/lib/process.mjs scripts/lib/stack.mjs scripts/lib/seed-data.mjs scripts/lib/stage.mjs scripts/lib/mail-address.mjs scripts/lib/
+COPY --chown=root:root scripts/lib/process.mjs scripts/lib/stack.mjs scripts/lib/seed-data.mjs scripts/lib/stage.mjs scripts/lib/mail-address.mjs scripts/lib/scram.mjs scripts/lib/
 COPY --chown=root:root --chmod=0555 deploy/image/entrypoint.sh /usr/local/bin/confera-entrypoint
 USER node
 ENTRYPOINT ["/usr/local/bin/confera-entrypoint"]

@@ -1,5 +1,5 @@
-# The access gate of the STAGING server (ADR-27, staging instance, rule 2), imported into both
-# sites by deploy/proxy/Caddyfile.
+# The access gate of the STAGING server (ADR-27, staging instance, rule 2), imported into the
+# admin and the public site by deploy/proxy/Caddyfile.
 #
 # - Every path asks for the gate's user and password (HTTP basic authentication over TLS).
 #   The password is kept as a bcrypt hash in the proxy's environment, never in git:
@@ -7,8 +7,19 @@
 # - Exceptions, and no others:
 #     * the certificate challenge: Caddy answers it before any route, so the gate never sees it;
 #     * the PayPal webhook (0.7.0): added here when the route exists;
-#     * the public form paths of the embed trial (M4-QA-04): opened ONLY after the staging tests of
-#       M4-QA-03 pass, by the change described at @gated below (a change the Security reviewer sees).
+#     * phase 2, the embed trial (M4-QA-04): the public form paths below, on the PUBLIC host only,
+#       and only once proxy.env says CONFERA_GATE_PUBLIC_PATHS=open (then recreate the proxy).
+#       That is done only after the staging tests of M4-QA-03 have passed. Any other value, or
+#       none, keeps every path gated (phase 1).
+# - The list of phase 2 is kept HERE and nowhere else in code. README section 15 ("Gate
+#   exceptions") repeats it, and deploy/checks/topology.mjs fails when the two differ; it also
+#   proves both phases against the running proxy. The runbook copies the README's list.
+#     /f/*                     the hosted form pages
+#     /embed/*                 the frame pages
+#     /public/v1/forms/*       the public form API (form, tokens, uploads, submissions)
+#     /public/v1/csp-reports   the browsers' CSP reports of those pages
+#     /_next/static/*          the scripts, styles and fonts the pages load
+#     /icon.png                the pages' icon
 # - noindex on everything (ADR-27).
 #
 # The application itself refuses a public route under the admin host and the reverse (ADR-02),
@@ -17,13 +28,11 @@
 header X-Robots-Tag "noindex, nofollow"
 
 @gated {
-	# Every path. To open the public form paths after M4-QA-03 has passed, replace the line
-	# "path *" by the block below (and nothing else):
-	#	not {
-	#		host {$CONFERA_PUBLIC_HOST}
-	#		path /f/* /embed/* /public/v1/forms/*
-	#	}
-	path *
+	not {
+		host {$CONFERA_PUBLIC_HOST}
+		path /f/* /embed/* /public/v1/forms/* /public/v1/csp-reports /_next/static/* /icon.png
+		expression `"{$CONFERA_GATE_PUBLIC_PATHS:closed}" == "open"`
+	}
 }
 
 basic_auth @gated {

@@ -1,0 +1,84 @@
+# The STAGING additions to deploy/compose.yml (ADR-27, staging rule 3; ST-50; SEC-M4I-05). A
+# production server never names this file.
+#
+#   docker compose --project-name confera \
+#     --env-file /srv/confera/compose.env --env-file /srv/confera/images.env \
+#     --file /srv/confera/deploy/compose.yml --file /srv/confera/deploy/compose.staging.yml up --detach
+#
+# confera-deploy and confera-backup add it themselves when /etc/confera/deploy.conf says
+# CONFERA_INSTANCE=staging (and refuse to run when compose.env says otherwise).
+#
+# - mailpit, the mail catcher: every message of the API and the worker goes to it alone
+#   (STAGING_MAIL_CATCHER, set here for both: src/modules/mail/mail-transport.ts). It relays
+#   nothing (no MP_SMTP_RELAY_* setting), publishes no port, and holds the messages in memory
+#   only (a restart empties it).
+# - Networks: mailpit is on `backend` (the API and the worker deliver SMTP to it on 1025) and on
+#   `catcher`, an internal network it shares with the proxy only. The web container is on neither,
+#   so it cannot read the catcher.
+# - The proxy serves the catcher's screen on its own host name, CONFERA_MAIL_HOST, behind its own
+#   credentials (CONFERA_CATCHER_USER and CONFERA_CATCHER_PASSWORD_HASH in proxy.env): whoever
+#   reads the catcher holds every invitation and reset link of staging (deploy/proxy/mail-staging.caddy).
+
+services:
+  mailpit:
+    # Mailpit v1.31.5, the same image as the development stack.
+    image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    user: '10003:10003'
+    environment:
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+      MP_MAX_MESSAGES: '1000'
+      MP_SMTP_DISABLE_RDNS: 'true'
+      MP_DISABLE_VERSION_CHECK: 'true'
+      MP_BLOCK_REMOTE_CSS_AND_FONTS: 'true'
+      # The messages live in a database under /tmp (a tmpfs): nothing is written to the disk.
+      TMPDIR: /tmp
+    tmpfs:
+      - /tmp:uid=10003,gid=10003,mode=0700
+    networks: [backend, catcher]
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+
+  api:
+    environment:
+      STAGING_MAIL_CATCHER: mailpit:1025
+    depends_on:
+      mailpit:
+        condition: service_healthy
+
+  worker:
+    environment:
+      STAGING_MAIL_CATCHER: mailpit:1025
+    depends_on:
+      mailpit:
+        condition: service_healthy
+
+  proxy:
+    environment:
+      CONFERA_MAIL_HOST: ${CONFERA_MAIL_HOST:?set CONFERA_MAIL_HOST in compose.env (staging)}
+    volumes:
+      - ./proxy/mail-staging.caddy:/etc/caddy/sites.d/mail-staging.caddy:ro
+    networks: [edge, catcher]
+    depends_on: [mailpit]
+
+networks:
+  # Internal: no route out of the server.
+  catcher:
+    internal: true

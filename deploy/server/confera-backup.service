@@ -1,0 +1,19 @@
+# /etc/systemd/system/confera-backup.service (root:root, 0644). SEC-M4I-01.
+# The nightly backup (deploy/server/confera-backup), started by confera-backup.timer. Its output
+# goes to the journal: `journalctl -u confera-backup`. A failed run leaves the unit "failed"
+# (`systemctl --failed` shows it).
+[Unit]
+Description=Confera nightly backup (database dump and file volume)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/confera-backup
+# The dump of a large database takes time; a run that hangs is stopped after two hours.
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=yes
+NoNewPrivileges=yes

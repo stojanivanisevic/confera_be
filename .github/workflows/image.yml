@@ -1,6 +1,10 @@
 # The production images of confera_be (M4-BE-07, M4-BE-08; ADR-27, rules 2 and 3).
 #
-# Runs on every push to develop (a staging candidate), on every version tag, and by hand.
+# Runs on every push to develop (a staging candidate), on every version tag, and by hand. Every
+# run builds and checks; only a run on develop or on a v* tag, started by Stojan, publishes
+# (SEC-M4I-03): a build of any other branch, or a run anyone else started, never reaches the
+# registry, so no unreviewed image gets a digest the server would take. A tag ruleset lets only
+# Stojan create v* tags (README, Gate 4a).
 #
 #   build    runs project code (install, build) and the image checks. It holds NO credential:
 #            the token can read the repository, and nothing else. The images leave it as OCI
@@ -74,13 +78,39 @@ jobs:
   publish:
     needs: build
     # Nothing is published before Gate 4a: the repository variable IMAGE_PUBLISH_ENABLED is set to
-    # true there. Until then the build job still builds and checks every image.
-    if: vars.IMAGE_PUBLISH_ENABLED == 'true'
+    # true there. Until then the build job still builds and checks every image. Then only from
+    # develop or a v* tag, and only in a run Stojan started (github.actor: who started it;
+    # github.triggering_actor: who started this attempt, a re-run included).
+    if: >-
+      vars.IMAGE_PUBLISH_ENABLED == 'true'
+      && (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+      && github.actor == 'stojanivanisevic' && github.triggering_actor == 'stojanivanisevic'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       packages: write
     steps:
+      # Refuse anyone but the owner, loudly (the job's `if` above already skips it for anyone
+      # else; this step fails a run that reached it some other way). deploy/checks/workflows.mjs
+      # runs this script with other actors and refs.
+      - name: Refuse anyone but the owner
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+        run: |
+          OWNER=stojanivanisevic
+          if [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only $OWNER may run this job; it was started by $ACTOR (triggered by $TRIGGERING_ACTOR)." >&2
+            exit 1
+          fi
+          case "$REF" in
+            refs/heads/develop | refs/tags/v*) ;;
+            *)
+              echo "::error::This job runs only from develop or a v* tag, not from $REF." >&2
+              exit 1
+              ;;
+          esac
       # actions/download-artifact v8.0.2
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -126,3 +156,23 @@ jobs:
             echo
             echo "To deploy to staging: run the workflow **deploy-staging** with the digest \`$DIGEST\`."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A run on develop or a v* tag that someone other than Stojan started (a bot or a collaborator
+  # with Write, a dispatch or a re-run): the publish job above is skipped, and this job fails, so
+  # the run is red and says why instead of passing quietly without an image.
+  publish-refused:
+    if: >-
+      vars.IMAGE_PUBLISH_ENABLED == 'true'
+      && (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
+      && !(github.actor == 'stojanivanisevic' && github.triggering_actor == 'stojanivanisevic')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Only Stojan's runs publish
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          echo "::error::Nothing was published: only stojanivanisevic's runs publish images; this one was started by $ACTOR (triggered by $TRIGGERING_ACTOR)." >&2
+          exit 1

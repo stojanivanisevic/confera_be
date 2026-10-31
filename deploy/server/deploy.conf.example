@@ -9,10 +9,22 @@ CONFERA_ROOT=/srv/confera
 # The Compose project name of the server.
 CONFERA_PROJECT=confera
 
+# staging or production: the same as CONFERA_INSTANCE in compose.env (the script refuses to run
+# when they differ). staging adds deploy/compose.staging.yml, the mail catcher. No default.
+CONFERA_INSTANCE=
+
 # The image repositories. A deploy key can name a digest, never a repository: these are fixed.
 CONFERA_BE_REPOSITORY=ghcr.io/stojanivanisevic/confera-be
 CONFERA_BE_JOBS_REPOSITORY=ghcr.io/stojanivanisevic/confera-be-jobs
 CONFERA_WEB_REPOSITORY=ghcr.io/stojanivanisevic/confera-web
 
+# The application's database (the database of migration_database_url): a be deploy dumps it
+# before it migrates, and confera-backup dumps it every night.
+CONFERA_DATABASE=confera
+
 # How long a restarted service may take to become healthy, in seconds.
 CONFERA_WAIT_SECONDS=240
+
+# A be deploy and the nightly backup refuse to start when the file system of <root>/backups is
+# fuller than this, in per cent.
+CONFERA_DISK_MAX_PERCENT=85

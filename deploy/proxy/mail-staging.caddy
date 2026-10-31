@@ -1,0 +1,26 @@
+# The mail catcher's screen on a STAGING server (ADR-27; ST-50; SEC-M4I-05). Mounted into the
+# proxy by deploy/compose.staging.yml only, and imported at the end of deploy/proxy/Caddyfile.
+#
+# - Its own host name (CONFERA_MAIL_HOST in compose.env) and its own certificate.
+# - Its own credentials, not the gate's: CONFERA_CATCHER_USER and the bcrypt hash
+#   CONFERA_CATCHER_PASSWORD_HASH in proxy.env. Whoever reads the catcher holds every invitation
+#   and password-reset link of staging, so the catcher's credential goes to fewer people than the
+#   gate's. The gate credential does not open it.
+# - Every path asks for them; no exception. noindex, HSTS, 1 MB bodies.
+
+{$CONFERA_MAIL_HOST} {
+	import confera_headers
+	header X-Robots-Tag "noindex, nofollow"
+
+	basic_auth {
+		{$CONFERA_CATCHER_USER} {$CONFERA_CATCHER_PASSWORD_HASH}
+	}
+	handle {
+		import body_limit 1048576
+		reverse_proxy mailpit:8025 {
+			transport http {
+				dial_timeout 5s
+			}
+		}
+	}
+}

@@ -10,6 +10,8 @@
 #
 # - Two networks (ADR-26): `edge` holds proxy, web and API; `backend` holds API, worker,
 #   Postgres and ClamAV. The web container is on `edge` only: it cannot reach Postgres or ClamAV.
+#   A staging server adds deploy/compose.staging.yml: the mail catcher, on `backend` and on a
+#   third, internal network `catcher` shared with the proxy only.
 # - Secrets per service, as files (ADR-26): each service is given only the secret files it needs,
 #   mounted under /run/secrets. The web container and the proxy are given none.
 # - One image for the API and the worker (CONFERA_API_IMAGE); the one-shot jobs have their own
@@ -19,6 +21,8 @@
 #   Neither proxy nor web mounts the file volume.
 # - Every container: non-root, read-only root file system, every capability dropped, no new
 #   privileges, memory, CPU and process limits (ST-53; deploy/checks/topology.mjs proves it).
+#
+# On staging every command also names --file /srv/confera/deploy/compose.staging.yml.
 #
 # The settings are in /srv/confera/compose.env (template: deploy/compose.env.example), the
 # settings of each service in its own file under CONFERA_CONFIG_DIR (templates: api.env.example,
@@ -257,9 +261,6 @@ services:
     # job and in Postgres only.
     command: ['node', 'scripts/db-provision.mjs']
     secrets: [postgres_password, migration_database_url, database_url, system_database_url]
-    # The superuser's password file belongs to Postgres (uid 999, group 999, mode 0440): this job
-    # reads it through the group.
-    group_add: ['999']
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=0700
     networks: [backend]
@@ -279,8 +280,11 @@ volumes:
   files: {}
   clamav-db: {}
 
-# One file per secret under CONFERA_SECRETS_DIR, readable by the user of the service that is
-# given it and by nobody else (README section 15). Compose mounts each read-only.
+# One file per secret under CONFERA_SECRETS_DIR (README section 15; SEC-M4I-07). The folder is
+# root's, mode 0700, so no account of the host but root can reach a file in it. Each file is
+# root:root 0444: dockerd (root) bind-mounts it read-only, and inside the container the service's
+# own user reads it; no host account owns it, so none can read or change it, whatever uid 1000
+# or gid 999 are on that host. Only the services listed below are given a file at all.
 secrets:
   database_url:
     file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/database_url

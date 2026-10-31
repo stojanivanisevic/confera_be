@@ -9,6 +9,8 @@
 #                                             through the web application, whose framework keeps
 #                                             only the first 10 MB of a body; M3-ISS-06)
 #                everything    -> web:3000   (hosted form, frame, secure-link pages)
+#   mail host    everything    -> mailpit:8025 (STAGING only, its own credentials:
+#                                             deploy/proxy/mail-staging.caddy)
 #   any other host name: no certificate, no answer.
 #
 # What the proxy adds and what it does not:
@@ -36,20 +38,26 @@
 	email {$CONFERA_ACME_EMAIL}
 	servers {
 		protocols h1 h2
-		# Plain-text access log on stdout: method, path pattern and status come from Caddy's
-		# JSON log; tokens never travel in a query of Confera (ST-55 checks the log in 1.0.0).
+	}
+	# No access log: there is no `log` directive in any site, so Caddy writes only its own
+	# events (certificates, configuration, errors) to stderr, which Docker keeps (json-file,
+	# 5 x 10 MB). Requests are logged by the API, by route pattern and status. An access log of
+	# the proxy would hold every client's address, which is personal data: turning it on needs a
+	# retention period and is decided before production (Gate 4; SEC-M4I-08).
+}
+
+(confera_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+		-Via
 	}
 }
 
 (confera_common) {
 	# The gate of a staging server, or nothing (production).
 	import /etc/caddy/gate.caddy
-
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		-Server
-		-Via
-	}
+	import confera_headers
 }
 
 # body_limit <bytes>: a body above <bytes> is refused with 413. A declared Content-Length above it
@@ -121,3 +129,8 @@ http:// {
 		import to_web
 	}
 }
+
+# Sites of one instance only: on staging, deploy/compose.staging.yml mounts the mail catcher's
+# site (deploy/proxy/mail-staging.caddy) here. On production the folder does not exist and the
+# pattern matches nothing (Caddy notes that and goes on).
+import /etc/caddy/sites.d/*.caddy

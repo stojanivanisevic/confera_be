@@ -81,3 +81,5 @@ jobs:
           node-version-file: .nvmrc
       - name: An SSH server set up by deploy/server, and every way past the forced command
         run: node deploy/checks/deploy-gate.mjs
+      - name: Only Stojan's runs deploy or publish (the conditions of the workflows, SEC-M4I-03)
+        run: node deploy/checks/workflows.mjs

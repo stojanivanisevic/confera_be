@@ -1,0 +1,15 @@
+# Appended at the END of /etc/ufw/after.rules AND of /etc/ufw/after6.rules (root:root, 0640, as
+# ufw ships them), then `ufw reload`. ADR-27 (staging rule: no mail leaves the server); SEC-M4I-01.
+#
+# Docker's published ports and its containers' outgoing traffic pass the FORWARD chain, not ufw's
+# INPUT and OUTPUT rules, so `ufw deny out 25/tcp` does not stop a container. Docker sends every
+# forwarded packet through DOCKER-USER first: this block rejects a container's connection to the
+# mail ports of any other host (SMTP 25, submission 465 and 587, and 2525). Mail inside the
+# topology (API and worker to Mailpit on 1025) never leaves the bridge and is not touched.
+# `sudo iptables -S DOCKER-USER` and `sudo ip6tables -S DOCKER-USER` show the two rules after
+# every reboot (Docker keeps the chain, ufw fills it again on start).
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -p tcp -m multiport --dports 25,465,587,2525 -j REJECT --reject-with tcp-reset
+-A DOCKER-USER -j RETURN
+COMMIT

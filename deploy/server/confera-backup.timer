@@ -1,0 +1,15 @@
+# /etc/systemd/system/confera-backup.timer (root:root, 0644). SEC-M4I-01.
+# Every night at 03:15 UTC, after the reboot window of the automatic security updates (02:00).
+# A night missed while the server was off is caught up at the next start (Persistent).
+#   systemctl enable --now confera-backup.timer
+#   systemctl list-timers confera-backup.timer
+[Unit]
+Description=Confera nightly backup at 03:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+Unit=confera-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -6,10 +6,22 @@
 # /usr/local/sbin/confera-deploy-gate (deploy/server). The key opens no shell, no forward and no
 # file transfer, and can name no other repository's image.
 #
-# Before Gate 4a it refuses to run: the GitHub environment `staging` (with its protection rule:
-# Stojan approves each run), its secret STAGING_DEPLOY_KEY and its variables STAGING_SSH_HOST,
-# STAGING_SSH_KNOWN_HOSTS and STAGING_DEPLOY_ENABLED=true are set up at Gate 4a (README,
-# "Production image and pipeline").
+# Who can deploy (SEC-M4I-03). GitHub Pro offers no "required reviewers" on an environment of a
+# private repository (that needs Enterprise), so no approval by GitHub stands between a dispatch
+# and the server. What does:
+#   - the deploy job runs only when Stojan started the run (github.actor and
+#     github.triggering_actor, so a re-run by someone else counts too); anyone else's run, a bot's
+#     with Write included, is refused by the job `refused` below, loudly, and never loads the
+#     environment or its secret;
+#   - only from develop: the job checks the ref, and the environment `staging` allows deployments
+#     from develop only, so its secret never reaches a workflow file of another branch;
+#   - the digest: Stojan checks before each run that it is in the summary of an `image` run on
+#     develop (image.yml publishes only from develop and v* tags, and only in his runs); the
+#     server takes a digest of its fixed repositories and nothing else.
+#
+# Before Gate 4a it refuses to run: the GitHub environment `staging` (deployments from develop
+# only), its secret STAGING_DEPLOY_KEY and its variables STAGING_SSH_HOST, STAGING_SSH_KNOWN_HOSTS
+# and STAGING_DEPLOY_ENABLED=true are set up at Gate 4a (README, "Production image and pipeline").
 name: deploy-staging
 
 on:
@@ -27,11 +39,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Anyone but Stojan, or any ref but develop: the deploy job below is skipped, and this one fails.
+  refused:
+    if: github.ref != 'refs/heads/develop' || !(github.actor == 'stojanivanisevic' && github.triggering_actor == 'stojanivanisevic')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Only Stojan deploys, and only from develop
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Refused: only stojanivanisevic deploys to staging, from develop only; this run was started by $ACTOR (triggered by $TRIGGERING_ACTOR) on $REF." >&2
+          exit 1
+
   deploy:
+    if: github.ref == 'refs/heads/develop' && github.actor == 'stojanivanisevic' && github.triggering_actor == 'stojanivanisevic'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: staging
     steps:
+      # Refuse anyone but the owner, loudly (the job's `if` above already skips it for anyone
+      # else; this step fails a run that reached it some other way). deploy/checks/workflows.mjs
+      # runs this script with other actors and refs.
+      - name: Refuse anyone but the owner
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+        run: |
+          OWNER=stojanivanisevic
+          if [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only $OWNER may run this job; it was started by $ACTOR (triggered by $TRIGGERING_ACTOR)." >&2
+            exit 1
+          fi
+          case "$REF" in
+            refs/heads/develop) ;;
+            *)
+              echo "::error::This job runs only from develop, not from $REF." >&2
+              exit 1
+              ;;
+          esac
       - name: Refuse before Gate 4a
         if: vars.STAGING_DEPLOY_ENABLED != 'true'
         run: |
