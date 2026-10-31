@@ -1,27 +1,27 @@
 #!/bin/bash
-# The deploy script of a Confera server (M4-BE-08; ADR-27). ST-63.
+# The deploy script of a Congresa server (M4-BE-08; ADR-27). ST-63.
 #
-#   confera-deploy be  sha256:<64 hex>    the API and worker image of confera_be (and its jobs image)
-#   confera-deploy web sha256:<64 hex>    the web image of confera_fe
-#   confera-deploy rollback be|web        back to the version before the last deploy, WITHOUT
+#   congresa-deploy be  sha256:<64 hex>    the API and worker image of confera_be (and its jobs image)
+#   congresa-deploy web sha256:<64 hex>    the web image of confera_fe
+#   congresa-deploy rollback be|web        back to the version before the last deploy, WITHOUT
 #                                         migrating (the operator only; see "Rollback" below)
 #
-# Installed as /usr/local/sbin/confera-deploy (root:root, 0700). On STAGING the pipeline reaches
-# it only through the forced command (confera-deploy-gate) and sudo, which pass `<target> <digest>`
+# Installed as /usr/local/sbin/congresa-deploy (root:root, 0700). On STAGING the pipeline reaches
+# it only through the forced command (congresa-deploy-gate) and sudo, which pass `<target> <digest>`
 # and nothing else, so a deploy key can never start a rollback; on PRODUCTION the operator runs it
 # by hand with the digest that staging ran (ADR-27, rule 5). It takes an image digest and nothing
-# else: the repository of each target is fixed in /etc/confera/deploy.conf, which root owns. A
+# else: the repository of each target is fixed in /etc/congresa/deploy.conf, which root owns. A
 # tag, a repository, an option or a second digest is refused before anything runs.
 #
 # A deploy does, in this order, and nothing more:
-#   0. be: refuse when the file system of the backups is fuller than CONFERA_DISK_MAX_PERCENT
+#   0. be: refuse when the file system of the backups is fuller than CONGRESA_DISK_MAX_PERCENT
 #      (85 % by default);
 #   1. pull the image by digest (be: also the jobs image the API image names in its label
-#      org.udekom.confera.jobs-image, itself a digest of the fixed jobs repository);
+#      org.udekom.congresa.jobs-image, itself a digest of the fixed jobs repository);
 #   2. be: refuse an image OLDER than the database: when a migration applied to the database
 #      (_prisma_migrations) is missing from the jobs image's prisma/migrations, the image would
 #      run on a schema it does not know, and its migrations cannot run backwards. Nothing is
-#      changed (exit 65); going back one version is `confera-deploy rollback be`;
+#      changed (exit 65); going back one version is `congresa-deploy rollback be`;
 #   3. be: dump the database (pg_dump, custom format) into
 #      <root>/backups/pre-deploy-<UTC time>-<first 12 hex of the digest>.dump (root, 0600),
 #      check the dump with pg_restore --list, and stop before migrating if the dump fails, is
@@ -35,7 +35,7 @@
 #      answers;
 #   7. on a failure in 5 or 6: put images.env.previous back and restart the previous version.
 #
-# Rollback (`confera-deploy rollback be|web`): writes the target's lines of
+# Rollback (`congresa-deploy rollback be|web`): writes the target's lines of
 # images.<target>.previous into images.env, restarts the target's services, waits for health and
 # smoke-tests, and NEVER migrates: the schema stays as it is. This is safe for one version back
 # only, because migrations are written expand-then-contract (README section 15): the previous
@@ -50,11 +50,11 @@
 #
 # A dropped session does not stop a deploy halfway (SEC-M4I-13). Once the request is checked,
 # the script runs again in a session of its own (setsid), with no terminal and its output in
-# /var/log/confera-deploy/<UTC time>-<target>.log (root, 0600; 30 days kept), and this first
+# /var/log/congresa-deploy/<UTC time>-<target>.log (root, 0600; 30 days kept), and this first
 # process only shows that log to the caller and waits for the end. Both ignore SIGHUP and
 # SIGPIPE. When the SSH session drops (network, the job's timeout, a cancelled run), the deploy
 # goes on to its end or its rollback. Every line it says also goes to the journal
-# (`journalctl -t confera-deploy`). A failed or interrupted dump leaves no .partial file.
+# (`journalctl -t congresa-deploy`). A failed or interrupted dump leaves no .partial file.
 #
 # Exit codes: 0 deployed or rolled back; 64 refused (usage, or no previous version recorded);
 # 65 the image is not what it must be, or is older than the database (deploy) or newer than it
@@ -74,23 +74,23 @@ trap '[ -z "$partial" ] || rm -f -- "$partial"' EXIT
 trap 'exit 1' TERM INT
 unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
 
-readonly CONF=/etc/confera/deploy.conf
+readonly CONF=/etc/congresa/deploy.conf
 readonly DIGEST_RE='^sha256:[0-9a-f]{64}$'
-readonly JOBS_LABEL=org.udekom.confera.jobs-image
+readonly JOBS_LABEL=org.udekom.congresa.jobs-image
 readonly MIGRATION_RE='^[0-9]{14}_[a-z0-9_]+$'
 
 # Each line to the caller (when it is still there) and to the journal.
-journal() { logger --tag confera-deploy -- "$*" 2>/dev/null || true; }
+journal() { logger --tag congresa-deploy -- "$*" 2>/dev/null || true; }
 say() {
-  printf 'confera-deploy: %s\n' "$*" || true
+  printf 'congresa-deploy: %s\n' "$*" || true
   journal "$*"
 }
 refuse() {
-  printf 'confera-deploy: refused: %s\n' "$1" >&2 || true
+  printf 'congresa-deploy: refused: %s\n' "$1" >&2 || true
   journal "refused: $1"
   exit "${2:-64}"
 }
-readonly USAGE="usage: confera-deploy be|web sha256:<64 hex digits>, or confera-deploy rollback be|web"
+readonly USAGE="usage: congresa-deploy be|web sha256:<64 hex digits>, or congresa-deploy rollback be|web"
 
 # ---- The request: a target and a digest, or a rollback of a target; nothing else ---------------
 [ "$#" -eq 2 ] || refuse "$USAGE"
@@ -112,13 +112,13 @@ if [ "$mode" = deploy ]; then
 fi
 
 # ---- The rest runs in a session of its own, which a dropped SSH session cannot end --------------
-readonly RUN_LOGS=/var/log/confera-deploy
-if [ "${CONFERA_DEPLOY_DETACHED-}" != 1 ]; then
+readonly RUN_LOGS=/var/log/congresa-deploy
+if [ "${CONGRESA_DEPLOY_DETACHED-}" != 1 ]; then
   install -d -m 0700 -o root -g root "$RUN_LOGS"
   find "$RUN_LOGS" -maxdepth 1 -type f -name '*.log' -mtime +30 -delete 2>/dev/null || true
   run_log="$RUN_LOGS/$(date -u +%Y%m%dT%H%M%SZ)-$target-$$.log"
   : >"$run_log"
-  CONFERA_DEPLOY_DETACHED=1 setsid "$(readlink -f "$0")" "$@" </dev/null >>"$run_log" 2>&1 &
+  CONGRESA_DEPLOY_DETACHED=1 setsid "$(readlink -f "$0")" "$@" </dev/null >>"$run_log" 2>&1 &
   child=$!
   # Shows the log to the caller; when the caller is gone, tail ends and the deploy does not.
   tail --pid="$child" --sleep-interval=0.2 --lines=+1 --follow "$run_log" 2>/dev/null || true
@@ -149,18 +149,18 @@ need() {
   [ -n "$value" ] || refuse "$CONF: $1 is not set" 78
   printf '%s' "$value"
 }
-root=$(need CONFERA_ROOT)
-project=$(need CONFERA_PROJECT)
-instance=$(need CONFERA_INSTANCE)
-be_repository=$(need CONFERA_BE_REPOSITORY)
-jobs_repository=$(need CONFERA_BE_JOBS_REPOSITORY)
-web_repository=$(need CONFERA_WEB_REPOSITORY)
-database=$(need CONFERA_DATABASE)
-[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || refuse "$CONF: CONFERA_DATABASE is not a database name" 78
-wait_seconds=${setting[CONFERA_WAIT_SECONDS]:-240}
-[[ "$wait_seconds" =~ ^[0-9]+$ ]] || refuse "$CONF: CONFERA_WAIT_SECONDS is not a number" 78
-disk_max=${setting[CONFERA_DISK_MAX_PERCENT]:-85}
-[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || refuse "$CONF: CONFERA_DISK_MAX_PERCENT is not a number below 100" 78
+root=$(need CONGRESA_ROOT)
+project=$(need CONGRESA_PROJECT)
+instance=$(need CONGRESA_INSTANCE)
+be_repository=$(need CONGRESA_BE_REPOSITORY)
+jobs_repository=$(need CONGRESA_BE_JOBS_REPOSITORY)
+web_repository=$(need CONGRESA_WEB_REPOSITORY)
+database=$(need CONGRESA_DATABASE)
+[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || refuse "$CONF: CONGRESA_DATABASE is not a database name" 78
+wait_seconds=${setting[CONGRESA_WAIT_SECONDS]:-240}
+[[ "$wait_seconds" =~ ^[0-9]+$ ]] || refuse "$CONF: CONGRESA_WAIT_SECONDS is not a number" 78
+disk_max=${setting[CONGRESA_DISK_MAX_PERCENT]:-85}
+[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || refuse "$CONF: CONGRESA_DISK_MAX_PERCENT is not a number below 100" 78
 
 readonly images="$root/images.env"
 readonly previous="$root/images.env.previous"
@@ -171,10 +171,10 @@ readonly backups="$root/backups"
 # never names it. compose.env must say the same, so a file copied from the other server stops here.
 case "$instance" in
   staging | production) ;;
-  *) refuse "$CONF: CONFERA_INSTANCE must be staging or production" 78 ;;
+  *) refuse "$CONF: CONGRESA_INSTANCE must be staging or production" 78 ;;
 esac
-grep -qx "CONFERA_INSTANCE=$instance" "$root/compose.env" ||
-  refuse "$root/compose.env does not say CONFERA_INSTANCE=$instance, as $CONF does" 78
+grep -qx "CONGRESA_INSTANCE=$instance" "$root/compose.env" ||
+  refuse "$root/compose.env does not say CONGRESA_INSTANCE=$instance, as $CONF does" 78
 compose=(docker compose --project-name "$project"
   --env-file "$root/compose.env" --env-file "$images"
   --file "$root/deploy/compose.yml")
@@ -183,17 +183,17 @@ compose=(docker compose --project-name "$project"
 case "$target" in
   be)
     services=(api worker)
-    names=(CONFERA_API_IMAGE CONFERA_JOBS_IMAGE)
+    names=(CONGRESA_API_IMAGE CONGRESA_JOBS_IMAGE)
     ;;
   web)
     services=(web)
-    names=(CONFERA_WEB_IMAGE)
+    names=(CONGRESA_WEB_IMAGE)
     ;;
 esac
 
 # ---- One deploy at a time ---------------------------------------------------------------------
-# confera-backup takes the same lock: a migration never runs beside the nightly dump.
-exec 9>/run/lock/confera-deploy.lock
+# congresa-backup takes the same lock: a migration never runs beside the nightly dump.
+exec 9>/run/lock/congresa-deploy.lock
 flock --nonblock 9 || refuse "another deploy or a backup is running" 75
 
 # Sets NAME=value in images.env through a new file that replaces it in one rename.
@@ -274,9 +274,9 @@ if [ "$mode" = rollback ]; then
   # Every line must be one of the target's names with a digest of its fixed repository.
   for name in "${names[@]}"; do
     case "$name" in
-      CONFERA_API_IMAGE) repository=$be_repository ;;
-      CONFERA_JOBS_IMAGE) repository=$jobs_repository ;;
-      CONFERA_WEB_IMAGE) repository=$web_repository ;;
+      CONGRESA_API_IMAGE) repository=$be_repository ;;
+      CONGRESA_JOBS_IMAGE) repository=$jobs_repository ;;
+      CONGRESA_WEB_IMAGE) repository=$web_repository ;;
     esac
     line_re="^$name=${repository//./\\.}@sha256:[0-9a-f]{64}$"
     [ "$(grep -c "^$name=" <<<"$wanted")" -eq 1 ] && [[ "$(grep "^$name=" <<<"$wanted")" =~ $line_re ]] ||
@@ -285,11 +285,11 @@ if [ "$mode" = rollback ]; then
   [ "$(grep -c . <<<"$wanted")" -eq "${#names[@]}" ] || refuse "$target_previous holds other lines" 78
   # Never an image NEWER than the database: a rollback does not migrate (SEC-M4I-14).
   if [ "$target" = be ]; then
-    wanted_jobs=$(grep -m 1 '^CONFERA_JOBS_IMAGE=' <<<"$wanted" | cut -d= -f2-)
+    wanted_jobs=$(grep -m 1 '^CONGRESA_JOBS_IMAGE=' <<<"$wanted" | cut -d= -f2-)
     read_migrations "$wanted_jobs"
     unapplied=$(comm -13 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
     if [ -n "$unapplied" ]; then
-      refuse "the recorded version is newer than the database: migrations it holds that the database has not applied: $(tr '\n' ' ' <<<"$unapplied")- a rollback never migrates; to run that version, deploy its digest (confera-deploy be <digest>), which migrates first; nothing was changed" 65
+      refuse "the recorded version is newer than the database: migrations it holds that the database has not applied: $(tr '\n' ' ' <<<"$unapplied")- a rollback never migrates; to run that version, deploy its digest (congresa-deploy be <digest>), which migrates first; nothing was changed" 65
     fi
   fi
   current=$(target_lines)
@@ -354,7 +354,7 @@ if [ "$target" = be ]; then
   read_migrations "$jobs_image"
   unknown=$(comm -23 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
   if [ -n "$unknown" ]; then
-    refuse "the image is older than the database: applied migrations it does not hold: $(tr '\n' ' ' <<<"$unknown")- migrations never run backwards; to go back one version, run confera-deploy rollback be (no migration); nothing was changed" 65
+    refuse "the image is older than the database: applied migrations it does not hold: $(tr '\n' ' ' <<<"$unknown")- migrations never run backwards; to go back one version, run congresa-deploy rollback be (no migration); nothing was changed" 65
   fi
 fi
 
@@ -383,7 +383,7 @@ if [ "$target" = be ]; then
   partial=''
   say "backup $dump (read back with pg_restore --list)"
 
-  write_images CONFERA_JOBS_IMAGE "$jobs_image"
+  write_images CONGRESA_JOBS_IMAGE "$jobs_image"
   say "migrating the database"
   if ! "${compose[@]}" run --rm --no-TTY migrate; then
     say "FAILED: the migration; nothing was restarted"
@@ -395,8 +395,8 @@ fi
 
 # ---- 4., 5. The new digest, restart, health -----------------------------------------------------
 case "$target" in
-  be) write_images CONFERA_API_IMAGE "$image" ;;
-  web) write_images CONFERA_WEB_IMAGE "$image" ;;
+  be) write_images CONGRESA_API_IMAGE "$image" ;;
+  web) write_images CONGRESA_WEB_IMAGE "$image" ;;
 esac
 say "restarting ${services[*]}"
 restart || rollback "the new version did not become healthy"
@@ -407,7 +407,7 @@ case "$target" in
   web) smoke || rollback "the web application does not answer" ;;
 esac
 
-# The version before, for `confera-deploy rollback <target>` (only when there was one).
+# The version before, for `congresa-deploy rollback <target>` (only when there was one).
 if [ "$(grep -c . <<<"$before")" -eq "${#names[@]}" ] && [ "$before" != "$(target_lines)" ]; then
   printf '%s\n' "$before" >"$target_previous.next"
   chmod 0644 "$target_previous.next"

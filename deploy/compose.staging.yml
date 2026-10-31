@@ -1,12 +1,12 @@
 # The STAGING additions to deploy/compose.yml (ADR-27, staging rule 3; ST-50; SEC-M4I-05). A
 # production server never names this file.
 #
-#   docker compose --project-name confera \
-#     --env-file /srv/confera/compose.env --env-file /srv/confera/images.env \
-#     --file /srv/confera/deploy/compose.yml --file /srv/confera/deploy/compose.staging.yml up --detach
+#   docker compose --project-name congresa \
+#     --env-file /srv/congresa/compose.env --env-file /srv/congresa/images.env \
+#     --file /srv/congresa/deploy/compose.yml --file /srv/congresa/deploy/compose.staging.yml up --detach
 #
-# confera-deploy and confera-backup add it themselves when /etc/confera/deploy.conf says
-# CONFERA_INSTANCE=staging (and refuse to run when compose.env says otherwise).
+# congresa-deploy and congresa-backup add it themselves when /etc/congresa/deploy.conf says
+# CONGRESA_INSTANCE=staging (and refuse to run when compose.env says otherwise).
 #
 # - mailpit, the mail catcher: every message of the API and the worker goes to it alone
 #   (STAGING_MAIL_CATCHER, set here for both: src/modules/mail/mail-transport.ts). It relays
@@ -15,8 +15,8 @@
 # - Networks: mailpit is on `backend` (the API and the worker deliver SMTP to it on 1025) and on
 #   `catcher`, an internal network it shares with the proxy only. The web container is on neither,
 #   so it cannot read the catcher.
-# - The proxy serves the catcher's screen on its own host name, CONFERA_MAIL_HOST, behind its own
-#   credentials (CONFERA_CATCHER_USER and CONFERA_CATCHER_PASSWORD_HASH in proxy.env): whoever
+# - The proxy serves the catcher's screen on its own host name, CONGRESA_MAIL_HOST, behind its own
+#   credentials (CONGRESA_CATCHER_USER and CONGRESA_CATCHER_PASSWORD_HASH in proxy.env): whoever
 #   reads the catcher holds every invitation and reset link of staging (deploy/proxy/mail-staging.caddy).
 
 services:
@@ -72,7 +72,7 @@ services:
 
   proxy:
     environment:
-      CONFERA_MAIL_HOST: ${CONFERA_MAIL_HOST:?set CONFERA_MAIL_HOST in compose.env (staging)}
+      CONGRESA_MAIL_HOST: ${CONGRESA_MAIL_HOST:?set CONGRESA_MAIL_HOST in compose.env (staging)}
     volumes:
       - ./proxy/mail-staging.caddy:/etc/caddy/sites.d/mail-staging.caddy:ro
     networks: [edge, catcher]

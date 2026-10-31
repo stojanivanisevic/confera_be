@@ -1,21 +1,21 @@
 #!/bin/bash
-# The nightly backup of a Confera server (ADR-26, ADR-27; SEC-M4I-01, SEC-M4I-09). ST-63.
+# The nightly backup of a Congresa server (ADR-26, ADR-27; SEC-M4I-01, SEC-M4I-09). ST-63.
 #
-#   confera-backup          (no argument; run by confera-backup.timer, or by the operator)
+#   congresa-backup          (no argument; run by congresa-backup.timer, or by the operator)
 #
-# Installed as /usr/local/sbin/confera-backup (root:root, 0700). Reads the same root-owned
-# /etc/confera/deploy.conf as confera-deploy, the same way (as data), and takes the same lock, so a
+# Installed as /usr/local/sbin/congresa-backup (root:root, 0700). Reads the same root-owned
+# /etc/congresa/deploy.conf as congresa-deploy, the same way (as data), and takes the same lock, so a
 # backup and a deploy never run side by side (it waits up to 30 minutes for a running deploy).
 #
 # What it does, in this order:
-#   1. refuse when the file system of <root>/backups is fuller than CONFERA_DISK_MAX_PERCENT;
-#   2. pg_dump of CONFERA_DATABASE, custom format, as the superuser inside the postgres container,
+#   1. refuse when the file system of <root>/backups is fuller than CONGRESA_DISK_MAX_PERCENT;
+#   2. pg_dump of CONGRESA_DATABASE, custom format, as the superuser inside the postgres container,
 #      into <root>/backups/nightly-<UTC time>.dump (root, 0600); read back with pg_restore --list;
 #   3. a tar of the file volume (<project>_files), read-only, from a container without network,
 #      into <root>/backups/files-<UTC time>.tar (root, 0600); read back with tar --list;
 #   4. only when both are good: remove nightly-*, files-* and pre-deploy-* files (the dumps of
-#      confera-deploy), and any *.partial left by a run that was killed, older than
-#      CONFERA_BACKUP_KEEP_DAYS (7 by default), naming each one.
+#      congresa-deploy), and any *.partial left by a run that was killed, older than
+#      CONGRESA_BACKUP_KEEP_DAYS (7 by default), naming each one.
 # A file is kept only once it has been read back; a failed step leaves no half-written file.
 #
 # The dumps are NOT encrypted: on staging the data is invented, and the folder is root's alone.
@@ -30,15 +30,15 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
 
-readonly CONF=/etc/confera/deploy.conf
-say() { printf 'confera-backup: %s\n' "$*"; }
+readonly CONF=/etc/congresa/deploy.conf
+say() { printf 'congresa-backup: %s\n' "$*"; }
 fail() {
-  printf 'confera-backup: FAILED: %s\n' "$1" >&2
+  printf 'congresa-backup: FAILED: %s\n' "$1" >&2
   exit "${2:-1}"
 }
-[ "$#" -eq 0 ] || fail "usage: confera-backup (no argument)" 64
+[ "$#" -eq 0 ] || fail "usage: congresa-backup (no argument)" 64
 
-# ---- The configuration: root's own file, read as data (as confera-deploy reads it) ------------
+# ---- The configuration: root's own file, read as data (as congresa-deploy reads it) ------------
 [ -f "$CONF" ] || fail "$CONF is missing" 78
 [ "$(stat -c '%u' "$CONF")" = 0 ] || fail "$CONF must be owned by root" 78
 case "$(stat -c '%a' "$CONF")" in
@@ -56,38 +56,38 @@ need() {
   [ -n "$value" ] || fail "$CONF: $1 is not set" 78
   printf '%s' "$value"
 }
-root=$(need CONFERA_ROOT)
-project=$(need CONFERA_PROJECT)
-instance=$(need CONFERA_INSTANCE)
-be_repository=$(need CONFERA_BE_REPOSITORY)
-database=$(need CONFERA_DATABASE)
-[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || fail "$CONF: CONFERA_DATABASE is not a database name" 78
-[[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "$CONF: CONFERA_PROJECT is not a project name" 78
-disk_max=${setting[CONFERA_DISK_MAX_PERCENT]:-85}
-[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || fail "$CONF: CONFERA_DISK_MAX_PERCENT is not a number below 100" 78
-keep_days=${setting[CONFERA_BACKUP_KEEP_DAYS]:-7}
-[[ "$keep_days" =~ ^[1-9][0-9]{0,2}$ ]] || fail "$CONF: CONFERA_BACKUP_KEEP_DAYS is not a number of days" 78
+root=$(need CONGRESA_ROOT)
+project=$(need CONGRESA_PROJECT)
+instance=$(need CONGRESA_INSTANCE)
+be_repository=$(need CONGRESA_BE_REPOSITORY)
+database=$(need CONGRESA_DATABASE)
+[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || fail "$CONF: CONGRESA_DATABASE is not a database name" 78
+[[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "$CONF: CONGRESA_PROJECT is not a project name" 78
+disk_max=${setting[CONGRESA_DISK_MAX_PERCENT]:-85}
+[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || fail "$CONF: CONGRESA_DISK_MAX_PERCENT is not a number below 100" 78
+keep_days=${setting[CONGRESA_BACKUP_KEEP_DAYS]:-7}
+[[ "$keep_days" =~ ^[1-9][0-9]{0,2}$ ]] || fail "$CONF: CONGRESA_BACKUP_KEEP_DAYS is not a number of days" 78
 case "$instance" in
   staging | production) ;;
-  *) fail "$CONF: CONFERA_INSTANCE must be staging or production" 78 ;;
+  *) fail "$CONF: CONGRESA_INSTANCE must be staging or production" 78 ;;
 esac
 
 readonly images="$root/images.env"
 readonly backups="$root/backups"
-grep -qx "CONFERA_INSTANCE=$instance" "$root/compose.env" ||
-  fail "$root/compose.env does not say CONFERA_INSTANCE=$instance, as $CONF does" 78
+grep -qx "CONGRESA_INSTANCE=$instance" "$root/compose.env" ||
+  fail "$root/compose.env does not say CONGRESA_INSTANCE=$instance, as $CONF does" 78
 compose=(docker compose --project-name "$project"
   --env-file "$root/compose.env" --env-file "$images"
   --file "$root/deploy/compose.yml")
 [ "$instance" = staging ] && compose+=(--file "$root/deploy/compose.staging.yml")
 
 # The API image (it has tar) by digest, from images.env, for the tar of the file volume.
-api_image=$(grep -m 1 '^CONFERA_API_IMAGE=' "$images" | cut -d= -f2-) || true
+api_image=$(grep -m 1 '^CONGRESA_API_IMAGE=' "$images" | cut -d= -f2-) || true
 api_re="^${be_repository//./\.}@sha256:[0-9a-f]{64}$"
 [[ "$api_image" =~ $api_re ]] || fail "$images names no API image of $be_repository by digest" 78
 
-# ---- The lock of confera-deploy --------------------------------------------------------------------
-exec 9>/run/lock/confera-deploy.lock
+# ---- The lock of congresa-deploy --------------------------------------------------------------------
+exec 9>/run/lock/congresa-deploy.lock
 flock --wait 1800 9 || fail "a deploy has held the lock for 30 minutes" 75
 
 # ---- 1. Room ------------------------------------------------------------------------------------
@@ -125,5 +125,5 @@ say "wrote $dump and $tarball (both read back)"
 # ---- 4. Prune, only after a good backup -----------------------------------------------------------
 find "$backups" -maxdepth 1 -type f \
   \( -name 'nightly-*.dump' -o -name 'files-*.tar' -o -name 'pre-deploy-*.dump' -o -name '*.partial' \) \
-  -mmin "+$((keep_days * 1440))" -printf 'confera-backup: removing %p (older than '"$keep_days"' days)\n' -delete
+  -mmin "+$((keep_days * 1440))" -printf 'congresa-backup: removing %p (older than '"$keep_days"' days)\n' -delete
 say "backup ok"

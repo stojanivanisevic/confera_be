@@ -5,8 +5,8 @@
 //   node deploy/checks/topology.mjs --images-only [--no-build]      ST-02 and ST-04 without starting
 //
 // It builds the runtime and jobs images of this repository (unless --no-build), takes the web image
-// of confera_fe (default confera-m4-infra-web:check, built from ../confera_fe when it is missing),
-// and starts deploy/compose.yml as a staging instance under the project name confera-m4-infra, with
+// of confera_fe (default congresa-m4-infra-web:check, built from ../confera_fe when it is missing),
+// and starts deploy/compose.yml as a staging instance under the project name congresa-m4-infra, with
 // host names under .localhost (Caddy's own local CA), random secrets in files under .artifacts/, and
 // free ports instead of 80 and 443. Then it proves:
 //
@@ -30,13 +30,13 @@
 //          catcher's own credentials, which the gate's do not replace;
 //   SEC-M4I-06  the gate's phase-2 exceptions in gate-staging.caddy equal README section 15's list
 //          (and the file's own comment), and against the running proxy: phase 1 gates every
-//          path; with CONFERA_GATE_PUBLIC_PATHS=open exactly the listed paths open, on the
+//          path; with CONGRESA_GATE_PUBLIC_PATHS=open exactly the listed paths open, on the
 //          public host only; the production proxy configuration has no gate and no mail host;
 //   SEC-M4I-07  the secrets folder is root:root 0700 and each file root:root 0444, as on a
 //          server: uid 1000 and gid 999 of the "host" cannot read a file; inside a container each
 //          given file is root's, 0444, and read-only.
 //
-// Everything it creates is named confera-m4-infra* and removed at the end (unless --keep).
+// Everything it creates is named congresa-m4-infra* and removed at the end (unless --keep).
 // Log: .artifacts/deploy-checks/topology.log. Needs Docker and about 3 GB of memory (1 GB without ClamAV).
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -66,9 +66,9 @@ const PROJECT = CHECK_PREFIX;
 const API_IMAGE = `${CHECK_PREFIX}-api:check`;
 const JOBS_IMAGE = `${CHECK_PREFIX}-jobs:check`;
 const WEB_IMAGE = option('--web-image', `${CHECK_PREFIX}-web:check`);
-const ADMIN_HOST = 'admin.confera-check.localhost';
-const PUBLIC_HOST = 'forms.confera-check.localhost';
-const MAIL_HOST = 'mail.confera-check.localhost';
+const ADMIN_HOST = 'admin.congresa-check.localhost';
+const PUBLIC_HOST = 'forms.congresa-check.localhost';
+const MAIL_HOST = 'mail.congresa-check.localhost';
 // The secret files must be root's, as on a server. Docker Desktop (Windows, macOS) shares host
 // folders without Unix owners, so there they live in the Docker VM's /tmp; on Linux, in work/.
 const onDockerDesktop = process.platform === 'win32' || process.platform === 'darwin';
@@ -141,7 +141,7 @@ function freePort() {
 const secret = (bytes = 24) => randomBytes(bytes).toString('base64url');
 
 function databaseAddress(role, password) {
-  const url = new URL('postgresql://postgres:5432/confera');
+  const url = new URL('postgresql://postgres:5432/congresa');
   url.username = role;
   url.password = password;
   return url.href;
@@ -158,9 +158,9 @@ async function prepare() {
   const roles = { owner: secret(), app: secret(), system: secret() };
   const files = {
     postgres_password: secret(),
-    migration_database_url: databaseAddress('confera_owner', roles.owner),
-    database_url: databaseAddress('confera_app', roles.app),
-    system_database_url: databaseAddress('confera_system', roles.system),
+    migration_database_url: databaseAddress('congresa_owner', roles.owner),
+    database_url: databaseAddress('congresa_app', roles.app),
+    system_database_url: databaseAddress('congresa_system', roles.system),
     data_key: secret(32),
   };
   // As README section 15 says: the folder root:root 0700, each file root:root 0444, one value.
@@ -212,23 +212,23 @@ async function prepare() {
   writeFileSync(
     path.join(work, 'compose.env'),
     lines([
-      ['CONFERA_INSTANCE', 'staging'],
-      ['CONFERA_ADMIN_HOST', ADMIN_HOST],
-      ['CONFERA_PUBLIC_HOST', PUBLIC_HOST],
-      ['CONFERA_MAIL_HOST', MAIL_HOST],
-      ['CONFERA_CONFIG_DIR', path.join(work, 'config')],
-      ['CONFERA_SECRETS_DIR', secretsDir],
-      ['CONFERA_PROXY_DATA_DIR', path.join(work, 'proxy-data')],
-      ['CONFERA_HTTP_PORT', String(ports.http)],
-      ['CONFERA_HTTPS_PORT', String(ports.https)],
+      ['CONGRESA_INSTANCE', 'staging'],
+      ['CONGRESA_ADMIN_HOST', ADMIN_HOST],
+      ['CONGRESA_PUBLIC_HOST', PUBLIC_HOST],
+      ['CONGRESA_MAIL_HOST', MAIL_HOST],
+      ['CONGRESA_CONFIG_DIR', path.join(work, 'config')],
+      ['CONGRESA_SECRETS_DIR', secretsDir],
+      ['CONGRESA_PROXY_DATA_DIR', path.join(work, 'proxy-data')],
+      ['CONGRESA_HTTP_PORT', String(ports.http)],
+      ['CONGRESA_HTTPS_PORT', String(ports.https)],
     ]),
   );
   writeFileSync(
     path.join(work, 'images.env'),
     lines([
-      ['CONFERA_API_IMAGE', API_IMAGE],
-      ['CONFERA_JOBS_IMAGE', JOBS_IMAGE],
-      ['CONFERA_WEB_IMAGE', WEB_IMAGE],
+      ['CONGRESA_API_IMAGE', API_IMAGE],
+      ['CONGRESA_JOBS_IMAGE', JOBS_IMAGE],
+      ['CONGRESA_WEB_IMAGE', WEB_IMAGE],
     ]),
   );
   const template = (name) => readFileSync(path.join(repoRoot, 'deploy', name), 'utf8');
@@ -241,17 +241,17 @@ async function prepare() {
   writeFileSync(
     path.join(work, 'config', 'web.env'),
     template('web.env.example')
-      .replace(/^CONFERA_ADMIN_ORIGIN=$/m, `CONFERA_ADMIN_ORIGIN=${origin(ADMIN_HOST)}`)
-      .replace(/^CONFERA_PUBLIC_ORIGIN=$/m, `CONFERA_PUBLIC_ORIGIN=${origin(PUBLIC_HOST)}`),
+      .replace(/^CONGRESA_ADMIN_ORIGIN=$/m, `CONGRESA_ADMIN_ORIGIN=${origin(ADMIN_HOST)}`)
+      .replace(/^CONGRESA_PUBLIC_ORIGIN=$/m, `CONGRESA_PUBLIC_ORIGIN=${origin(PUBLIC_HOST)}`),
   );
   const proxyEnv = template('proxy.env.example')
-    .replace(/^CONFERA_ACME_EMAIL=$/m, 'CONFERA_ACME_EMAIL=ops@example.org')
-    .replace(/^CONFERA_GATE_USER=$/m, `CONFERA_GATE_USER=${gateUser}`)
-    .replace(/^CONFERA_GATE_PASSWORD_HASH=$/m, `CONFERA_GATE_PASSWORD_HASH='${hash}'`)
-    .replace(/^CONFERA_CATCHER_USER=$/m, `CONFERA_CATCHER_USER=${catcherUser}`)
+    .replace(/^CONGRESA_ACME_EMAIL=$/m, 'CONGRESA_ACME_EMAIL=ops@example.org')
+    .replace(/^CONGRESA_GATE_USER=$/m, `CONGRESA_GATE_USER=${gateUser}`)
+    .replace(/^CONGRESA_GATE_PASSWORD_HASH=$/m, `CONGRESA_GATE_PASSWORD_HASH='${hash}'`)
+    .replace(/^CONGRESA_CATCHER_USER=$/m, `CONGRESA_CATCHER_USER=${catcherUser}`)
     .replace(
-      /^CONFERA_CATCHER_PASSWORD_HASH=$/m,
-      `CONFERA_CATCHER_PASSWORD_HASH='${catcherHash}'`,
+      /^CONGRESA_CATCHER_PASSWORD_HASH=$/m,
+      `CONGRESA_CATCHER_PASSWORD_HASH='${catcherHash}'`,
     );
   writeFileSync(path.join(work, 'config', 'proxy.env'), proxyEnv);
   const basic = (user, word) => `Basic ${Buffer.from(`${user}:${word}`).toString('base64')}`;
@@ -320,7 +320,7 @@ function call(ports, { host, pathname, method = 'GET', headers = {}, body, plain
 function bodyThroughProxy(gate, host, pathname, bytes, asFile) {
   const script = `
 const https = require('node:https'), crypto = require('node:crypto');
-const bytes = Number(process.env.BYTES), boundary = 'confera-check-' + crypto.randomBytes(6).toString('hex');
+const bytes = Number(process.env.BYTES), boundary = 'congresa-check-' + crypto.randomBytes(6).toString('hex');
 const head = Buffer.from(process.env.AS_FILE === '1' ? '--' + boundary + '\\r\\nContent-Disposition: form-data; name="file"; filename="paper.pdf"\\r\\nContent-Type: application/pdf\\r\\n\\r\\n' : '');
 const tail = Buffer.from(process.env.AS_FILE === '1' ? '\\r\\n--' + boundary + '--\\r\\n' : '');
 const done = (result) => { process.stdout.write(JSON.stringify(result)); process.exit(0); };
@@ -393,7 +393,7 @@ function checkGateList() {
     `matcher: ${matcher.join(' ')} | comment: ${comment.join(' ')}`,
   );
   check(
-    'SEC-M4I-06: the exceptions include the pages\' scripts (/_next/static/*)',
+    "SEC-M4I-06: the exceptions include the pages' scripts (/_next/static/*)",
     matcher.includes('/_next/static/*'),
   );
 }
@@ -406,15 +406,15 @@ function adaptProxy(instance, open = false) {
     `type=bind,source=${source},target=${target},readonly`,
   ];
   const env = {
-    CONFERA_ADMIN_HOST: ADMIN_HOST,
-    CONFERA_PUBLIC_HOST: PUBLIC_HOST,
-    CONFERA_MAIL_HOST: MAIL_HOST,
-    CONFERA_ACME_EMAIL: 'ops@example.org',
-    CONFERA_GATE_USER: 'gate',
-    CONFERA_GATE_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
-    CONFERA_CATCHER_USER: 'catcher',
-    CONFERA_CATCHER_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
-    CONFERA_GATE_PUBLIC_PATHS: open ? 'open' : 'closed',
+    CONGRESA_ADMIN_HOST: ADMIN_HOST,
+    CONGRESA_PUBLIC_HOST: PUBLIC_HOST,
+    CONGRESA_MAIL_HOST: MAIL_HOST,
+    CONGRESA_ACME_EMAIL: 'ops@example.org',
+    CONGRESA_GATE_USER: 'gate',
+    CONGRESA_GATE_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
+    CONGRESA_CATCHER_USER: 'catcher',
+    CONGRESA_CATCHER_PASSWORD_HASH: '$2a$10$abcdefghijklmnopqrstuuAbCdEfGhIjKlMnOpQrStUvWxYz01234',
+    CONGRESA_GATE_PUBLIC_PATHS: open ? 'open' : 'closed',
   };
   return docker([
     'run',
@@ -464,9 +464,10 @@ function checkProxyConfigurations() {
   }
   check(
     'SEC-M4I-08: the proxy configuration writes no access log',
-    !/"logs"\s*:/.test(production.stdout) && !/^\s*log(\s|$)/m.test(
-      readFileSync(path.join(repoRoot, 'deploy', 'proxy', 'Caddyfile'), 'utf8'),
-    ),
+    !/"logs"\s*:/.test(production.stdout) &&
+      !/^\s*log(\s|$)/m.test(
+        readFileSync(path.join(repoRoot, 'deploy', 'proxy', 'Caddyfile'), 'utf8'),
+      ),
   );
 }
 
@@ -671,7 +672,9 @@ function checkComposeConfig() {
   check(
     'SEC-M4I-05: mailpit is pinned by digest and relays nothing',
     /^axllent\/mailpit:[^@]+@sha256:[0-9a-f]{64}$/.test(String(services.mailpit?.image)) &&
-      !Object.keys(services.mailpit?.environment ?? {}).some((name) => name.startsWith('MP_SMTP_RELAY')),
+      !Object.keys(services.mailpit?.environment ?? {}).some((name) =>
+        name.startsWith('MP_SMTP_RELAY'),
+      ),
     String(services.mailpit?.image),
   );
   check(
@@ -701,7 +704,7 @@ function checkComposeConfig() {
       ['proxy', 'web'].includes(name) &&
       (service.volumes ?? []).some(
         (volume) =>
-          volume.source === 'files' || String(volume.target).includes('/var/lib/confera/files'),
+          volume.source === 'files' || String(volume.target).includes('/var/lib/congresa/files'),
       )
     )
       problems.push('mounts the file volume');
@@ -782,7 +785,7 @@ function checkContainers(running) {
       id,
       'sh',
       '-c',
-      'touch /confera-probe 2>/dev/null || touch /etc/confera-probe 2>/dev/null',
+      'touch /congresa-probe 2>/dev/null || touch /etc/congresa-probe 2>/dev/null',
     ]);
     if (probe.code === 0) problems.push('wrote into the root file system');
     check(
@@ -809,7 +812,7 @@ function checkContainers(running) {
   check(
     'the web container has no secret file and no file volume',
     !webMounts.some(
-      (target) => target.startsWith('/run/secrets') || target.includes('/var/lib/confera'),
+      (target) => target.startsWith('/run/secrets') || target.includes('/var/lib/congresa'),
     ),
     webMounts.join(', '),
   );
@@ -817,7 +820,7 @@ function checkContainers(running) {
   check(
     'the proxy has no secret file and no file volume',
     !proxyMounts.some(
-      (target) => target.startsWith('/run/secrets') || target.includes('/var/lib/confera'),
+      (target) => target.startsWith('/run/secrets') || target.includes('/var/lib/congresa'),
     ),
     proxyMounts.join(', '),
   );
@@ -896,7 +899,13 @@ function checkContainers(running) {
     const id = containerOf(service);
     const seen = docker(['exec', id, 'sh', '-c', "stat -c '%n %u:%g %a' /run/secrets/*"]);
     const lines = seen.stdout.trim().split('\n').filter(Boolean);
-    const write = docker(['exec', id, 'sh', '-c', 'for f in /run/secrets/*; do printf x >>"$f" && exit 0; done; exit 1']);
+    const write = docker([
+      'exec',
+      id,
+      'sh',
+      '-c',
+      'for f in /run/secrets/*; do printf x >>"$f" && exit 0; done; exit 1',
+    ]);
     check(
       `SEC-M4I-07: ${service}'s secret files are root:root 0444 and cannot be written`,
       lines.length > 0 && lines.every((line) => / 0:0 444$/.test(line)) && write.code !== 0,
@@ -1029,7 +1038,11 @@ async function checkProxy(ports, gate, catcher, proxyEnv) {
   // SEC-M4I-05: the catcher's screen, on its own host, behind its own credentials.
   const mailBare = await call(ports, { host: MAIL_HOST, pathname: '/' });
   const mailGate = await call(ports, { host: MAIL_HOST, pathname: '/', headers: auth });
-  const mail = await call(ports, { host: MAIL_HOST, pathname: '/', headers: { authorization: catcher } });
+  const mail = await call(ports, {
+    host: MAIL_HOST,
+    pathname: '/',
+    headers: { authorization: catcher },
+  });
   const mailApi = await call(ports, { host: MAIL_HOST, pathname: '/api/v1/messages' });
   check(
     'SEC-M4I-05: the mail host asks for credentials on every path (401)',
@@ -1065,7 +1078,7 @@ async function checkProxy(ports, gate, catcher, proxyEnv) {
     plain.status === 308 && String(plain.headers.location).startsWith(`https://${ADMIN_HOST}`),
     `${String(plain.status)} ${String(plain.headers.location)}`,
   );
-  const stranger = await call(ports, { host: 'other.confera-check.localhost', pathname: '/' });
+  const stranger = await call(ports, { host: 'other.congresa-check.localhost', pathname: '/' });
   check(
     'another host name gets no answer',
     stranger.status === 0 || stranger.status >= 400,
@@ -1077,9 +1090,19 @@ async function checkProxy(ports, gate, catcher, proxyEnv) {
 async function checkGatePhases(ports, proxyEnv) {
   const { matcher } = gateLists();
   const sample = (pattern) => (pattern.endsWith('/*') ? `${pattern.slice(0, -1)}check` : pattern);
-  const closedOnes = ['/', '/sign-in', '/f', '/embed', '/public/v1/meta', '/_next/data/x', '/api/v1/meta'];
+  const closedOnes = [
+    '/',
+    '/sign-in',
+    '/f',
+    '/embed',
+    '/public/v1/meta',
+    '/_next/data/x',
+    '/api/v1/meta',
+  ];
   const statuses = async (host, paths) =>
-    Promise.all(paths.map(async (pathname) => [pathname, (await call(ports, { host, pathname })).status]));
+    Promise.all(
+      paths.map(async (pathname) => [pathname, (await call(ports, { host, pathname })).status]),
+    );
   const phase1 = await statuses(PUBLIC_HOST, matcher.map(sample));
   check(
     'SEC-M4I-06 phase 1: every listed path is gated too (401)',
@@ -1089,7 +1112,7 @@ async function checkGatePhases(ports, proxyEnv) {
 
   writeFileSync(
     path.join(work, 'config', 'proxy.env'),
-    proxyEnv.replace(/^CONFERA_GATE_PUBLIC_PATHS=.*$/m, 'CONFERA_GATE_PUBLIC_PATHS=open'),
+    proxyEnv.replace(/^CONGRESA_GATE_PUBLIC_PATHS=.*$/m, 'CONGRESA_GATE_PUBLIC_PATHS=open'),
   );
   const recreated = compose(['up', '--detach', '--no-deps', '--force-recreate', 'proxy']);
   log.write(recreated.stdout + recreated.stderr);
@@ -1118,7 +1141,11 @@ async function checkGatePhases(ports, proxyEnv) {
     JSON.stringify(adminClosed),
   );
   const mail = await call(ports, { host: MAIL_HOST, pathname: '/' });
-  check('SEC-M4I-06 phase 2: the mail host stays closed (401)', mail.status === 401, String(mail.status));
+  check(
+    'SEC-M4I-06 phase 2: the mail host stays closed (401)',
+    mail.status === 401,
+    String(mail.status),
+  );
 
   writeFileSync(path.join(work, 'config', 'proxy.env'), proxyEnv);
   log.write(compose(['up', '--detach', '--no-deps', '--force-recreate', 'proxy']).stderr);
@@ -1136,11 +1163,13 @@ function checkDeployCommands() {
     'postgres',
     'sh',
     '-c',
-    'pg_dump --username postgres --dbname confera --format custom --no-password | pg_restore --list',
+    'pg_dump --username postgres --dbname congresa --format custom --no-password | pg_restore --list',
   ]);
   check(
     "SEC-M4I-02: the deploy script's pg_dump -Fc runs in the postgres container and pg_restore --list reads it",
-    dump.code === 0 && dump.stdout.includes('Format: CUSTOM') && dump.stdout.includes('_prisma_migrations'),
+    dump.code === 0 &&
+      dump.stdout.includes('Format: CUSTOM') &&
+      dump.stdout.includes('_prisma_migrations'),
     dump.stderr.slice(-400),
   );
   const applied = compose([
@@ -1151,7 +1180,7 @@ function checkDeployCommands() {
     '--username',
     'postgres',
     '--dbname',
-    'confera',
+    'congresa',
     '--no-psqlrc',
     '--no-password',
     '--tuples-only',

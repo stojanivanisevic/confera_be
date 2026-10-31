@@ -1,11 +1,11 @@
-# The production topology of a Confera server: staging and production alike (M4-BE-07;
+# The production topology of a Congresa server: staging and production alike (M4-BE-07;
 # ADR-26, ADR-27). Not for a developer machine: that is docker-compose.yml at the root.
 #
-#   docker compose --project-name confera \
-#     --env-file /srv/confera/compose.env --env-file /srv/confera/images.env \
-#     --file /srv/confera/deploy/compose.yml up --detach
+#   docker compose --project-name congresa \
+#     --env-file /srv/congresa/compose.env --env-file /srv/congresa/images.env \
+#     --file /srv/congresa/deploy/compose.yml up --detach
 #
-# Only the deploy script (deploy/server/confera-deploy) and the operator run this. The pipeline
+# Only the deploy script (deploy/server/congresa-deploy) and the operator run this. The pipeline
 # never does: it hands the deploy script an image digest and nothing else (ADR-27).
 #
 # - Two networks (ADR-26): `edge` holds proxy, web and API; `backend` holds API, worker,
@@ -14,19 +14,19 @@
 #   third, internal network `catcher` shared with the proxy only.
 # - Secrets per service, as files (ADR-26): each service is given only the secret files it needs,
 #   mounted under /run/secrets. The web container and the proxy are given none.
-# - One image for the API and the worker (CONFERA_API_IMAGE); the one-shot jobs have their own
-#   (CONFERA_JOBS_IMAGE). Every Confera image is referenced by digest (images.env, written by the
+# - One image for the API and the worker (CONGRESA_API_IMAGE); the one-shot jobs have their own
+#   (CONGRESA_JOBS_IMAGE). Every Congresa image is referenced by digest (images.env, written by the
 #   deploy script); every other image is pinned by digest here.
 # - No published port except the proxy's 80 and 443. No container mounts the Docker socket.
 #   Neither proxy nor web mounts the file volume.
 # - Every container: non-root, read-only root file system, every capability dropped, no new
 #   privileges, memory, CPU and process limits (ST-53; deploy/checks/topology.mjs proves it).
 #
-# On staging every command also names --file /srv/confera/deploy/compose.staging.yml.
+# On staging every command also names --file /srv/congresa/deploy/compose.staging.yml.
 #
-# The settings are in /srv/confera/compose.env (template: deploy/compose.env.example), the
-# settings of each service in its own file under CONFERA_CONFIG_DIR (templates: api.env.example,
-# web.env.example, proxy.env.example), the secrets one file each under CONFERA_SECRETS_DIR
+# The settings are in /srv/congresa/compose.env (template: deploy/compose.env.example), the
+# settings of each service in its own file under CONGRESA_CONFIG_DIR (templates: api.env.example,
+# web.env.example, proxy.env.example), the secrets one file each under CONGRESA_SECRETS_DIR
 # (README section 15 lists them, with the owner and mode each must have).
 
 x-hardened: &hardened
@@ -44,10 +44,10 @@ x-hardened: &hardened
 x-api-environment:
   &api-environment # Fixed by this topology; everything the operator decides is in api.env.
   STAGE: prod
-  INSTANCE: ${CONFERA_INSTANCE:?set CONFERA_INSTANCE in compose.env (staging or production)}
+  INSTANCE: ${CONGRESA_INSTANCE:?set CONGRESA_INSTANCE in compose.env (staging or production)}
   PORT: '3001'
   LISTEN_HOST: 0.0.0.0
-  FILE_STORAGE_DIR: /var/lib/confera/files
+  FILE_STORAGE_DIR: /var/lib/congresa/files
   CLAMAV_ADDRESS: clamav:3310
 
 x-api-healthcheck: &api-healthcheck
@@ -76,18 +76,18 @@ services:
     # check reads them). It listens on 8080 and 8443, so it needs none.
     cap_add: [NET_BIND_SERVICE]
     ports:
-      - '${CONFERA_HTTP_PORT:-80}:8080'
-      - '${CONFERA_HTTPS_PORT:-443}:8443'
+      - '${CONGRESA_HTTP_PORT:-80}:8080'
+      - '${CONGRESA_HTTPS_PORT:-443}:8443'
     env_file:
-      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/proxy.env
+      - ${CONGRESA_CONFIG_DIR:?set CONGRESA_CONFIG_DIR in compose.env}/proxy.env
     environment:
-      CONFERA_ADMIN_HOST: ${CONFERA_ADMIN_HOST:?set CONFERA_ADMIN_HOST in compose.env}
-      CONFERA_PUBLIC_HOST: ${CONFERA_PUBLIC_HOST:?set CONFERA_PUBLIC_HOST in compose.env}
+      CONGRESA_ADMIN_HOST: ${CONGRESA_ADMIN_HOST:?set CONGRESA_ADMIN_HOST in compose.env}
+      CONGRESA_PUBLIC_HOST: ${CONGRESA_PUBLIC_HOST:?set CONGRESA_PUBLIC_HOST in compose.env}
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./proxy/gate-${CONFERA_INSTANCE:?set CONFERA_INSTANCE in compose.env}.caddy:/etc/caddy/gate.caddy:ro
+      - ./proxy/gate-${CONGRESA_INSTANCE:?set CONGRESA_INSTANCE in compose.env}.caddy:/etc/caddy/gate.caddy:ro
       # Certificates and the ACME account: a directory of the host owned by uid 10002 (README section 15).
-      - ${CONFERA_PROXY_DATA_DIR:?set CONFERA_PROXY_DATA_DIR in compose.env}:/data
+      - ${CONGRESA_PROXY_DATA_DIR:?set CONGRESA_PROXY_DATA_DIR in compose.env}:/data
     tmpfs:
       - /config:uid=10002,gid=10002,mode=0700
       - /tmp:uid=10002,gid=10002,mode=0700
@@ -99,13 +99,13 @@ services:
 
   web:
     <<: *hardened
-    image: ${CONFERA_WEB_IMAGE:?the deploy script writes CONFERA_WEB_IMAGE into images.env}
+    image: ${CONGRESA_WEB_IMAGE:?the deploy script writes CONGRESA_WEB_IMAGE into images.env}
     env_file:
-      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/web.env
+      - ${CONGRESA_CONFIG_DIR:?set CONGRESA_CONFIG_DIR in compose.env}/web.env
     environment:
       # The web application holds no secret and no database address (ADR-20, ADR-26).
       STAGE: prod
-      CONFERA_API_ORIGIN: http://api:3001
+      CONGRESA_API_ORIGIN: http://api:3001
       PORT: '3000'
       LISTEN_HOST: 0.0.0.0
     tmpfs:
@@ -132,9 +132,9 @@ services:
 
   api:
     <<: *hardened
-    image: ${CONFERA_API_IMAGE:?the deploy script writes CONFERA_API_IMAGE into images.env}
+    image: ${CONGRESA_API_IMAGE:?the deploy script writes CONGRESA_API_IMAGE into images.env}
     env_file:
-      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/api.env
+      - ${CONGRESA_CONFIG_DIR:?set CONGRESA_CONFIG_DIR in compose.env}/api.env
     environment:
       <<: *api-environment
       # The API serves requests only: the worker below runs the outbox and the file jobs, so
@@ -143,7 +143,7 @@ services:
       JOBS_INTERVAL_SECONDS: '0'
     secrets: [database_url, system_database_url, data_key]
     volumes:
-      - files:/var/lib/confera/files
+      - files:/var/lib/congresa/files
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=0700
     networks: [edge, backend]
@@ -159,14 +159,14 @@ services:
     <<: *hardened
     # The same image as the API, by the same digest. It also answers /health, on the backend
     # network only: nothing routes to it.
-    image: ${CONFERA_API_IMAGE:?the deploy script writes CONFERA_API_IMAGE into images.env}
+    image: ${CONGRESA_API_IMAGE:?the deploy script writes CONGRESA_API_IMAGE into images.env}
     env_file:
-      - ${CONFERA_CONFIG_DIR:?set CONFERA_CONFIG_DIR in compose.env}/api.env
+      - ${CONGRESA_CONFIG_DIR:?set CONGRESA_CONFIG_DIR in compose.env}/api.env
     environment:
       <<: *api-environment
     secrets: [database_url, system_database_url, data_key]
     volumes:
-      - files:/var/lib/confera/files
+      - files:/var/lib/congresa/files
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=0700
     networks: [backend]
@@ -236,7 +236,7 @@ services:
   migrate:
     <<: *hardened
     restart: 'no'
-    image: ${CONFERA_JOBS_IMAGE:?the deploy script writes CONFERA_JOBS_IMAGE into images.env}
+    image: ${CONGRESA_JOBS_IMAGE:?the deploy script writes CONGRESA_JOBS_IMAGE into images.env}
     profiles: [jobs]
     command: ['node_modules/.bin/prisma', 'migrate', 'deploy']
     # The owner role's address exists in this job only (ADR-05, ADR-26).
@@ -254,7 +254,7 @@ services:
   provision:
     <<: *hardened
     restart: 'no'
-    image: ${CONFERA_JOBS_IMAGE:?the deploy script writes CONFERA_JOBS_IMAGE into images.env}
+    image: ${CONGRESA_JOBS_IMAGE:?the deploy script writes CONGRESA_JOBS_IMAGE into images.env}
     profiles: [provision]
     # Creates the database roles and the database (scripts/db-provision.mjs); the operator runs
     # it once at provisioning and first after a restore. The superuser's password exists in this
@@ -280,19 +280,19 @@ volumes:
   files: {}
   clamav-db: {}
 
-# One file per secret under CONFERA_SECRETS_DIR (README section 15; SEC-M4I-07). The folder is
+# One file per secret under CONGRESA_SECRETS_DIR (README section 15; SEC-M4I-07). The folder is
 # root's, mode 0700, so no account of the host but root can reach a file in it. Each file is
 # root:root 0444: dockerd (root) bind-mounts it read-only, and inside the container the service's
 # own user reads it; no host account owns it, so none can read or change it, whatever uid 1000
 # or gid 999 are on that host. Only the services listed below are given a file at all.
 secrets:
   database_url:
-    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/database_url
+    file: ${CONGRESA_SECRETS_DIR:?set CONGRESA_SECRETS_DIR in compose.env}/database_url
   system_database_url:
-    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/system_database_url
+    file: ${CONGRESA_SECRETS_DIR:?set CONGRESA_SECRETS_DIR in compose.env}/system_database_url
   data_key:
-    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/data_key
+    file: ${CONGRESA_SECRETS_DIR:?set CONGRESA_SECRETS_DIR in compose.env}/data_key
   migration_database_url:
-    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/migration_database_url
+    file: ${CONGRESA_SECRETS_DIR:?set CONGRESA_SECRETS_DIR in compose.env}/migration_database_url
   postgres_password:
-    file: ${CONFERA_SECRETS_DIR:?set CONFERA_SECRETS_DIR in compose.env}/postgres_password
+    file: ${CONGRESA_SECRETS_DIR:?set CONGRESA_SECRETS_DIR in compose.env}/postgres_password

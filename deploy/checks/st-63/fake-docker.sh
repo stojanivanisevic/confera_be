@@ -17,7 +17,7 @@ case "$1 ${2-}" in
       cat /etc/fake-docker/image-migrations
       echo migration_lock.toml
     fi
-    # The tar of the file volume (confera-backup): a real, small tar.
+    # The tar of the file volume (congresa-backup): a real, small tar.
     if [[ " $* " == *" --entrypoint tar "* ]]; then
       switch fail-tar && exit 1
       tar -C /etc/fake-docker -cf - label
@@ -48,7 +48,7 @@ case "$1 ${2-}" in
     fi
     if [[ "$args" == *" exec --no-TTY postgres pg_restore --list "* ]]; then
       head -c 5 | grep -q '^PGDMP' || { echo 'pg_restore: error: input file does not appear to be a valid archive' >&2; exit 1; }
-      printf ';\n; Archive created at 2026-10-18 03:15:00 UTC\n;     dbname: confera\n;     Format: CUSTOM\n;\n'
+      printf ';\n; Archive created at 2026-10-18 03:15:00 UTC\n;     dbname: congresa\n;     Format: CUSTOM\n;\n'
       exit 0
     fi
     if [[ "$args" == *" exec --no-TTY postgres psql "* ]]; then

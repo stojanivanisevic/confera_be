@@ -160,7 +160,7 @@ function evaluate(source, context) {
 }
 
 // ---- The cases --------------------------------------------------------------------------------------
-const actors = [OWNER, 'confera-bot', 'a-collaborator', 'Stojanivanisevic-not', ''];
+const actors = [OWNER, 'congresa-bot', 'a-collaborator', 'Stojanivanisevic-not', ''];
 const refs = [
   'refs/heads/develop',
   'refs/heads/main',
@@ -184,9 +184,9 @@ for (const actor of actors)
 const byOwner = (c) => c['github.actor'] === OWNER && c['github.triggering_actor'] === OWNER;
 
 // On Windows, `bash` on the PATH may be WSL's, which does not see this process's environment:
-// take Git for Windows' bash there (or CONFERA_BASH).
+// take Git for Windows' bash there (or CONGRESA_BASH).
 const bashPath =
-  process.env.CONFERA_BASH ??
+  process.env.CONGRESA_BASH ??
   (process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
     ? 'C:/Program Files/Git/bin/bash.exe'
     : 'bash');
@@ -267,13 +267,13 @@ function checkWorkflow(repository, file, kind) {
   const scriptCases = [
     [OWNER, OWNER, 'refs/heads/develop', 0],
     [OWNER, OWNER, 'refs/heads/feature/x', 1],
-    ['confera-bot', OWNER, 'refs/heads/develop', 1],
-    [OWNER, 'confera-bot', 'refs/heads/develop', 1],
+    ['congresa-bot', OWNER, 'refs/heads/develop', 1],
+    [OWNER, 'congresa-bot', 'refs/heads/develop', 1],
     ['', '', 'refs/heads/develop', 1],
     ...(kind === 'publish'
       ? [
           [OWNER, OWNER, 'refs/tags/v0.4.0', 0],
-          ['confera-bot', 'confera-bot', 'refs/tags/v0.4.0', 1],
+          ['congresa-bot', 'congresa-bot', 'refs/tags/v0.4.0', 1],
           [OWNER, OWNER, 'refs/tags/x0.4.0', 1],
         ]
       : [[OWNER, OWNER, 'refs/tags/v0.4.0', 1]]),

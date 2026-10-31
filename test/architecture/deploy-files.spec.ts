@@ -130,7 +130,7 @@ describe('compose files, Dockerfiles and deploy/ (ST-04, govcore matrix row 3)',
       ['a placeholder password of the local stack', 'DATABASE_URL=x:local-only-app@db'],
       [
         'a database address with a password',
-        ['DATABASE_URL=postgresql://confera_app', 'Sup3rSecret@db:5432/confera'].join(':'),
+        ['DATABASE_URL=postgresql://congresa_app', 'Sup3rSecret@db:5432/congresa'].join(':'),
       ],
     ])('in a file of a server: %s', (_name, text) => {
       expect(serverFileProblems({ name: 'compose.yml', text })).toHaveLength(1);
@@ -190,7 +190,7 @@ describe('compose files, Dockerfiles and deploy/ (ST-04, govcore matrix row 3)',
       const published = [...compose.matchAll(/^\s*-\s*'([^']+:\d+)'/gm)].map((match) => match[1]);
       expect(published.length).toBeGreaterThanOrEqual(3);
       for (const entry of published) {
-        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONFERA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
+        expect(entry).toMatch(/^127\.0\.0\.1:\$\{CONGRESA_[A-Z_]+_PORT:\?[^}]+\}:\d+$/);
       }
     });
 

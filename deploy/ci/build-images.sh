@@ -9,12 +9,12 @@
 #
 #   1. the jobs image (migrate, provision, seed) -> jobs.tar, its digest
 #   2. the runtime image (API and worker), labelled with the jobs image BY DIGEST
-#      (org.udekom.confera.jobs-image): a deploy names one digest, and the jobs image it migrates
+#      (org.udekom.congresa.jobs-image): a deploy names one digest, and the jobs image it migrates
 #      with follows from the content of that image -> runtime.tar, its digest
-#   3. both archives loaded into the local Docker as confera-m4-infra-{jobs,api}:check, so that the
+#   3. both archives loaded into the local Docker as congresa-m4-infra-{jobs,api}:check, so that the
 #      checks of deploy/checks look at exactly what will be pushed
 #
-# Writes <output>/digests.env: CONFERA_BE_DIGEST and CONFERA_BE_JOBS_DIGEST.
+# Writes <output>/digests.env: CONGRESA_BE_DIGEST and CONGRESA_BE_JOBS_DIGEST.
 # Needs a buildx builder that can export OCI archives (the workflow creates one; Docker Desktop
 # with the containerd image store has one by default).
 set -euo pipefail
@@ -39,21 +39,21 @@ build() {
   shift 3
   docker buildx build --target "$target" --platform linux/amd64 \
     --provenance=false --sbom=false \
-    --build-arg "CONFERA_REVISION=$revision" \
+    --build-arg "CONGRESA_REVISION=$revision" \
     --output "type=oci,dest=$archive,name=$name" "$@" .
 }
 
-build jobs "$out/jobs.tar" confera-m4-infra-jobs:check
+build jobs "$out/jobs.tar" congresa-m4-infra-jobs:check
 jobs_digest=$(digest_of "$out/jobs.tar")
 [[ "$jobs_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no digest for the jobs image" >&2; exit 1; }
 
-label="org.udekom.confera.jobs-image=$REGISTRY/confera-be-jobs@$jobs_digest"
-build runtime "$out/runtime.tar" confera-m4-infra-api:check --label "$label"
+label="org.udekom.congresa.jobs-image=$REGISTRY/congresa-be-jobs@$jobs_digest"
+build runtime "$out/runtime.tar" congresa-m4-infra-api:check --label "$label"
 runtime_digest=$(digest_of "$out/runtime.tar")
 [[ "$runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no digest for the runtime image" >&2; exit 1; }
 
 docker load --input "$out/jobs.tar"
 docker load --input "$out/runtime.tar"
 
-printf 'CONFERA_BE_DIGEST=%s\nCONFERA_BE_JOBS_DIGEST=%s\n' "$runtime_digest" "$jobs_digest" >"$out/digests.env"
+printf 'CONGRESA_BE_DIGEST=%s\nCONGRESA_BE_JOBS_DIGEST=%s\n' "$runtime_digest" "$jobs_digest" >"$out/digests.env"
 cat "$out/digests.env"

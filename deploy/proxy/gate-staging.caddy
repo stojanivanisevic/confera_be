@@ -8,7 +8,7 @@
 #     * the certificate challenge: Caddy answers it before any route, so the gate never sees it;
 #     * the PayPal webhook (0.7.0): added here when the route exists;
 #     * phase 2, the embed trial (M4-QA-04): the public form paths below, on the PUBLIC host only,
-#       and only once proxy.env says CONFERA_GATE_PUBLIC_PATHS=open (then recreate the proxy).
+#       and only once proxy.env says CONGRESA_GATE_PUBLIC_PATHS=open (then recreate the proxy).
 #       That is done only after the staging tests of M4-QA-03 have passed. Any other value, or
 #       none, keeps every path gated (phase 1).
 # - The list of phase 2 is kept HERE and nowhere else in code. README section 15 ("Gate
@@ -29,12 +29,12 @@ header X-Robots-Tag "noindex, nofollow"
 
 @gated {
 	not {
-		host {$CONFERA_PUBLIC_HOST}
+		host {$CONGRESA_PUBLIC_HOST}
 		path /f/* /embed/* /public/v1/forms/* /public/v1/csp-reports /_next/static/* /icon.png
-		expression `"{$CONFERA_GATE_PUBLIC_PATHS:closed}" == "open"`
+		expression `"{$CONGRESA_GATE_PUBLIC_PATHS:closed}" == "open"`
 	}
 }
 
 basic_auth @gated {
-	{$CONFERA_GATE_USER} {$CONFERA_GATE_PASSWORD_HASH}
+	{$CONGRESA_GATE_USER} {$CONGRESA_GATE_PASSWORD_HASH}
 }

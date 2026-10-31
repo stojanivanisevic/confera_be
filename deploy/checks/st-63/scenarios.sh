@@ -33,22 +33,22 @@ LOG=/var/log/fake-docker.log
 
 # ---- Set up: host keys, the two deploy keys, sshd ---------------------------------------------
 for who in be web; do
-  su tester -c "ssh-keygen -q -t ed25519 -N '' -C 'confera_$who pipeline' -f /home/tester/$who"
-  printf 'restrict,command="/usr/local/sbin/confera-deploy-gate %s" %s\n' "$who" "$(cat /home/tester/$who.pub)" \
-    >/etc/ssh/confera-deploy/confera-deploy-$who.keys
-  chmod 0644 /etc/ssh/confera-deploy/confera-deploy-$who.keys
+  su tester -c "ssh-keygen -q -t ed25519 -N '' -C 'congresa_$who pipeline' -f /home/tester/$who"
+  printf 'restrict,command="/usr/local/sbin/congresa-deploy-gate %s" %s\n' "$who" "$(cat /home/tester/$who.pub)" \
+    >/etc/ssh/congresa-deploy/congresa-deploy-$who.keys
+  chmod 0644 /etc/ssh/congresa-deploy/congresa-deploy-$who.keys
 done
 # A shell account with a key of its own, to show that the server does open shells: the refusals
 # below are the deploy users' configuration, not a server without shells.
 su tester -c "ssh-keygen -q -t ed25519 -N '' -f /home/tester/own"
 install -d -o tester -g tester -m 0700 /home/tester/.ssh
 install -o tester -g tester -m 0600 /home/tester/own.pub /home/tester/.ssh/authorized_keys
-printf 'ghcr.io/stojanivanisevic/confera-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
+printf 'ghcr.io/stojanivanisevic/congresa-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
 # The jobs image holds three migrations, and the database has applied the same three.
 printf '%s\n' 20261013070000_tenancy_foundation 20261014120000_access_and_audit 20261015090000_mail_and_conferences \
   >/etc/fake-docker/image-migrations
 cp /etc/fake-docker/image-migrations /etc/fake-docker/applied-migrations
-# Keys for root and for a user outside confera-ssh: sshd must refuse both.
+# Keys for root and for a user outside congresa-ssh: sshd must refuse both.
 install -d -m 0700 /root/.ssh
 install -m 0600 /home/tester/own.pub /root/.ssh/authorized_keys
 install -d -o outsider -g outsider -m 0700 /home/outsider/.ssh
@@ -65,41 +65,41 @@ send() {
   shift 2
   printf '%s' "$request" >/tmp/request
   chmod 0644 /tmp/request
-  as_tester "ssh $SSH_OPTS $* -i /home/tester/$key -- confera-deploy-$key@127.0.0.1 \"\$(cat /tmp/request)\""
+  as_tester "ssh $SSH_OPTS $* -i /home/tester/$key -- congresa-deploy-$key@127.0.0.1 \"\$(cat /tmp/request)\""
 }
 # raw <key> [ssh options and arguments...]
 raw() {
   local key=$1
   shift
-  as_tester "ssh $SSH_OPTS -i /home/tester/$key $* confera-deploy-$key@127.0.0.1"
+  as_tester "ssh $SSH_OPTS -i /home/tester/$key $* congresa-deploy-$key@127.0.0.1"
 }
 
 calls() { wc -l <"$LOG"; }
 
 # ---- A digest is deployed, from the fixed repository only --------------------------------------
 : >"$LOG"
-rm -f /srv/confera/images.env /srv/confera/images.env.previous
+rm -f /srv/congresa/images.env /srv/congresa/images.env.previous
 out=$(send be "$DIGEST" 2>&1)
 code=$?
-if [ "$code" -eq 0 ] && grep -qx "pull --quiet ghcr.io/stojanivanisevic/confera-be@$DIGEST" "$LOG"; then
-  ok "be key + digest: pulls ghcr.io/stojanivanisevic/confera-be@<digest>"
+if [ "$code" -eq 0 ] && grep -qx "pull --quiet ghcr.io/stojanivanisevic/congresa-be@$DIGEST" "$LOG"; then
+  ok "be key + digest: pulls ghcr.io/stojanivanisevic/congresa-be@<digest>"
 else
   not_ok "be key + digest: exit $code; $out"
 fi
-grep -qx "pull --quiet ghcr.io/stojanivanisevic/confera-be-jobs@$JOBS_DIGEST" "$LOG" &&
+grep -qx "pull --quiet ghcr.io/stojanivanisevic/congresa-be-jobs@$JOBS_DIGEST" "$LOG" &&
   ok "be: pulls the jobs image the API image names, by digest" || not_ok "be: jobs image not pulled"
 grep -q " run --rm --no-TTY migrate$" "$LOG" && ok "be: runs the migration job" || not_ok "be: no migration"
 grep -q " up --detach --no-deps --wait --wait-timeout 240 api worker$" "$LOG" &&
   ok "be: restarts api and worker and waits for health" || not_ok "be: no restart of api and worker"
 grep -q " exec --no-TTY api node -e " "$LOG" && ok "be: smoke test of readiness" || not_ok "be: no smoke test"
-if grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.env &&
-  grep -qx "CONFERA_JOBS_IMAGE=ghcr.io/stojanivanisevic/confera-be-jobs@$JOBS_DIGEST" /srv/confera/images.env; then
+if grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST" /srv/congresa/images.env &&
+  grep -qx "CONGRESA_JOBS_IMAGE=ghcr.io/stojanivanisevic/congresa-be-jobs@$JOBS_DIGEST" /srv/congresa/images.env; then
   ok "be: images.env names both images by digest"
 else
-  not_ok "be: images.env is $(cat /srv/confera/images.env 2>&1)"
+  not_ok "be: images.env is $(cat /srv/congresa/images.env 2>&1)"
 fi
 line_of() { grep -n -m 1 -e "$1" "$LOG" | cut -d: -f1; }
-dump_line=$(line_of ' exec --no-TTY postgres pg_dump --username postgres --dbname confera --format custom')
+dump_line=$(line_of ' exec --no-TTY postgres pg_dump --username postgres --dbname congresa --format custom')
 list_line=$(line_of ' exec --no-TTY postgres pg_restore --list')
 migrate_line=$(line_of ' run --rm --no-TTY migrate$')
 if [ -n "$dump_line" ] && [ -n "$list_line" ] && [ -n "$migrate_line" ] &&
@@ -108,21 +108,21 @@ if [ -n "$dump_line" ] && [ -n "$list_line" ] && [ -n "$migrate_line" ] &&
 else
   not_ok "be: dump $dump_line, check $list_line, migration $migrate_line: $(cat "$LOG")"
 fi
-dumps=(/srv/confera/backups/pre-deploy-*Z-aaaaaaaaaaaa.dump)
+dumps=(/srv/congresa/backups/pre-deploy-*Z-aaaaaaaaaaaa.dump)
 if [ "${#dumps[@]}" -eq 1 ] && [ -s "${dumps[0]}" ] && [ "$(stat -c '%U %a' "${dumps[0]}")" = "root 600" ] &&
-  [ "$(stat -c '%U %a' /srv/confera/backups)" = "root 700" ] && ! ls /srv/confera/backups/*.partial >/dev/null 2>&1; then
+  [ "$(stat -c '%U %a' /srv/congresa/backups)" = "root 700" ] && ! ls /srv/congresa/backups/*.partial >/dev/null 2>&1; then
   ok "be: the dump is backups/pre-deploy-<UTC>-<12 hex>.dump, root 0600, in a root 0700 folder"
 else
-  not_ok "be: dumps ${dumps[*]}: $(ls -la /srv/confera/backups 2>&1)"
+  not_ok "be: dumps ${dumps[*]}: $(ls -la /srv/congresa/backups 2>&1)"
 fi
-[[ "$out" == *"backup /srv/confera/backups/pre-deploy-"*".dump"* ]] && ok "be: the output names the dump" ||
+[[ "$out" == *"backup /srv/congresa/backups/pre-deploy-"*".dump"* ]] && ok "be: the output names the dump" ||
   not_ok "be: the dump is not named in the output: $out"
-if grep -Eq 'confera-web|--privileged|-v |--volume|/bin/sh|bash' "$LOG"; then
+if grep -Eq 'congresa-web|--privileged|-v |--volume|/bin/sh|bash' "$LOG"; then
   not_ok "be: docker was asked for something else: $(cat "$LOG")"
 else
   ok "be: docker was asked for nothing but pull, inspect, compose and the migration list"
 fi
-if grep -qx "run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --entrypoint ls ghcr.io/stojanivanisevic/confera-be-jobs@$JOBS_DIGEST /app/prisma/migrations" "$LOG" &&
+if grep -qx "run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1000:1000 --entrypoint ls ghcr.io/stojanivanisevic/congresa-be-jobs@$JOBS_DIGEST /app/prisma/migrations" "$LOG" &&
   grep -q " exec --no-TTY postgres psql .*_prisma_migrations" "$LOG"; then
   ok "be: compares the jobs image's migrations (no network, read-only) with _prisma_migrations"
 else
@@ -132,9 +132,9 @@ fi
 : >"$LOG"
 out=$(send web "$DIGEST" 2>&1)
 code=$?
-if [ "$code" -eq 0 ] && grep -qx "pull --quiet ghcr.io/stojanivanisevic/confera-web@$DIGEST" "$LOG" &&
-  ! grep -q 'confera-be' "$LOG" && grep -q " up --detach --no-deps --wait --wait-timeout 240 web$" "$LOG"; then
-  ok "web key + digest: pulls ghcr.io/stojanivanisevic/confera-web@<digest> and restarts web only"
+if [ "$code" -eq 0 ] && grep -qx "pull --quiet ghcr.io/stojanivanisevic/congresa-web@$DIGEST" "$LOG" &&
+  ! grep -q 'congresa-be' "$LOG" && grep -q " up --detach --no-deps --wait --wait-timeout 240 web$" "$LOG"; then
+  ok "web key + digest: pulls ghcr.io/stojanivanisevic/congresa-web@<digest> and restarts web only"
 else
   not_ok "web key + digest: exit $code; $out; $(cat "$LOG")"
 fi
@@ -154,9 +154,9 @@ refused_requests=(
   "sha256:$(printf 'g%.0s' {1..64})"
   "sha512:${hex64}${hex64}"
   "${hex64}"
-  "ghcr.io/stojanivanisevic/confera-be@sha256:${hex64}"
-  "ghcr.io/stojanivanisevic/confera-be:latest"
-  "confera-be:0.4.0"
+  "ghcr.io/stojanivanisevic/congresa-be@sha256:${hex64}"
+  "ghcr.io/stojanivanisevic/congresa-be:latest"
+  "congresa-be:0.4.0"
   "latest"
   "sha256:${hex64} sha256:${hex64}"
   "sha256:${hex64} --privileged"
@@ -198,7 +198,7 @@ code=$?
 
 # ---- The deploy key opens no shell, no terminal, no forward, no file transfer -----------------
 : >"$LOG"
-out=$(as_tester "ssh $SSH_OPTS -tt -i /home/tester/be confera-deploy-be@127.0.0.1 </dev/null" 2>&1)
+out=$(as_tester "ssh $SSH_OPTS -tt -i /home/tester/be congresa-deploy-be@127.0.0.1 </dev/null" 2>&1)
 code=$?
 [ "$code" -ne 0 ] && [ "$(calls)" -eq 0 ] && [[ "$out" != *"$ "* ]] &&
   ok "no shell: an interactive login with a terminal ends at once (exit $code)" ||
@@ -224,15 +224,15 @@ out=$(raw be -o ExitOnForwardFailure=yes -N -R 127.0.0.1:2222:127.0.0.1:22 2>&1 
 out=$(send be "sha256:x" -A -o ForwardAgent=yes 2>&1 </dev/null)
 [[ "$out" == *"refused"* ]] && ok "an agent-forwarding request changes nothing (still only a digest)" || not_ok "-A: $out"
 
-out=$(as_tester "sftp -b - $SSH_OPTS -i /home/tester/be confera-deploy-be@127.0.0.1 <<<'ls'" 2>&1)
+out=$(as_tester "sftp -b - $SSH_OPTS -i /home/tester/be congresa-deploy-be@127.0.0.1 <<<'ls'" 2>&1)
 code=$?
 [ "$code" -ne 0 ] && [ "$(calls)" -eq 0 ] && ok "no sftp" || not_ok "sftp: exit $code: $out"
 
-out=$(as_tester "scp $SSH_OPTS -O -i /home/tester/be /etc/hostname confera-deploy-be@127.0.0.1:/tmp/x" 2>&1)
+out=$(as_tester "scp $SSH_OPTS -O -i /home/tester/be /etc/hostname congresa-deploy-be@127.0.0.1:/tmp/x" 2>&1)
 code=$?
 [ "$code" -ne 0 ] && [ ! -e /tmp/x ] && ok "no scp" || not_ok "scp: exit $code: $out"
 
-out=$(as_tester "ssh $SSH_OPTS -o SendEnv=LD_PRELOAD -o SetEnv=SSH_ORIGINAL_COMMAND=$DIGEST -i /home/tester/be confera-deploy-be@127.0.0.1 id" 2>&1)
+out=$(as_tester "ssh $SSH_OPTS -o SendEnv=LD_PRELOAD -o SetEnv=SSH_ORIGINAL_COMMAND=$DIGEST -i /home/tester/be congresa-deploy-be@127.0.0.1 id" 2>&1)
 code=$?
 [ "$code" -eq 64 ] && ok "the client cannot set the request through the environment" || not_ok "SetEnv: exit $code: $out"
 
@@ -240,13 +240,13 @@ out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own tester@127.0.0.1 'echo shell-
 [[ "$out" == *"shell-opens"* ]] && ok "control: the same server opens a shell for an ordinary key" ||
   not_ok "control: an ordinary key got no shell either; the checks above prove nothing: $out"
 
-# ---- The hardening drop-in (sshd-confera-hardening.conf) --------------------------------------
+# ---- The hardening drop-in (sshd-congresa-hardening.conf) --------------------------------------
 out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own root@127.0.0.1 'echo shell-opens'" 2>&1)
 [[ "$out" != *"shell-opens"* && "$out" == *"Permission denied"* ]] &&
   ok "sshd: root cannot log in, even with a valid key" || not_ok "root login: $out"
 out=$(as_tester "ssh $SSH_OPTS -i /home/tester/own outsider@127.0.0.1 'echo shell-opens'" 2>&1)
 [[ "$out" != *"shell-opens"* && "$out" == *"Permission denied"* ]] &&
-  ok "sshd: a user outside the group confera-ssh cannot log in, even with a valid key" ||
+  ok "sshd: a user outside the group congresa-ssh cannot log in, even with a valid key" ||
   not_ok "outsider login: $out"
 out=$(as_tester "ssh $SSH_OPTS -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no tester@127.0.0.1 true" 2>&1)
 [[ "$out" == *"Permission denied (publickey)"* ]] &&
@@ -254,105 +254,105 @@ out=$(as_tester "ssh $SSH_OPTS -o PreferredAuthentications=password,keyboard-int
   not_ok "password login: $out"
 settings=$(sshd -T 2>/dev/null)
 for expected in "permitrootlogin no" "passwordauthentication no" "kbdinteractiveauthentication no" \
-  "allowgroups confera-ssh" "x11forwarding no" "allowtcpforwarding no" "permituserenvironment no"; do
+  "allowgroups congresa-ssh" "x11forwarding no" "allowtcpforwarding no" "permituserenvironment no"; do
   grep -qx "$expected" <<<"$settings" && ok "sshd -T: $expected" || not_ok "sshd -T has no line \"$expected\""
 done
 
 # ---- The deploy users can run nothing but the deploy script as root ---------------------------
-out=$(su confera-deploy-be -c "sudo --non-interactive /bin/sh -c id" 2>&1)
+out=$(su congresa-deploy-be -c "sudo --non-interactive /bin/sh -c id" 2>&1)
 [[ "$out" != *"uid=0"* ]] && ok "sudo: no shell as root for the deploy user" || not_ok "sudo /bin/sh: $out"
-out=$(su confera-deploy-be -c "sudo --non-interactive /usr/local/sbin/confera-deploy web $DIGEST" 2>&1)
+out=$(su congresa-deploy-be -c "sudo --non-interactive /usr/local/sbin/congresa-deploy web $DIGEST" 2>&1)
 [[ "$out" != *"deployed"* ]] && ok "sudo: the be user cannot deploy the web target" || not_ok "be->web: $out"
 : >"$LOG"
-out=$(su confera-deploy-be -c "sudo --non-interactive /usr/local/sbin/confera-deploy be 'sha256:x --privileged'" 2>&1)
+out=$(su congresa-deploy-be -c "sudo --non-interactive /usr/local/sbin/congresa-deploy be 'sha256:x --privileged'" 2>&1)
 code=$?
 [ "$(calls)" -eq 0 ] && [[ "$out" == *"refused"* ]] &&
   ok "the deploy script checks the digest itself, behind sudo" || not_ok "script behind sudo: exit $code: $out"
-id confera-deploy-be | grep -q docker && not_ok "the deploy user is in the docker group" ||
+id congresa-deploy-be | grep -q docker && not_ok "the deploy user is in the docker group" ||
   ok "the deploy user is not in the docker group"
 
 # ---- The deploy script itself ------------------------------------------------------------------
-printf 'ghcr.io/somebody-else/confera-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
+printf 'ghcr.io/somebody-else/congresa-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 code=$?
 [ "$code" -eq 65 ] && ! grep -q ' migrate$' "$LOG" &&
   ok "an image naming a jobs image of another repository is refused before the migration" ||
   not_ok "foreign jobs image: exit $code: $out"
-printf 'ghcr.io/stojanivanisevic/confera-be-jobs:latest' >/etc/fake-docker/label
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+printf 'ghcr.io/stojanivanisevic/congresa-be-jobs:latest' >/etc/fake-docker/label
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 [ "$?" -eq 65 ] && ok "an image naming its jobs image by tag is refused" || not_ok "jobs by tag: $out"
-printf 'ghcr.io/stojanivanisevic/confera-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
+printf 'ghcr.io/stojanivanisevic/congresa-be-jobs@%s' "$JOBS_DIGEST" >/etc/fake-docker/label
 
-cp /srv/confera/images.env /tmp/images.before
+cp /srv/congresa/images.env /tmp/images.before
 touch /etc/fake-docker/fail-migrate
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf 'd%.0s' {1..64})" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "sha256:$(printf 'd%.0s' {1..64})" 2>&1)
 code=$?
 rm -f /etc/fake-docker/fail-migrate
-[ "$code" -eq 1 ] && ! grep -q ' up ' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env &&
+[ "$code" -eq 1 ] && ! grep -q ' up ' "$LOG" && cmp -s /tmp/images.before /srv/congresa/images.env &&
   ok "a failed migration restarts nothing and leaves images.env as it was" ||
   not_ok "failed migration: exit $code: $out; $(cat "$LOG")"
 
-grep -q '^confera-deploy: the database as it was before the migration: /srv/confera/backups/pre-deploy-' <<<"$out" &&
+grep -q '^congresa-deploy: the database as it was before the migration: /srv/congresa/backups/pre-deploy-' <<<"$out" &&
   ok "a failed migration names the dump taken before it" || not_ok "failed migration, no dump named: $out"
 
 # ---- The backup before the migration (SEC-M4I-02) ----------------------------------------------
 for failure in fail-dump empty-dump bad-dump; do
-  cp /srv/confera/images.env /tmp/images.before
-  count_before=$(find /srv/confera/backups -name '*.dump' | wc -l)
+  cp /srv/congresa/images.env /tmp/images.before
+  count_before=$(find /srv/congresa/backups -name '*.dump' | wc -l)
   touch "/etc/fake-docker/$failure"
   : >"$LOG"
-  out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf 'e%.0s' {1..64})" 2>&1)
+  out=$(/usr/local/sbin/congresa-deploy be "sha256:$(printf 'e%.0s' {1..64})" 2>&1)
   code=$?
   rm -f "/etc/fake-docker/$failure"
   if [ "$code" -eq 74 ] && ! grep -q ' migrate$' "$LOG" && ! grep -q ' up ' "$LOG" &&
-    cmp -s /tmp/images.before /srv/confera/images.env && [[ "$out" == *"backup before the migration failed"* ]] &&
-    [ "$(find /srv/confera/backups -name '*.dump' | wc -l)" -eq "$count_before" ] &&
-    [ -z "$(find /srv/confera/backups -name '*.partial')" ]; then
+    cmp -s /tmp/images.before /srv/congresa/images.env && [[ "$out" == *"backup before the migration failed"* ]] &&
+    [ "$(find /srv/congresa/backups -name '*.dump' | wc -l)" -eq "$count_before" ] &&
+    [ -z "$(find /srv/congresa/backups -name '*.partial')" ]; then
     ok "$failure: stops before the migration (exit 74), keeps no file, images.env unchanged"
   else
     not_ok "$failure: exit $code: $out; $(cat "$LOG")"
   fi
 done
 
-cp /etc/confera/deploy.conf /tmp/deploy.conf
-sed -i 's/^CONFERA_DISK_MAX_PERCENT=.*/CONFERA_DISK_MAX_PERCENT=0/' /etc/confera/deploy.conf
+cp /etc/congresa/deploy.conf /tmp/deploy.conf
+sed -i 's/^CONGRESA_DISK_MAX_PERCENT=.*/CONGRESA_DISK_MAX_PERCENT=0/' /etc/congresa/deploy.conf
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 code=$?
-cp /tmp/deploy.conf /etc/confera/deploy.conf
+cp /tmp/deploy.conf /etc/congresa/deploy.conf
 [ "$code" -eq 74 ] && [ "$(calls)" -eq 0 ] && [[ "$out" == *"% full"* ]] &&
-  ok "a disk fuller than CONFERA_DISK_MAX_PERCENT stops a be deploy before anything runs (exit 74)" ||
+  ok "a disk fuller than CONGRESA_DISK_MAX_PERCENT stops a be deploy before anything runs (exit 74)" ||
   not_ok "full disk: exit $code calls $(calls): $out"
 
 # ---- Rollback to the previous digest -----------------------------------------------------------
-cp /srv/confera/images.env /tmp/images.before
+cp /srv/congresa/images.env /tmp/images.before
 touch /etc/fake-docker/fail-up-once
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf 'f%.0s' {1..64})" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "sha256:$(printf 'f%.0s' {1..64})" 2>&1)
 code=$?
 rm -f /etc/fake-docker/fail-up-once
 ups=$(grep -c ' up --detach --no-deps --wait ' "$LOG")
-if [ "$code" -eq 1 ] && [ "$ups" -eq 2 ] && cmp -s /tmp/images.before /srv/confera/images.env &&
+if [ "$code" -eq 1 ] && [ "$ups" -eq 2 ] && cmp -s /tmp/images.before /srv/congresa/images.env &&
   [[ "$out" == *"putting the previous version back"* ]] &&
-  [[ "$out" == *"the database as it was before this deploy's migration: /srv/confera/backups/pre-deploy-"* ]]; then
+  [[ "$out" == *"the database as it was before this deploy's migration: /srv/congresa/backups/pre-deploy-"* ]]; then
   ok "a new version that is not healthy: images.env.previous is put back and restarted; the dump is named"
 else
-  not_ok "rollback: exit $code, $ups restarts: $out; $(cat /srv/confera/images.env)"
+  not_ok "rollback: exit $code, $ups restarts: $out; $(cat /srv/congresa/images.env)"
 fi
 
 # ---- Migrations never run backwards ----------------------------------------------------------------
 # The database has applied a migration the image does not hold: the image is older.
-cp /srv/confera/images.env /tmp/images.before
+cp /srv/congresa/images.env /tmp/images.before
 cp /etc/fake-docker/applied-migrations /tmp/applied.before
 echo 20261016090000_one_default_mail_server >>/etc/fake-docker/applied-migrations
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "sha256:$(printf '9%.0s' {1..64})" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "sha256:$(printf '9%.0s' {1..64})" 2>&1)
 code=$?
 cp /tmp/applied.before /etc/fake-docker/applied-migrations
-if [ "$code" -eq 65 ] && ! grep -q ' pg_dump \| migrate$\| up ' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env &&
-  [[ "$out" == *"older than the database"*"20261016090000_one_default_mail_server"*"confera-deploy rollback be"* ]]; then
+if [ "$code" -eq 65 ] && ! grep -q ' pg_dump \| migrate$\| up ' "$LOG" && cmp -s /tmp/images.before /srv/congresa/images.env &&
+  [[ "$out" == *"older than the database"*"20261016090000_one_default_mail_server"*"congresa-deploy rollback be"* ]]; then
   ok "an image older than the database is refused (exit 65) before the dump, the migration and any restart"
 else
   not_ok "older image: exit $code: $out; $(cat "$LOG")"
@@ -360,7 +360,7 @@ fi
 # A database that was never migrated (the first deploy) has no _prisma_migrations: allowed.
 touch /etc/fake-docker/no-migrations-table
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 code=$?
 rm -f /etc/fake-docker/no-migrations-table
 [ "$code" -eq 0 ] && grep -q ' run --rm --no-TTY migrate$' "$LOG" &&
@@ -368,19 +368,19 @@ rm -f /etc/fake-docker/no-migrations-table
 
 # ---- Rollback by the operator: one version back, no migration ------------------------------------
 DIGEST2="sha256:$(printf '2%.0s' {1..64})"
-rm -f /srv/confera/images.be.previous
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST2" 2>&1)
+rm -f /srv/congresa/images.be.previous
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST2" 2>&1)
 code=$?
-[ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.be.previous &&
-  [ "$(stat -c '%U %a' /srv/confera/images.be.previous)" = "root 644" ] &&
+[ "$code" -eq 0 ] && grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST" /srv/congresa/images.be.previous &&
+  [ "$(stat -c '%U %a' /srv/congresa/images.be.previous)" = "root 644" ] &&
   ok "a deploy records the target's version before it in images.be.previous" ||
-  not_ok "images.be.previous after a deploy: exit $code: $out; $(cat /srv/confera/images.be.previous 2>&1)"
-web_before=$(grep '^CONFERA_WEB_IMAGE=' /srv/confera/images.env)
+  not_ok "images.be.previous after a deploy: exit $code: $out; $(cat /srv/congresa/images.be.previous 2>&1)"
+web_before=$(grep '^CONGRESA_WEB_IMAGE=' /srv/congresa/images.env)
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
-if [ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST" /srv/confera/images.env &&
-  [ "$(grep '^CONFERA_WEB_IMAGE=' /srv/confera/images.env)" = "$web_before" ] &&
+if [ "$code" -eq 0 ] && grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST" /srv/congresa/images.env &&
+  [ "$(grep '^CONGRESA_WEB_IMAGE=' /srv/congresa/images.env)" = "$web_before" ] &&
   ! grep -q ' migrate$\| pg_dump \|^pull ' "$LOG" &&
   [ "$(grep -c '^run ' "$LOG")" -eq "$(grep -c '^run .* --entrypoint ls .* /app/prisma/migrations$' "$LOG")" ] &&
   grep -q ' exec --no-TTY postgres psql .*_prisma_migrations' "$LOG" &&
@@ -388,79 +388,79 @@ if [ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/con
   grep -q ' exec --no-TTY api node -e ' "$LOG"; then
   ok "rollback be: back to the previous digest after comparing migrations, api and worker restarted and smoke-tested, NO migration, no pull, web untouched"
 else
-  not_ok "rollback be: exit $code: $out; $(cat "$LOG"); $(cat /srv/confera/images.env)"
+  not_ok "rollback be: exit $code: $out; $(cat "$LOG"); $(cat /srv/congresa/images.env)"
 fi
-grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST2" /srv/confera/images.be.previous &&
+grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST2" /srv/congresa/images.be.previous &&
   ok "after a rollback, images.be.previous holds the version rolled back from" ||
-  not_ok "images.be.previous after the rollback: $(cat /srv/confera/images.be.previous)"
-cp /srv/confera/images.env /tmp/images.before
+  not_ok "images.be.previous after the rollback: $(cat /srv/congresa/images.be.previous)"
+cp /srv/congresa/images.env /tmp/images.before
 touch /etc/fake-docker/fail-up-once
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
 rm -f /etc/fake-docker/fail-up-once
-[ "$code" -eq 1 ] && cmp -s /tmp/images.before /srv/confera/images.env &&
+[ "$code" -eq 1 ] && cmp -s /tmp/images.before /srv/congresa/images.env &&
   ok "a rollback whose version is not healthy puts the current version back (exit 1)" ||
-  not_ok "failed rollback: exit $code: $out; $(cat /srv/confera/images.env)"
-out=$(/usr/local/sbin/confera-deploy rollback web 2>&1)
+  not_ok "failed rollback: exit $code: $out; $(cat /srv/congresa/images.env)"
+out=$(/usr/local/sbin/congresa-deploy rollback web 2>&1)
 code=$?
-[ -f /srv/confera/images.web.previous ] && not_ok "web has a previous version unexpectedly" ||
+[ -f /srv/congresa/images.web.previous ] && not_ok "web has a previous version unexpectedly" ||
   { [ "$code" -eq 64 ] && [[ "$out" == *"no previous version of web"* ]] &&
     ok "rollback without a recorded previous version is refused (exit 64)" || not_ok "rollback web: exit $code: $out"; }
-printf 'CONFERA_API_IMAGE=ghcr.io/somebody-else/confera-be@%s\nCONFERA_JOBS_IMAGE=ghcr.io/stojanivanisevic/confera-be-jobs@%s\n' \
+printf 'CONGRESA_API_IMAGE=ghcr.io/somebody-else/congresa-be@%s\nCONGRESA_JOBS_IMAGE=ghcr.io/stojanivanisevic/congresa-be-jobs@%s\n' \
   "$DIGEST" "$JOBS_DIGEST" >/tmp/foreign.previous
-cp /srv/confera/images.be.previous /tmp/be.previous
-cp /tmp/foreign.previous /srv/confera/images.be.previous
+cp /srv/congresa/images.be.previous /tmp/be.previous
+cp /tmp/foreign.previous /srv/congresa/images.be.previous
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
-cp /tmp/be.previous /srv/confera/images.be.previous
+cp /tmp/be.previous /srv/congresa/images.be.previous
 [ "$code" -eq 78 ] && [ "$(calls)" -eq 0 ] && ok "rollback refuses a recorded image of another repository" ||
   not_ok "foreign rollback: exit $code: $out"
 : >"$LOG"
-out=$(su confera-deploy-be -c "sudo --non-interactive /usr/local/sbin/confera-deploy rollback be" 2>&1)
+out=$(su congresa-deploy-be -c "sudo --non-interactive /usr/local/sbin/congresa-deploy rollback be" 2>&1)
 [ "$(calls)" -eq 0 ] && [[ "$out" != *"rolled back"* ]] &&
   ok "the deploy user cannot start a rollback (sudo allows <target> sha256:... only)" || not_ok "deploy user rollback: $out"
 : >"$LOG"
 out=$(send be "rollback" 2>&1 </dev/null)
 [ "$?" -eq 64 ] && [ "$(calls)" -eq 0 ] && ok "a deploy key cannot start a rollback" || not_ok "key rollback: $out"
 
-# ---- The nightly backup (confera-backup) ----------------------------------------------------------
-touch -d '8 days ago' /srv/confera/backups/pre-deploy-20260101T000000Z-000000000000.dump \
-  /srv/confera/backups/nightly-20260101T000000Z.dump
-touch -d '2 days ago' /srv/confera/backups/nightly-20260102T000000Z.dump
+# ---- The nightly backup (congresa-backup) ----------------------------------------------------------
+touch -d '8 days ago' /srv/congresa/backups/pre-deploy-20260101T000000Z-000000000000.dump \
+  /srv/congresa/backups/nightly-20260101T000000Z.dump
+touch -d '2 days ago' /srv/congresa/backups/nightly-20260102T000000Z.dump
 : >"$LOG"
-out=$(/usr/local/sbin/confera-backup 2>&1)
+out=$(/usr/local/sbin/congresa-backup 2>&1)
 code=$?
-nightly=(/srv/confera/backups/nightly-*Z.dump)
-files=(/srv/confera/backups/files-*Z.tar)
+nightly=(/srv/congresa/backups/nightly-*Z.dump)
+files=(/srv/congresa/backups/files-*Z.tar)
 if [ "$code" -eq 0 ] && [[ "$out" == *"backup ok"* ]] && [ "${#files[@]}" -eq 1 ] && [ -s "${files[0]}" ] &&
   [ "$(stat -c '%U %a' "${files[0]}")" = "root 600" ] && [ "$(stat -c '%U %a' "${nightly[-1]}")" = "root 600" ] &&
-  grep -q ' exec --no-TTY postgres pg_dump --username postgres --dbname confera --format custom' "$LOG" &&
+  grep -q ' exec --no-TTY postgres pg_dump --username postgres --dbname congresa --format custom' "$LOG" &&
   grep -q ' exec --no-TTY postgres pg_restore --list' "$LOG" &&
-  grep -q '^run --rm --network none --read-only --cap-drop ALL .*source=confera_files,target=/files,readonly --entrypoint tar ' "$LOG"; then
+  grep -q '^run --rm --network none --read-only --cap-drop ALL .*source=congresa_files,target=/files,readonly --entrypoint tar ' "$LOG"; then
   ok "backup: a checked dump and a tar of the file volume (read-only, no network), both root 0600"
 else
-  not_ok "backup: exit $code: $out; $(ls -la /srv/confera/backups); $(cat "$LOG")"
+  not_ok "backup: exit $code: $out; $(ls -la /srv/congresa/backups); $(cat "$LOG")"
 fi
-[ ! -e /srv/confera/backups/pre-deploy-20260101T000000Z-000000000000.dump ] &&
-  [ ! -e /srv/confera/backups/nightly-20260101T000000Z.dump ] && [ -e /srv/confera/backups/nightly-20260102T000000Z.dump ] &&
-  [[ "$out" == *"removing /srv/confera/backups/nightly-20260101T000000Z.dump"* ]] &&
+[ ! -e /srv/congresa/backups/pre-deploy-20260101T000000Z-000000000000.dump ] &&
+  [ ! -e /srv/congresa/backups/nightly-20260101T000000Z.dump ] && [ -e /srv/congresa/backups/nightly-20260102T000000Z.dump ] &&
+  [[ "$out" == *"removing /srv/congresa/backups/nightly-20260101T000000Z.dump"* ]] &&
   ok "backup: files older than 7 days are removed and named; younger ones stay" ||
-  not_ok "prune: $out; $(ls -la /srv/confera/backups)"
-count_before=$(find /srv/confera/backups -type f | wc -l)
-touch -d '8 days ago' /srv/confera/backups/nightly-20260102T000000Z.dump
+  not_ok "prune: $out; $(ls -la /srv/congresa/backups)"
+count_before=$(find /srv/congresa/backups -type f | wc -l)
+touch -d '8 days ago' /srv/congresa/backups/nightly-20260102T000000Z.dump
 touch /etc/fake-docker/bad-dump
-out=$(/usr/local/sbin/confera-backup 2>&1)
+out=$(/usr/local/sbin/congresa-backup 2>&1)
 code=$?
 rm -f /etc/fake-docker/bad-dump
-[ "$code" -eq 1 ] && [ "$(find /srv/confera/backups -type f | wc -l)" -eq "$count_before" ] &&
-  [ -e /srv/confera/backups/nightly-20260102T000000Z.dump ] &&
+[ "$code" -eq 1 ] && [ "$(find /srv/congresa/backups -type f | wc -l)" -eq "$count_before" ] &&
+  [ -e /srv/congresa/backups/nightly-20260102T000000Z.dump ] &&
   ok "backup: an unreadable dump fails (exit 1), keeps no file and prunes nothing" ||
-  not_ok "bad backup: exit $code: $out; $(ls -la /srv/confera/backups)"
-exec 9>/run/lock/confera-deploy.lock
+  not_ok "bad backup: exit $code: $out; $(ls -la /srv/congresa/backups)"
+exec 9>/run/lock/congresa-deploy.lock
 flock 9
 : >"$LOG"
-out=$(timeout 5 /usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+out=$(timeout 5 /usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 code=$?
 exec 9>&-
 [ "$code" -eq 75 ] && [ "$(calls)" -eq 0 ] && ok "a deploy does not start while the backup holds the lock" ||
@@ -469,7 +469,7 @@ exec 9>&-
 wait_for_unlock() {
   local i
   for i in $(seq 150); do
-    flock --nonblock /run/lock/confera-deploy.lock true 2>/dev/null && return 0
+    flock --nonblock /run/lock/congresa-deploy.lock true 2>/dev/null && return 0
     sleep 0.2
   done
   return 1
@@ -487,7 +487,7 @@ for i in $(seq 100); do [ -e /tmp/migrate-started ] && break; sleep 0.1; done
 started=no
 [ -e /tmp/migrate-started ] && started=yes
 # The client goes away during the migration, as a lost network or a cancelled job would.
-pkill -KILL -f "confera-deploy-be@127.0.0.1" 2>/dev/null
+pkill -KILL -f "congresa-deploy-be@127.0.0.1" 2>/dev/null
 kill -KILL "$client" 2>/dev/null
 wait "$client" 2>/dev/null
 sleep 0.5
@@ -497,94 +497,94 @@ rm -f /etc/fake-docker/slow-migrate
 migrate_line=$(grep -n -m 1 ' run --rm --no-TTY migrate$' "$LOG" | cut -d: -f1)
 up_line=$(grep -n -m 1 ' up --detach --no-deps --wait --wait-timeout 240 api worker$' "$LOG" | cut -d: -f1)
 if [ "$started" = yes ] && [ "$unlocked" -eq 0 ] && [ -n "$up_line" ] && [ "$up_line" -gt "${migrate_line:-999999}" ] &&
-  grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST3" /srv/confera/images.env &&
+  grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST3" /srv/congresa/images.env &&
   grep -q ' exec --no-TTY api node -e ' "$LOG"; then
   ok "SEC-M4I-13: the client is killed during the migration; the deploy still restarts, smoke-tests and finishes"
 else
-  not_ok "dropped session: started $started, unlocked $unlocked, migrate $migrate_line, up $up_line; $(cat /srv/confera/images.env); $(cat "$LOG")"
+  not_ok "dropped session: started $started, unlocked $unlocked, migrate $migrate_line, up $up_line; $(cat /srv/congresa/images.env); $(cat "$LOG")"
 fi
-grep -q "^confera-deploy: deployed ghcr.io/stojanivanisevic/confera-be@$DIGEST3$" /var/log/fake-journal.log &&
-  grep -q "^confera-deploy: migrating the database$" /var/log/fake-journal.log &&
-  ok "SEC-M4I-13: every line of the deploy also went to the journal (logger --tag confera-deploy)" ||
+grep -q "^congresa-deploy: deployed ghcr.io/stojanivanisevic/congresa-be@$DIGEST3$" /var/log/fake-journal.log &&
+  grep -q "^congresa-deploy: migrating the database$" /var/log/fake-journal.log &&
+  ok "SEC-M4I-13: every line of the deploy also went to the journal (logger --tag congresa-deploy)" ||
   not_ok "journal: $(cat /var/log/fake-journal.log)"
-run_log=$(grep -l "deployed ghcr.io/stojanivanisevic/confera-be@$DIGEST3" /var/log/confera-deploy/*-be-*.log 2>/dev/null | head -n 1)
+run_log=$(grep -l "deployed ghcr.io/stojanivanisevic/congresa-be@$DIGEST3" /var/log/congresa-deploy/*-be-*.log 2>/dev/null | head -n 1)
 [ -n "$run_log" ] && [ "$(stat -c '%U %a' "$run_log")" = "root 600" ] &&
-  [ "$(stat -c '%U %a' /var/log/confera-deploy)" = "root 700" ] &&
-  ok "SEC-M4I-13: the run's whole output is in /var/log/confera-deploy/<UTC>-be-<pid>.log (root 0600)" ||
-  not_ok "run log: $(ls -la /var/log/confera-deploy 2>&1)"
+  [ "$(stat -c '%U %a' /var/log/congresa-deploy)" = "root 700" ] &&
+  ok "SEC-M4I-13: the run's whole output is in /var/log/congresa-deploy/<UTC>-be-<pid>.log (root 0600)" ||
+  not_ok "run log: $(ls -la /var/log/congresa-deploy 2>&1)"
 
 # ---- An interrupted dump leaves no .partial (SEC-M4I-13) -----------------------------------------
 DIGEST4="sha256:$(printf '4%.0s' {1..64})"
-cp /srv/confera/images.env /tmp/images.before
+cp /srv/congresa/images.env /tmp/images.before
 touch /etc/fake-docker/slow-dump
 rm -f /tmp/dump-started
 : >"$LOG"
-/usr/local/sbin/confera-deploy be "$DIGEST4" >/tmp/killed.out 2>&1 &
+/usr/local/sbin/congresa-deploy be "$DIGEST4" >/tmp/killed.out 2>&1 &
 deployer=$!
 for i in $(seq 100); do [ -e /tmp/dump-started ] && break; sleep 0.1; done
-partial_seen=$(find /srv/confera/backups -name '*.partial' | wc -l)
-pkill -TERM -f "confera-deploy be $DIGEST4" 2>/dev/null
+partial_seen=$(find /srv/congresa/backups -name '*.partial' | wc -l)
+pkill -TERM -f "congresa-deploy be $DIGEST4" 2>/dev/null
 wait "$deployer" 2>/dev/null
 wait_for_unlock
 rm -f /etc/fake-docker/slow-dump
-if [ "$partial_seen" -ge 1 ] && [ -z "$(find /srv/confera/backups -name '*.partial')" ] &&
-  ! grep -q ' migrate$' "$LOG" && cmp -s /tmp/images.before /srv/confera/images.env; then
+if [ "$partial_seen" -ge 1 ] && [ -z "$(find /srv/congresa/backups -name '*.partial')" ] &&
+  ! grep -q ' migrate$' "$LOG" && cmp -s /tmp/images.before /srv/congresa/images.env; then
   ok "SEC-M4I-13: a deploy stopped (TERM) during the dump removes its .partial, migrates nothing, changes nothing"
 else
-  not_ok "killed dump: seen $partial_seen, left $(find /srv/confera/backups -name '*.partial'); $(cat /tmp/killed.out); $(cat "$LOG")"
+  not_ok "killed dump: seen $partial_seen, left $(find /srv/congresa/backups -name '*.partial'); $(cat /tmp/killed.out); $(cat "$LOG")"
 fi
-touch -d '8 days ago' /srv/confera/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial
-out=$(/usr/local/sbin/confera-backup 2>&1)
-[ ! -e /srv/confera/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial ] &&
+touch -d '8 days ago' /srv/congresa/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial
+out=$(/usr/local/sbin/congresa-backup 2>&1)
+[ ! -e /srv/congresa/backups/pre-deploy-20260101T000000Z-111111111111.dump.partial ] &&
   ok "the nightly prune also removes an old .partial a killed run left (SIGKILL leaves no trap)" ||
   not_ok "old partial kept: $out"
 
 # ---- A rollback never starts an image newer than the database (SEC-M4I-14) ---------------------
 DIGEST5="sha256:$(printf '5%.0s' {1..64})"
 DIGEST6="sha256:$(printf '6%.0s' {1..64})"
-/usr/local/sbin/confera-deploy be "$DIGEST5" >/dev/null 2>&1
-/usr/local/sbin/confera-deploy be "$DIGEST6" >/dev/null 2>&1
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+/usr/local/sbin/congresa-deploy be "$DIGEST5" >/dev/null 2>&1
+/usr/local/sbin/congresa-deploy be "$DIGEST6" >/dev/null 2>&1
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
-grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST5" /srv/confera/images.env && [ "$code" -eq 0 ] &&
+grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST5" /srv/congresa/images.env && [ "$code" -eq 0 ] &&
   ok "SEC-M4I-14 setup: deployed 5, then 6, rolled back to 5 (images.be.previous now holds 6)" ||
   not_ok "rollback setup: exit $code: $out"
 # R-02: the pre-deploy dump was restored, so the database lacks the last migration of version 6.
 cp /etc/fake-docker/applied-migrations /tmp/applied.before
 head -n 2 /tmp/applied.before >/etc/fake-docker/applied-migrations
-cp /srv/confera/images.env /tmp/images.before
+cp /srv/congresa/images.env /tmp/images.before
 : >"$LOG"
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
 cp /tmp/applied.before /etc/fake-docker/applied-migrations
-if [ "$code" -eq 65 ] && cmp -s /tmp/images.before /srv/confera/images.env && ! grep -q ' up \| migrate$' "$LOG" &&
-  [[ "$out" == *"newer than the database"*"20261015090000_mail_and_conferences"*"confera-deploy be <digest>"* ]]; then
+if [ "$code" -eq 65 ] && cmp -s /tmp/images.before /srv/congresa/images.env && ! grep -q ' up \| migrate$' "$LOG" &&
+  [[ "$out" == *"newer than the database"*"20261015090000_mail_and_conferences"*"congresa-deploy be <digest>"* ]]; then
   ok "SEC-M4I-14: a second rollback (forward to 6) on a database without 6's migration is refused (exit 65), nothing restarted"
 else
   not_ok "rollback to a newer image: exit $code: $out; $(cat "$LOG")"
 fi
 # The database is ahead of the recorded version (the usual rollback, one version back): allowed.
 echo 20261016090000_one_default_mail_server >>/etc/fake-docker/applied-migrations
-out=$(/usr/local/sbin/confera-deploy rollback be 2>&1)
+out=$(/usr/local/sbin/congresa-deploy rollback be 2>&1)
 code=$?
 cp /tmp/applied.before /etc/fake-docker/applied-migrations
-[ "$code" -eq 0 ] && grep -qx "CONFERA_API_IMAGE=ghcr.io/stojanivanisevic/confera-be@$DIGEST6" /srv/confera/images.env &&
+[ "$code" -eq 0 ] && grep -qx "CONGRESA_API_IMAGE=ghcr.io/stojanivanisevic/congresa-be@$DIGEST6" /srv/congresa/images.env &&
   ok "SEC-M4I-14: a rollback to a version older than the database is allowed (expand-then-contract)" ||
   not_ok "rollback to an older image: exit $code: $out"
 
-chmod 0666 /etc/confera/deploy.conf
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+chmod 0666 /etc/congresa/deploy.conf
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 [ "$?" -eq 78 ] && ok "a configuration others may write is refused" || not_ok "unsafe conf: $out"
-chmod 0644 /etc/confera/deploy.conf
-cp /etc/confera/deploy.conf /tmp/deploy.conf
-printf 'CONFERA_ROOT=$(id)\n' >>/etc/confera/deploy.conf
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+chmod 0644 /etc/congresa/deploy.conf
+cp /etc/congresa/deploy.conf /tmp/deploy.conf
+printf 'CONGRESA_ROOT=$(id)\n' >>/etc/congresa/deploy.conf
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 [ "$?" -eq 78 ] && ok "the configuration is read as data: a command in it is refused" || not_ok "conf injection: $out"
-cp /tmp/deploy.conf /etc/confera/deploy.conf
+cp /tmp/deploy.conf /etc/congresa/deploy.conf
 
-exec 9>/run/lock/confera-deploy.lock
+exec 9>/run/lock/congresa-deploy.lock
 flock 9
-out=$(/usr/local/sbin/confera-deploy be "$DIGEST" 2>&1)
+out=$(/usr/local/sbin/congresa-deploy be "$DIGEST" 2>&1)
 [ "$?" -eq 75 ] && ok "one deploy at a time" || not_ok "lock: $out"
 exec 9>&-
 

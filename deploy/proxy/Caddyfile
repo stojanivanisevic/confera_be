@@ -1,4 +1,4 @@
-# The reverse proxy of a Confera server (ADR-02, ADR-26, ADR-28; M4-BE-07, M3-ISS-06).
+# The reverse proxy of a Congresa server (ADR-02, ADR-26, ADR-28; M4-BE-07, M3-ISS-06).
 #
 # Caddy ends TLS (certificates from Let's Encrypt, renewed by Caddy itself, without the Docker
 # socket) and routes by host name and path:
@@ -35,7 +35,7 @@
 	https_port 8443
 	# HTTP is answered by the site below, which only redirects (the default redirect would name port 8443).
 	auto_https disable_redirects
-	email {$CONFERA_ACME_EMAIL}
+	email {$CONGRESA_ACME_EMAIL}
 	servers {
 		protocols h1 h2
 	}
@@ -46,7 +46,7 @@
 	# retention period and is decided before production (Gate 4; SEC-M4I-08).
 }
 
-(confera_headers) {
+(congresa_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		-Server
@@ -54,10 +54,10 @@
 	}
 }
 
-(confera_common) {
+(congresa_common) {
 	# The gate of a staging server, or nothing (production).
 	import /etc/caddy/gate.caddy
-	import confera_headers
+	import congresa_headers
 }
 
 # body_limit <bytes>: a body above <bytes> is refused with 413. A declared Content-Length above it
@@ -94,8 +94,8 @@ http:// {
 	redir https://{host}{uri} 308
 }
 
-{$CONFERA_ADMIN_HOST} {
-	import confera_common
+{$CONGRESA_ADMIN_HOST} {
+	import congresa_common
 
 	handle /api/v1/* {
 		import body_limit 1048576
@@ -107,8 +107,8 @@ http:// {
 	}
 }
 
-{$CONFERA_PUBLIC_HOST} {
-	import confera_common
+{$CONGRESA_PUBLIC_HOST} {
+	import congresa_common
 
 	# The upload route of a form (POST /public/v1/forms/{slug}/uploads): the only route that
 	# takes a large body. Each handle sets its own limit, so the two never nest.
