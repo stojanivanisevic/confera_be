@@ -34,6 +34,7 @@ Statuses, status emails, template management, email images and the mail log (0.4
 - Every status change whose email is on, except `open`, needs the `previewDigest` of its preview (400 at `previewDigest` without it; SEC-M4-05).
 - The audit entry of a discard of held mail lists the ids discarded (`detail.ids`, SEC-M4-08).
 - Staging under congresa.com shares the registrable domain of production (SEC-STG-05): the proxy's HSTS stays exactly `max-age=31536000`, without `includeSubDomains` and `preload`. `deploy/checks/topology.mjs` requires that exact value of the running proxy, and a test of `pnpm check` holds every file of `deploy/proxy` to it; the Caddyfile says at the header that changing it needs the Security reviewer.
+- The cookie rule (condition 5 of the same review): an architecture test fails when a file of `src` other than `src/modules/access/cookies.ts` writes a cookie (the header `Set-Cookie`, the framework's cookie API or a cookie library) or a text of `src` carries `Domain=`, and checks that every cookie of `cookies.ts` is `__Host-`, `Secure`, `Path=/` and without `Domain`.
 
 ### Fixed (0.4.0 fix round)
 
