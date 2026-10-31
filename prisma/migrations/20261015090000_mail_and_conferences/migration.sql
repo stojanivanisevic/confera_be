@@ -1,7 +1,7 @@
 -- Mail servers, conferences, templates and the mail log (0.2.0 part B, M2-BE-07 to
 -- M2-BE-10): the outbox gains its worker columns.
 --
--- Runs as confera_owner. The table and index statements are what `prisma migrate diff`
+-- Runs as congresa_owner. The table and index statements are what `prisma migrate diff`
 -- generates from schema.prisma; everything below "Hand-written" is not expressible in
 -- Prisma.
 
@@ -219,15 +219,15 @@ CREATE POLICY "tenant_isolation" ON "mail_log"
     WITH CHECK ("organisation_id" = NULLIF(current_setting('app.org_id', true), '')::uuid);
 
 -- Grants of the application role.
-GRANT SELECT, INSERT, UPDATE, DELETE ON "mail_servers" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "conferences" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "mail_templates" TO confera_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "mail_servers" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "conferences" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "mail_templates" TO congresa_app;
 -- The mail log only grows through the application (FR-SMTP-04); its retention job (0.4.0)
 -- gets DELETE when it arrives.
-GRANT SELECT, INSERT ON "mail_log" TO confera_app;
+GRANT SELECT, INSERT ON "mail_log" TO congresa_app;
 
 -- The system role finds the next outbox rows for the worker (ADR-05: "the claim of a job
 -- or outbox row" is a resolver that returns ids); it reads the few columns of the claim and
 -- nothing of the message. The claim itself is written inside the organisation, as the
 -- application role, under row-level security.
-GRANT SELECT ("id", "organisation_id", "status", "next_attempt_at", "claimed_at") ON "mail_outbox" TO confera_system;
+GRANT SELECT ("id", "organisation_id", "status", "next_attempt_at", "claimed_at") ON "mail_outbox" TO congresa_system;

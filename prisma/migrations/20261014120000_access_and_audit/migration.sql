@@ -2,7 +2,7 @@
 -- state, the two roles and their permissions, sessions and known devices, secure links,
 -- the mail outbox, the audit log and the security events of the instance.
 --
--- Runs as confera_owner. The table and index statements are what `prisma migrate diff`
+-- Runs as congresa_owner. The table and index statements are what `prisma migrate diff`
 -- generates from schema.prisma, in an order that lets the seed of the roles come before
 -- the foreign key that points at them; everything below "Hand-written" is not
 -- expressible in Prisma.
@@ -314,12 +314,12 @@ CREATE POLICY "tenant_isolation" ON "audit_entries"
 ALTER TABLE "roles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "roles" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "reference_read" ON "roles" FOR SELECT USING (true);
-CREATE POLICY "reference_write" ON "roles" FOR ALL TO confera_owner USING (true) WITH CHECK (true);
+CREATE POLICY "reference_write" ON "roles" FOR ALL TO congresa_owner USING (true) WITH CHECK (true);
 
 ALTER TABLE "role_permissions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "role_permissions" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "reference_read" ON "role_permissions" FOR SELECT USING (true);
-CREATE POLICY "reference_write" ON "role_permissions" FOR ALL TO confera_owner USING (true) WITH CHECK (true);
+CREATE POLICY "reference_write" ON "role_permissions" FOR ALL TO congresa_owner USING (true) WITH CHECK (true);
 
 -- The instance table: what happens before an organisation is known (a failed sign-in for
 -- an unknown address). A statement sees and writes its rows only while NO organisation is
@@ -333,18 +333,18 @@ CREATE POLICY "instance_only" ON "security_events"
 
 -- Grants.
 --
--- confera_app, the running API.
-GRANT SELECT ON "roles" TO confera_app;
-GRANT SELECT ON "role_permissions" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "sessions" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "known_devices" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "secure_links" TO confera_app;
-GRANT SELECT, INSERT, UPDATE ON "mail_outbox" TO confera_app;
+-- congresa_app, the running API.
+GRANT SELECT ON "roles" TO congresa_app;
+GRANT SELECT ON "role_permissions" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "sessions" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "known_devices" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "secure_links" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE ON "mail_outbox" TO congresa_app;
 -- The audit log can only grow (FR-AUD-02, ST-24): no UPDATE, no DELETE, no TRUNCATE.
-GRANT SELECT, INSERT ON "audit_entries" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "security_events" TO confera_app;
+GRANT SELECT, INSERT ON "audit_entries" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "security_events" TO congresa_app;
 
--- confera_system, the resolvers (ADR-05): a session and a secure link by the hash of their
+-- congresa_system, the resolvers (ADR-05): a session and a secure link by the hash of their
 -- token, returning the two ids. Nothing else of either table.
-GRANT SELECT ("id", "organisation_id", "token_hash") ON "sessions" TO confera_system;
-GRANT SELECT ("id", "organisation_id", "token_hash") ON "secure_links" TO confera_system;
+GRANT SELECT ("id", "organisation_id", "token_hash") ON "sessions" TO congresa_system;
+GRANT SELECT ("id", "organisation_id", "token_hash") ON "secure_links" TO congresa_system;

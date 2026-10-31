@@ -3,7 +3,7 @@
 -- authors and status history, stored files with their scan state, and the columns of the
 -- send breaker on the outbox.
 --
--- Runs as confera_owner. The table and index statements are what `prisma migrate diff`
+-- Runs as congresa_owner. The table and index statements are what `prisma migrate diff`
 -- generates from schema.prisma; everything below "Hand-written" is not expressible in
 -- Prisma.
 
@@ -467,22 +467,22 @@ CREATE POLICY "tenant_isolation" ON "files"
     WITH CHECK ("organisation_id" = NULLIF(current_setting('app.org_id', true), '')::uuid);
 
 -- Grants of the application role.
-GRANT SELECT, INSERT, UPDATE ON "forms" TO confera_app;
+GRANT SELECT, INSERT, UPDATE ON "forms" TO congresa_app;
 -- A published version never changes (ADR-06): read and add, nothing else.
-GRANT SELECT, INSERT ON "form_versions" TO confera_app;
+GRANT SELECT, INSERT ON "form_versions" TO congresa_app;
 -- Tokens are used up and purged when they expire (ADR-08, ADR-10).
-GRANT SELECT, INSERT, UPDATE, DELETE ON "form_tokens" TO confera_app;
-GRANT SELECT, INSERT, UPDATE ON "conference_deadlines" TO confera_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "form_tokens" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE ON "conference_deadlines" TO congresa_app;
 -- The history of a deadline only grows (FR-DL-03).
-GRANT SELECT, INSERT ON "conference_deadline_changes" TO confera_app;
+GRANT SELECT, INSERT ON "conference_deadline_changes" TO congresa_app;
 -- A submission is written once, in the transaction of the submit; the statuses of 0.4.0
 -- change it through their own grant then. The counter of the references moves with it.
-GRANT SELECT, INSERT ON "submissions" TO confera_app;
-GRANT SELECT, INSERT ON "submission_authors" TO confera_app;
-GRANT SELECT, INSERT ON "submission_status_history" TO confera_app;
+GRANT SELECT, INSERT ON "submissions" TO congresa_app;
+GRANT SELECT, INSERT ON "submission_authors" TO congresa_app;
+GRANT SELECT, INSERT ON "submission_status_history" TO congresa_app;
 -- Files: attached, scanned, and purged while unattached (ADR-10).
-GRANT SELECT, INSERT, UPDATE, DELETE ON "files" TO confera_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "files" TO congresa_app;
 
 -- The system role finds a form by its public key (ADR-05: "form by public key"): the three
 -- columns of the answer and nothing of the form. The rest is read inside the organisation.
-GRANT SELECT ("id", "organisation_id", "public_key") ON "forms" TO confera_system;
+GRANT SELECT ("id", "organisation_id", "public_key") ON "forms" TO congresa_system;

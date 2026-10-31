@@ -17,7 +17,7 @@ ALTER TABLE "organisations" ADD CONSTRAINT "organisations_mail_log_retention_day
 
 -- The retention job removes what is older than that: log entries, and the messages that are
 -- done with (sent, failed, discarded, stuck), with their content. Nothing else is deleted.
-GRANT DELETE ON "mail_log" TO confera_app;
-GRANT DELETE ON "mail_outbox" TO confera_app;
+GRANT DELETE ON "mail_log" TO congresa_app;
+GRANT DELETE ON "mail_outbox" TO congresa_app;
 CREATE INDEX "mail_outbox_organisation_id_status_created_at_idx"
     ON "mail_outbox"("organisation_id", "status", "created_at");
