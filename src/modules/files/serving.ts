@@ -5,7 +5,7 @@
  *
  * - An uploaded file only when its scan is clean. Pending, also while ClamAV is down: no
  *   "download anyway". Infected or beyond the scanner's limits: never.
- * - A PDF that Confera generated (0.6.0) is not scanned and is served while ClamAV is down.
+ * - A PDF that Congresa generated (0.6.0) is not scanned and is served while ClamAV is down.
  */
 export type ServeDecision = 'serve' | 'scan_pending' | 'file_not_clean';
 

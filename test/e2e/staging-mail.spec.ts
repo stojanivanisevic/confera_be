@@ -21,8 +21,8 @@ import { inOrganisation } from './support/forms';
  * refuses to start without it, is in src/config/stage-guard.spec.ts. The firewall half of
  * ST-50 (the outgoing mail ports closed) is proven on the staging server (runbook, section 4).
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = process.env.CONFERA_MAIL_SMTP_PORT ?? '1025';
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025';
 
 interface MailpitSummary {
   ID: string;

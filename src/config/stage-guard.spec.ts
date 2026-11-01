@@ -35,7 +35,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
     const publicOrigins = [
       'https://admin.udekom.example',
       'http://admin.example.org',
-      'https://confera.rs',
+      'https://congresa.rs',
       'http://192.168.1.20:3000',
       'http://10.0.0.5:3000',
       'http://0.0.0.0:3000',
@@ -61,8 +61,8 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
       it.each([
         ['http://localhost:3000', 'http://127.0.0.1:3000'],
         ['http://admin.localhost:3000', 'http://forms.localhost:3000'],
-        ['http://admin.confera.test', 'http://forms.confera.test'],
-        ['https://admin.confera.test:8443', 'https://forms.confera.test:8443'],
+        ['http://admin.congresa.test', 'http://forms.congresa.test'],
+        ['https://admin.congresa.test:8443', 'https://forms.congresa.test:8443'],
         ['http://[::1]:3000', 'http://localhost:3000'],
         ['http://127.0.0.2:3000', 'http://127.0.0.1:3000'],
       ])('accepts %s with %s', (admin, publicOrigin) => {
@@ -149,7 +149,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
     it('is in the configuration of staging only', () => {
       const staging = parseEnvironment(validStagingEnvironment());
       expect(staging.ok && staging.config.mail.stagingCatcher).toEqual({
-        host: 'mailpit.confera.test',
+        host: 'mailpit.congresa.test',
         port: 1025,
       });
       const production = parseEnvironment(validProductionEnvironment());
@@ -216,7 +216,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
   });
 
   describe('prod is a positive allowlist', () => {
-    it.each(['http://admin.confera.test', 'http://localhost:3000'])(
+    it.each(['http://admin.congresa.test', 'http://localhost:3000'])(
       'requires https: %s',
       (origin) => {
         expect(refused(validProductionEnvironment({ ADMIN_ORIGIN: origin }))).toEqual([
@@ -237,7 +237,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
       expect(refused(validProductionEnvironment({ [name]: 'anything' }))).toEqual([name]);
     });
 
-    it.each(['fake-clamd:3310', 'FAKE-CLAMD:3310', 'confera-be-m4-1a2b3c4d-fake-clamd-1:3310'])(
+    it.each(['fake-clamd:3310', 'FAKE-CLAMD:3310', 'congresa-be-m4-1a2b3c4d-fake-clamd-1:3310'])(
       'refuses the fake clamd of the development stack as the antivirus: %s',
       (address) => {
         const problems = problemsOf(validProductionEnvironment({ CLAMAV_ADDRESS: address }));
@@ -274,7 +274,7 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
   describe('two surfaces, two host names (ADR-02)', () => {
     it.each([
       ['http://localhost:3000', 'http://localhost:3001'],
-      ['http://admin.confera.test', 'http://admin.confera.test:8080'],
+      ['http://admin.congresa.test', 'http://admin.congresa.test:8080'],
     ])('refuses %s with %s', (admin, publicOrigin) => {
       expect(
         refused(validEnvironment({ ADMIN_ORIGIN: admin, PUBLIC_ORIGIN: publicOrigin })),
@@ -310,8 +310,8 @@ describe('STAGE and INSTANCE guard (ADR-24)', () => {
       LOG_LEVEL: `${canary}-level`,
       DEV_LOGIN: canary,
       DEV_API_DOCS: canary,
-      MIGRATION_DATABASE_URL: `postgresql://confera_owner:${canary}@db.confera.test:5432/confera`,
-      ADMIN_ORIGIN: `http://${canary}.confera.test`,
+      MIGRATION_DATABASE_URL: `postgresql://congresa_owner:${canary}@db.congresa.test:5432/congresa`,
+      ADMIN_ORIGIN: `http://${canary}.congresa.test`,
     });
     expect(JSON.stringify(problemsOf(env))).not.toContain(canary);
   });

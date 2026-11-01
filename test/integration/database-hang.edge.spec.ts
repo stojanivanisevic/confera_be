@@ -61,7 +61,7 @@ describe('edge case (M1-REV-01): the database accepts the connection and never a
 
   it('the built API refuses to start with exit code 77 and the sentence of the README, within a minute', async () => {
     const at = (role: string): string => {
-      const url = new URL('postgresql://confera_app:invented-silent@127.0.0.1:5432/confera');
+      const url = new URL('postgresql://congresa_app:invented-silent@127.0.0.1:5432/congresa');
       url.username = role;
       url.port = String(silent.port);
       return url.toString();
@@ -69,8 +69,8 @@ describe('edge case (M1-REV-01): the database accepts the connection and never a
     const result = await runNode([PRODUCTION_ENTRY], {
       env: {
         ...validProductionEnvironment(),
-        DATABASE_URL: at('confera_app'),
-        SYSTEM_DATABASE_URL: at('confera_system'),
+        DATABASE_URL: at('congresa_app'),
+        SYSTEM_DATABASE_URL: at('congresa_system'),
         PORT: String(await freePort()),
         LISTEN_HOST: '127.0.0.1',
       },

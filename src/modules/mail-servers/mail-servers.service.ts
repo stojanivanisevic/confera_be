@@ -329,7 +329,7 @@ export class MailServersService {
   ): Promise<void> {
     // Two admins who mark at once are taken one after the other (E2-09); a unique index
     // of the migration holds the rule as well.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`confera mail server marks ${this.context.requireOrganisationId()}`}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`congresa mail server marks ${this.context.requireOrganisationId()}`}, 0))`;
     const others = except === null ? {} : { id: { not: except } };
     if (isDefault) {
       await tx.mailServer.updateMany({

@@ -19,8 +19,8 @@ import { linkPath, mintLink } from './support/links';
  * a working link after the password changed (own change or reset), nor after the address
  * changed. Through Mailpit, on a developer stage, as the Security reviewer proved it.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 const NEW_PASSWORD = 'invented-Nova-Lozinka-Reka-91';
 
 async function mailsTo(address: string): Promise<number> {

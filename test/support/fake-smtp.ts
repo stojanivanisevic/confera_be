@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { createServer as createTlsServer } from 'node:tls';
@@ -133,6 +133,8 @@ export function selfSignedCertificate(): { key: string; cert: string } {
   if (tool === null) {
     throw new Error('openssl is needed for the self-signed certificate of ST-20');
   }
+  // tmp/ is not in git: a fresh checkout (CI) has none until something makes it.
+  mkdirSync(join(repoRoot, 'tmp'), { recursive: true });
   const folder = mkdtempSync(join(repoRoot, 'tmp', 'smtp-cert-'));
   try {
     const result = spawnSync(

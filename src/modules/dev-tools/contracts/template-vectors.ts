@@ -299,12 +299,12 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
         recipientName: '<img src=x onerror=alert(1)> "Mila" </a><a href="https://evil.test">',
       },
       conditions: [],
-      link: 'https://admin.confera.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      link: 'https://admin.congresa.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     },
     expected: {
       subject: 'Welcome, <img src=x onerror=alert(1)> "Mila" </a><a href="https://evil.test">',
-      html: '<p>Dear &lt;img src=x onerror=alert(1)&gt; &quot;Mila&quot; &lt;/a&gt;&lt;a href=&quot;https://evil.test&quot;&gt;, {{ this is text }} &amp; &lt;b&gt;so is this&lt;/b&gt;</p>\n<p><a href="https://admin.confera.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA">Set your password</a></p>',
-      text: 'Dear <img src=x onerror=alert(1)> "Mila" </a><a href="https://evil.test">, {{ this is text }} & <b>so is this</b>\n\nSet your password <https://admin.confera.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA>\n',
+      html: '<p>Dear &lt;img src=x onerror=alert(1)&gt; &quot;Mila&quot; &lt;/a&gt;&lt;a href=&quot;https://evil.test&quot;&gt;, {{ this is text }} &amp; &lt;b&gt;so is this&lt;/b&gt;</p>\n<p><a href="https://admin.congresa.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA">Set your password</a></p>',
+      text: 'Dear <img src=x onerror=alert(1)> "Mila" </a><a href="https://evil.test">, {{ this is text }} & <b>so is this</b>\n\nSet your password <https://admin.congresa.test/invitations/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA>\n',
     },
   },
   {
@@ -373,7 +373,7 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
       },
       paragraph({
         type: 'link',
-        href: 'https://admin.confera.test/audit',
+        href: 'https://admin.congresa.test/audit',
         children: [text('the audit log')],
       }),
       paragraph({
@@ -393,8 +393,8 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
     },
     expected: {
       subject: 'Notice: user_role_changed',
-      html: '<h2>Change at Društvo &amp; Co</h2>\n<p><strong>Bold</strong> and <u><em>italic</em></u><br>next line</p>\n<ul><li>one</li><li>two: user_role_changed</li></ul>\n<ol><li>first</li><li>second</li></ol>\n<p>By Đorđe Žikić</p>\n\n<p><a href="https://admin.confera.test/audit">the audit log</a></p>\n<p><a href="mailto:office@example.test">office@example.test</a></p>',
-      text: 'Change at Društvo & Co\n\nBold and italic\nnext line\n\n- one\n- two: user_role_changed\n\n1. first\n2. second\n\nBy Đorđe Žikić\n\nthe audit log <https://admin.confera.test/audit>\n\noffice@example.test <mailto:office@example.test>\n',
+      html: '<h2>Change at Društvo &amp; Co</h2>\n<p><strong>Bold</strong> and <u><em>italic</em></u><br>next line</p>\n<ul><li>one</li><li>two: user_role_changed</li></ul>\n<ol><li>first</li><li>second</li></ol>\n<p>By Đorđe Žikić</p>\n\n<p><a href="https://admin.congresa.test/audit">the audit log</a></p>\n<p><a href="mailto:office@example.test">office@example.test</a></p>',
+      text: 'Change at Društvo & Co\n\nBold and italic\nnext line\n\n- one\n- two: user_role_changed\n\n1. first\n2. second\n\nBy Đorđe Žikić\n\nthe audit log <https://admin.congresa.test/audit>\n\noffice@example.test <mailto:office@example.test>\n',
     },
   },
   {
@@ -421,12 +421,12 @@ export const RENDERED_VECTORS: readonly RenderedVector[] = [
       },
       conditions: ['hasTitle'],
       images: {
-        [IMAGE_ID]: { src: `cid:${IMAGE_ID}@confera`, width: 600, height: 120 },
+        [IMAGE_ID]: { src: `cid:${IMAGE_ID}@congresa`, width: 600, height: 120 },
       },
     },
     expected: {
       subject: 'Your submission IT27-0001 needs changes',
-      html: `<p>Dear Živana &lt;b&gt;Đorđević&lt;/b&gt;,</p>\n<p><img src="cid:${IMAGE_ID}@confera" alt="Logo of the conference" width="600" height="120" style="max-width:100%;height:auto"></p>\n<p>[Not scanned yet]</p>\n<p>Title: &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;</p>\n<p>Line one &lt;i&gt;x&lt;/i&gt;<br>Line two<br>Line three</p>`,
+      html: `<p>Dear Živana &lt;b&gt;Đorđević&lt;/b&gt;,</p>\n<p><img src="cid:${IMAGE_ID}@congresa" alt="Logo of the conference" width="600" height="120" style="max-width:100%;height:auto"></p>\n<p>[Not scanned yet]</p>\n<p>Title: &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;</p>\n<p>Line one &lt;i&gt;x&lt;/i&gt;<br>Line two<br>Line three</p>`,
       text: 'Dear Živana <b>Đorđević</b>,\n\n[Logo of the conference]\n\n[Not scanned yet]\n\nTitle: <script>alert(1)</script> & "quotes"\n\nLine one <i>x</i>\nLine two\nLine three\n',
     },
   },

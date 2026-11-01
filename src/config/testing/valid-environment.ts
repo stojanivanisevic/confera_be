@@ -11,11 +11,11 @@ export function validEnvironment(overrides: RawEnvironment = {}): TestEnvironmen
   return {
     STAGE: 'test',
     PORT: '3001',
-    ADMIN_ORIGIN: 'http://admin.confera.test',
-    PUBLIC_ORIGIN: 'http://forms.confera.test',
-    DATABASE_URL: 'postgresql://confera_app:invented-app-password@127.0.0.1:5432/confera_unit',
+    ADMIN_ORIGIN: 'http://admin.congresa.test',
+    PUBLIC_ORIGIN: 'http://forms.congresa.test',
+    DATABASE_URL: 'postgresql://congresa_app:invented-app-password@127.0.0.1:5432/congresa_unit',
     SYSTEM_DATABASE_URL:
-      'postgresql://confera_system:invented-system-password@127.0.0.1:5432/confera_unit',
+      'postgresql://congresa_system:invented-system-password@127.0.0.1:5432/congresa_unit',
     DATA_KEY: 'invented-data-key-of-the-unit-tests-0123456789ab',
     ...overrides,
   };
@@ -30,10 +30,10 @@ export function validProductionEnvironment(overrides: RawEnvironment = {}): Test
     ...validEnvironment(),
     STAGE: 'prod',
     INSTANCE: 'production',
-    FILE_STORAGE_DIR: '/var/lib/confera/files',
-    CLAMAV_ADDRESS: 'clamav.confera.test:3310',
-    ADMIN_ORIGIN: 'https://admin.confera.test',
-    PUBLIC_ORIGIN: 'https://forms.confera.test',
+    FILE_STORAGE_DIR: '/var/lib/congresa/files',
+    CLAMAV_ADDRESS: 'clamav.congresa.test:3310',
+    ADMIN_ORIGIN: 'https://admin.congresa.test',
+    PUBLIC_ORIGIN: 'https://forms.congresa.test',
     ...overrides,
   };
 }
@@ -42,7 +42,7 @@ export function validProductionEnvironment(overrides: RawEnvironment = {}): Test
 export function validStagingEnvironment(overrides: RawEnvironment = {}): TestEnvironment {
   return validProductionEnvironment({
     INSTANCE: 'staging',
-    STAGING_MAIL_CATCHER: 'mailpit.confera.test:1025',
+    STAGING_MAIL_CATCHER: 'mailpit.congresa.test:1025',
     ...overrides,
   });
 }

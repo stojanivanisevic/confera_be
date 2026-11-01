@@ -46,7 +46,7 @@ export function traceLog(chunk: string): void {
 }
 
 function superuserUrl(): string | null {
-  const owner = process.env.CONFERA_E2E_OWNER_URL;
+  const owner = process.env.CONGRESA_E2E_OWNER_URL;
   const password = process.env.POSTGRES_PASSWORD;
   if (owner === undefined || password === undefined || password === '') {
     return null;

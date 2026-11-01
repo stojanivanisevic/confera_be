@@ -39,7 +39,7 @@ describe('CSP reports', () => {
   it('takes a report in the report-uri shape and logs what matters, without the query, the token or the address', async () => {
     const response = await post({
       'csp-report': {
-        'document-uri': `https://admin.confera.test/invitations/${TOKEN_SHAPE}?next=/users&token=${TOKEN_SHAPE}`,
+        'document-uri': `https://admin.congresa.test/invitations/${TOKEN_SHAPE}?next=/users&token=${TOKEN_SHAPE}`,
         referrer: `https://evil.example/?session=${TOKEN_SHAPE}`,
         'violated-directive': 'script-src-elem',
         'effective-directive': 'script-src-elem',
@@ -57,7 +57,7 @@ describe('CSP reports', () => {
       expect.objectContaining({
         directive: 'script-src-elem',
         blocked: 'https://cdn.example/x.js',
-        document: 'https://admin.confera.test/invitations/[token]',
+        document: 'https://admin.congresa.test/invitations/[token]',
         disposition: 'report',
         status: 200,
         sample: 'alert(document.cookie) and much more tha',
@@ -79,7 +79,7 @@ describe('CSP reports', () => {
           body: {
             effectiveDirective: 'img-src',
             blockedURL: 'https://x.example/a.png',
-            documentURL: 'https://forms.confera.test/f/abstract',
+            documentURL: 'https://forms.congresa.test/f/abstract',
           },
         },
         {
@@ -87,7 +87,7 @@ describe('CSP reports', () => {
           body: {
             effectiveDirective: 'style-src',
             blockedURL: 'inline',
-            documentURL: 'https://forms.confera.test/f/abstract',
+            documentURL: 'https://forms.congresa.test/f/abstract',
           },
         },
         { type: 'other', body: {} },
@@ -147,7 +147,7 @@ describe('CSP reports', () => {
       (
         await post({}, 'application/csp-report', '203.0.113.6').set(
           'Cookie',
-          '__Host-confera_session=x',
+          '__Host-congresa_session=x',
         )
       ).status,
     ).toBe(204);

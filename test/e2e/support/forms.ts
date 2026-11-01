@@ -6,7 +6,7 @@ import { type E2eApp, PUBLIC_HOST } from './e2e-app';
 
 /**
  * Forms for the end-to-end tests (M3): a conference that is open for submissions with an
- * abstract form published, and the calls of the public page, made as Confera's own page
+ * abstract form published, and the calls of the public page, made as Congresa's own page
  * makes them (the public host, its exact Origin, `Sec-Fetch-Site: same-origin`).
  */
 let year = 2040;
@@ -98,7 +98,7 @@ export async function openForm(
   };
 }
 
-/** A request of Confera's own form page, from a client address of its own. */
+/** A request of Congresa's own form page, from a client address of its own. */
 export function page(
   e2e: E2eApp,
   method: 'get' | 'post',

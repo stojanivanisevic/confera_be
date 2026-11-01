@@ -67,7 +67,7 @@ export const REVIEWED_SECURITY_DEFINER_FUNCTIONS: readonly string[] = [];
 /** Views that do not run with the rights of the caller and were reviewed. None so far. */
 export const REVIEWED_NON_INVOKER_VIEWS: readonly string[] = [];
 
-const RUNTIME_ROLES = ['confera_app', 'confera_system'];
+const RUNTIME_ROLES = ['congresa_app', 'congresa_system'];
 const COMMANDS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 
 interface TableRow {
@@ -102,7 +102,7 @@ function referenceTableProblems(table: TableRow, policies: readonly PolicyRow[])
   }
   for (const policy of own) {
     const writes = policy.command !== 'SELECT';
-    if (writes && !(policy.roles.length === 1 && policy.roles[0] === 'confera_owner')) {
+    if (writes && !(policy.roles.length === 1 && policy.roles[0] === 'congresa_owner')) {
       problems.push(
         `${table.name}: policy ${policy.name} lets roles other than the owner write a reference table`,
       );
@@ -336,7 +336,7 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
     await client.query<{ grantee: string; table: string; privilege: string }>(`
       SELECT grantee, table_name AS "table", privilege_type AS privilege
       FROM information_schema.role_table_grants
-      WHERE table_schema = 'public' AND grantee IN ('confera_app', 'confera_system', 'PUBLIC')`)
+      WHERE table_schema = 'public' AND grantee IN ('congresa_app', 'congresa_system', 'PUBLIC')`)
   ).rows;
   for (const grant of grants) {
     if (grant.grantee === 'PUBLIC') {
@@ -345,7 +345,7 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
       problems.push(
         `${grant.table}: ${grant.grantee} has ${grant.privilege} on an owner-only table`,
       );
-    } else if (grant.grantee === 'confera_system') {
+    } else if (grant.grantee === 'congresa_system') {
       problems.push(
         `${grant.table}: the system role has ${grant.privilege} on the whole table; grant columns to it`,
       );
@@ -361,7 +361,7 @@ export async function catalogueProblems(client: Client): Promise<string[]> {
     await client.query<{ table: string; column: string; privilege: string }>(`
       SELECT table_name AS "table", column_name AS "column", privilege_type AS privilege
       FROM information_schema.column_privileges
-      WHERE table_schema = 'public' AND grantee = 'confera_system'`)
+      WHERE table_schema = 'public' AND grantee = 'congresa_system'`)
   ).rows;
   for (const grant of columnGrants) {
     const allowed = SYSTEM_ROLE_COLUMNS[grant.table] ?? [];

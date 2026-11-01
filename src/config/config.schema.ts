@@ -45,7 +45,7 @@ const PROBLEM = {
     'is required and must be 43 to 128 characters of letters, digits, - and _ (32 random bytes in base64url; see .env.example)',
   smallNumber: 'must be a whole number between 0 and 86400',
   directory:
-    'must be the path of a folder: letters, digits and . _ - / \\ : only, no space (for example /var/lib/confera/files)',
+    'must be the path of a folder: letters, digits and . _ - / \\ : only, no space (for example /var/lib/congresa/files)',
   clamavAddress: 'must be host:port of the ClamAV daemon (clamd), for example 127.0.0.1:3310',
   stagingMailCatcher:
     'must be host:port of the mail catcher of the staging server, for example mailpit:1025',
@@ -195,13 +195,13 @@ export const VARIABLES = {
   },
   DATABASE_URL: {
     description:
-      'PostgreSQL address of the APPLICATION role (confera_app): no schema rights, bound by row-level security.',
+      'PostgreSQL address of the APPLICATION role (congresa_app): no schema rights, bound by row-level security.',
     secret: true,
     required: true,
   },
   SYSTEM_DATABASE_URL: {
     description:
-      'PostgreSQL address of the SYSTEM role (confera_system): used only by the resolvers that find an organisation before one is known (ADR-05).',
+      'PostgreSQL address of the SYSTEM role (congresa_system): used only by the resolvers that find an organisation before one is known (ADR-05).',
     secret: true,
     required: true,
   },
@@ -242,7 +242,7 @@ export const VARIABLES = {
   },
   STAGING_MAIL_CATCHER: {
     description:
-      'host:port of the mail catcher (ADR-27, ST-50). Required with INSTANCE=staging and refused everywhere else: every message then goes to the catcher only, in clear and without a login, whatever mail server an admin configured, to a fixed catcher address, with the original recipient in the header X-Confera-Original-Recipient and the subject marked [STAGING].',
+      'host:port of the mail catcher (ADR-27, ST-50). Required with INSTANCE=staging and refused everywhere else: every message then goes to the catcher only, in clear and without a login, whatever mail server an admin configured, to a fixed catcher address, with the original recipient in the header X-Congresa-Original-Recipient and the subject marked [STAGING].',
     secret: false,
     required: false,
   },

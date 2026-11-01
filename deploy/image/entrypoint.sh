@@ -1,5 +1,5 @@
 #!/bin/sh
-# Entry of the Confera images (runtime and jobs). M4-BE-07; ADR-26: secrets per service, as files.
+# Entry of the Congresa images (runtime and jobs). M4-BE-07; ADR-26: secrets per service, as files.
 #
 # Docker Compose mounts the secret files a service is given under /run/secrets/<name>
 # (deploy/compose.yml, `secrets:`). This script turns each of them into the one variable the
@@ -34,11 +34,11 @@ if [ -d "$SECRETS_DIR" ]; then
     [ -e "$file" ] || continue
     name=$(basename "$file")
     if ! variable=$(variable_for "$name"); then
-      echo "confera-entrypoint: /run/secrets/$name is not a secret this image knows; refusing to start" >&2
+      echo "congresa-entrypoint: /run/secrets/$name is not a secret this image knows; refusing to start" >&2
       exit 78
     fi
     if [ ! -f "$file" ] || [ ! -r "$file" ]; then
-      echo "confera-entrypoint: /run/secrets/$name cannot be read by uid $(id -u); refusing to start" >&2
+      echo "congresa-entrypoint: /run/secrets/$name cannot be read by uid $(id -u); refusing to start" >&2
       exit 78
     fi
     value=$(cat "$file")

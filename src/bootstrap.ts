@@ -114,13 +114,13 @@ export async function start(config: AppConfig, options: AppOptions = {}): Promis
   } catch (error) {
     if (error instanceof StartupRefusal) {
       // A sentence written by us: safe to print.
-      process.stderr.write(`Confera API did not start: ${error.reason}
+      process.stderr.write(`Congresa API did not start: ${error.reason}
 `);
       process.exitCode = EXIT_CODE.refused;
     } else {
       // Named by its kind only: a message can hold an address or a value.
       const kind = error instanceof Error ? error.name : 'unknown error';
-      process.stderr.write(`Confera API did not start: ${kind}.
+      process.stderr.write(`Congresa API did not start: ${kind}.
 `);
       process.exitCode = EXIT_CODE.failure;
     }

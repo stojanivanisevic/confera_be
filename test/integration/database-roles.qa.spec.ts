@@ -32,12 +32,12 @@ describe('the start-up role check and the roles of the server files (ADR-05, ST-
   const password = randomPassword();
   const PREDEFINED = ['pg_read_server_files', 'pg_write_server_files', 'pg_execute_server_program'];
   const roles = {
-    pg_read_server_files: 'confera_test_qa_app_read_files',
-    pg_write_server_files: 'confera_test_qa_app_write_files',
-    pg_execute_server_program: 'confera_test_qa_app_run_programs',
-    system: 'confera_test_qa_system_run_programs',
+    pg_read_server_files: 'congresa_test_qa_app_read_files',
+    pg_write_server_files: 'congresa_test_qa_app_write_files',
+    pg_execute_server_program: 'congresa_test_qa_app_run_programs',
+    system: 'congresa_test_qa_system_run_programs',
     /** Member of the system role that may SET ROLE to it, without inheriting from it. */
-    setOnly: 'confera_test_qa_app_set_only',
+    setOnly: 'congresa_test_qa_app_set_only',
   } as const;
 
   let superuser: Client;
@@ -60,16 +60,16 @@ describe('the start-up role check and the roles of the server files (ADR-05, ST-
     for (const predefined of PREDEFINED) {
       const role = roles[predefined as keyof typeof roles];
       await superuser.query(
-        `CREATE ROLE ${role} LOGIN PASSWORD ${pw} IN ROLE confera_app, ${predefined}`,
+        `CREATE ROLE ${role} LOGIN PASSWORD ${pw} IN ROLE congresa_app, ${predefined}`,
       );
       await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${role}`);
     }
     await superuser.query(
-      `CREATE ROLE ${roles.system} LOGIN PASSWORD ${pw} IN ROLE confera_system, pg_execute_server_program`,
+      `CREATE ROLE ${roles.system} LOGIN PASSWORD ${pw} IN ROLE congresa_system, pg_execute_server_program`,
     );
     await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${roles.system}`);
-    await superuser.query(`CREATE ROLE ${roles.setOnly} LOGIN PASSWORD ${pw} IN ROLE confera_app`);
-    await superuser.query(`GRANT confera_system TO ${roles.setOnly} WITH INHERIT FALSE, SET TRUE`);
+    await superuser.query(`CREATE ROLE ${roles.setOnly} LOGIN PASSWORD ${pw} IN ROLE congresa_app`);
+    await superuser.query(`GRANT congresa_system TO ${roles.setOnly} WITH INHERIT FALSE, SET TRUE`);
     await superuser.query(`GRANT CONNECT ON DATABASE ${testDatabase.name} TO ${roles.setOnly}`);
   });
 

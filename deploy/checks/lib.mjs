@@ -10,8 +10,18 @@ import { fileURLToPath } from 'node:url';
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const artifactsDir = path.join(repoRoot, '.artifacts', 'deploy-checks');
 
-/** Names of everything a check creates start with this. */
-export const CHECK_PREFIX = 'confera-m4-infra';
+/**
+ * Names of everything a check creates start with this: congresa-m4-infra, or CONGRESA_CHECK_PREFIX
+ * (lower-case letters, digits and hyphens), so that two checkouts never share a stack.
+ */
+export const CHECK_PREFIX = (() => {
+  const prefix = process.env.CONGRESA_CHECK_PREFIX ?? 'congresa-m4-infra';
+  if (!/^congresa-[a-z0-9-]{1,40}$/.test(prefix))
+    throw new Error(
+      `CONGRESA_CHECK_PREFIX must be congresa-<letters, digits, hyphens>, not "${prefix}"`,
+    );
+  return prefix;
+})();
 
 /** Runs a command; returns { code, stdout, stderr }. Never throws on a non-zero exit. */
 export function run(command, args, options = {}) {

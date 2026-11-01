@@ -237,7 +237,7 @@ export class TemplatesService {
         const rendered = renderBody(checked.body, {
           values,
           conditions,
-          link: 'https://admin.confera.example/preview-link',
+          link: 'https://admin.congresa.example/preview-link',
           images,
         });
         return {
@@ -417,7 +417,7 @@ export class TemplatesService {
           contact: `${'x'.repeat(240)}@example.test`,
         }),
         conditions: new Set(catalogue.conditions),
-        link: 'https://admin.confera.example/a-link-of-the-length-of-a-real-one-0123456789',
+        link: 'https://admin.congresa.example/a-link-of-the-length-of-a-real-one-0123456789',
         images,
       });
     } catch (error) {
@@ -463,7 +463,7 @@ export class TemplatesService {
       if (file.width === null || file.height === null) {
         continue;
       }
-      let src = `cid:${file.id}@confera`;
+      let src = `cid:${file.id}@congresa`;
       if (asData) {
         const chunks: Buffer[] = [];
         for await (const chunk of this.storage.read(file.storageKey)) {

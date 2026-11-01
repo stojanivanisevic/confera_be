@@ -1,7 +1,7 @@
 /**
  * Reads a `Host` header strictly (RFC 9110, section 7.2: `Host = uri-host [ ":" port ]`).
  *
- * The two surfaces of Confera are told apart by this header (ADR-02), so it must never
+ * The two surfaces of Congresa are told apart by this header (ADR-02), so it must never
  * be "understood" generously. A lenient reader, such as a URL parser, finds the admin
  * host name inside `evil.example@admin.example.org`, `admin.example.org/x`,
  * `admin.example.org?x` or `%61dmin.example.org`. None of these is a host. This parser

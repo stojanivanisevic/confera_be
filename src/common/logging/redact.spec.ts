@@ -100,12 +100,12 @@ describe('redaction of log entries (ADR-19, SEC-A-28)', () => {
 
     it.each([
       [
-        address('postgresql', 'confera_app', 'db.internal:5432/confera'),
-        `postgresql://${REDACTED}@db.internal:5432/confera`,
+        address('postgresql', 'congresa_app', 'db.internal:5432/congresa'),
+        `postgresql://${REDACTED}@db.internal:5432/congresa`,
       ],
       [
-        `connect failed for ${address('postgres', 'u', '127.0.0.1/confera?sslmode=disable')}`,
-        `connect failed for postgres://${REDACTED}@127.0.0.1/confera?sslmode=disable`,
+        `connect failed for ${address('postgres', 'u', '127.0.0.1/congresa?sslmode=disable')}`,
+        `connect failed for postgres://${REDACTED}@127.0.0.1/congresa?sslmode=disable`,
       ],
       [
         address('smtp', 'office', 'mail.example.test:587'),
@@ -140,11 +140,11 @@ describe('redaction of log entries (ADR-19, SEC-A-28)', () => {
   describe('errors', () => {
     it('keeps type, message and stack, scrubbed', () => {
       const error = new Error(
-        ['cannot reach postgresql://confera_app', 'canary-pw@db:5432/confera'].join(':'),
+        ['cannot reach postgresql://congresa_app', 'canary-pw@db:5432/congresa'].join(':'),
       );
       const out = redact({ err: error }) as { err: Record<string, string> };
       expect(out.err.type).toBe('Error');
-      expect(out.err.message).toBe(`cannot reach postgresql://${REDACTED}@db:5432/confera`);
+      expect(out.err.message).toBe(`cannot reach postgresql://${REDACTED}@db:5432/congresa`);
       expect(out.err.stack).toContain('redact.spec');
       expect(JSON.stringify(out)).not.toContain('canary-pw');
     });

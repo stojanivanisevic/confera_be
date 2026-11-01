@@ -6,15 +6,15 @@ import { prepareTestDatabase } from '../../support/prepare-database';
  * Runs once before the integration tests (`pnpm test:int`):
  *
  * 1. reads `.env` (the addresses of the development stack);
- * 2. drops and creates a database of its own, `confera_integration_test`, with the roles
+ * 2. drops and creates a database of its own, `congresa_integration_test`, with the roles
  *    of ADR-05, through the same script a developer runs (`db:provision`);
  * 3. creates the schema with `prisma migrate deploy`, as the owner role. Never `db push`.
  *
  * The tests then connect as the application and system roles, so row-level security is
- * exercised exactly as in production. The development database `confera` is not touched.
+ * exercised exactly as in production. The development database `congresa` is not touched.
  */
 const repoRoot = join(__dirname, '..', '..', '..');
-const TEST_DATABASE = 'confera_integration_test';
+const TEST_DATABASE = 'congresa_integration_test';
 
 export default function globalSetup(): void {
   if (!existsSync(join(repoRoot, 'dist', 'main.js'))) {
@@ -26,8 +26,8 @@ export default function globalSetup(): void {
   const urls = prepareTestDatabase(TEST_DATABASE);
 
   // Handed to the test files, which run in this process (--runInBand) or its children.
-  process.env.CONFERA_TEST_DATABASE = urls.name;
-  process.env.CONFERA_TEST_APPLICATION_URL = urls.application;
-  process.env.CONFERA_TEST_SYSTEM_URL = urls.system;
-  process.env.CONFERA_TEST_OWNER_URL = urls.owner;
+  process.env.CONGRESA_TEST_DATABASE = urls.name;
+  process.env.CONGRESA_TEST_APPLICATION_URL = urls.application;
+  process.env.CONGRESA_TEST_SYSTEM_URL = urls.system;
+  process.env.CONGRESA_TEST_OWNER_URL = urls.owner;
 }

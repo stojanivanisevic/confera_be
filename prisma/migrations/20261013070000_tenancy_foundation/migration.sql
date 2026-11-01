@@ -1,7 +1,7 @@
 -- Tenancy foundation (ADR-05, ADR-06): organisations, users and their roles, with
 -- row-level security as the backstop of tenant isolation.
 --
--- Runs as confera_owner, in a database prepared by `pnpm db:provision`.
+-- Runs as congresa_owner, in a database prepared by `pnpm db:provision`.
 -- The table and index statements are what `prisma migrate diff` generates from
 -- schema.prisma; everything below "Hand-written" is not expressible in Prisma.
 
@@ -73,7 +73,7 @@ ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_role_check" CHECK ("role" IN
 -- a comparison with NULL is never true: no organisation, no rows, and no write.
 --
 -- ENABLE alone would leave the table owner outside the policies; FORCE binds the owner
--- too. Only a role with the BYPASSRLS attribute is exempt (confera_system, and later the
+-- too. Only a role with the BYPASSRLS attribute is exempt (congresa_system, and later the
 -- backup role). A policy without TO applies to every role.
 --
 -- USING is the read check (which rows a statement may see, change or delete);
@@ -102,14 +102,14 @@ CREATE POLICY "tenant_isolation" ON "user_roles"
 
 -- Grants. Nothing is granted by default: every table names what each run-time role may do.
 --
--- confera_app, the running API. An organisation is created by the seed or by an
+-- congresa_app, the running API. An organisation is created by the seed or by an
 -- operator's command, never by the API, so there is no INSERT or DELETE on it.
-GRANT SELECT, UPDATE ON "organisations" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "users" TO confera_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON "user_roles" TO confera_app;
+GRANT SELECT, UPDATE ON "organisations" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "users" TO congresa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "user_roles" TO congresa_app;
 
--- confera_system, the resolvers (ADR-05): it bypasses the policies, so it gets only the
+-- congresa_system, the resolvers (ADR-05): it bypasses the policies, so it gets only the
 -- columns a resolver returns or searches by. The user-by-email look-up of sign-in and of
 -- a password-reset request returns ids only; the password hash is not granted, and is
 -- read afterwards through the tenant client.
-GRANT SELECT ("id", "organisation_id", "email") ON "users" TO confera_system;
+GRANT SELECT ("id", "organisation_id", "email") ON "users" TO congresa_system;

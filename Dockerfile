@@ -1,7 +1,7 @@
-# Production images of the Confera API (M4-BE-07; ADR-24, ADR-26, ADR-27).
+# Production images of the Congresa API (M4-BE-07; ADR-24, ADR-26, ADR-27).
 #
-#   docker build --target runtime -t confera-be .     the API and the worker: one image, two services
-#   docker build --target jobs    -t confera-be-jobs .  the one-shot jobs: migrate, provision, seed
+#   docker build --target runtime -t congresa-be .     the API and the worker: one image, two services
+#   docker build --target jobs    -t congresa-be-jobs .  the one-shot jobs: migrate, provision, seed
 #
 # - Every stage starts from the same base image, referenced by digest (ADR-01; `pnpm supply-chain`
 #   checks every FROM line, so a stage never starts FROM another stage's name).
@@ -57,11 +57,11 @@ RUN corepack pnpm install --frozen-lockfile --prod --ignore-scripts
 # when the deploy script or the operator starts it. It holds no source, no build, no test,
 # and no test tool of scripts/ (seed:e2e and the stubs are not copied).
 FROM node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS jobs
-ARG CONFERA_REVISION=unknown
-LABEL org.opencontainers.image.title="confera-be-jobs" \
-      org.opencontainers.image.description="Confera one-shot jobs: migrate, provision, production seed" \
+ARG CONGRESA_REVISION=unknown
+LABEL org.opencontainers.image.title="congresa-be-jobs" \
+      org.opencontainers.image.description="Congresa one-shot jobs: migrate, provision, production seed" \
       org.opencontainers.image.source="https://github.com/stojanivanisevic/confera_be" \
-      org.opencontainers.image.revision="${CONFERA_REVISION}" \
+      org.opencontainers.image.revision="${CONGRESA_REVISION}" \
       org.opencontainers.image.licenses="UNLICENSED"
 ENV NODE_ENV=production \
     HOME=/tmp
@@ -76,34 +76,34 @@ COPY --from=build --chown=root:root /build/node_modules ./node_modules
 COPY --chown=root:root package.json prisma.config.ts ./
 COPY --chown=root:root prisma prisma
 COPY --chown=root:root scripts/db-provision.mjs scripts/seed-production.mjs scripts/first-admin.mjs scripts/
-COPY --chown=root:root scripts/lib/process.mjs scripts/lib/stack.mjs scripts/lib/seed-data.mjs scripts/lib/stage.mjs scripts/lib/mail-address.mjs scripts/lib/
-COPY --chown=root:root --chmod=0555 deploy/image/entrypoint.sh /usr/local/bin/confera-entrypoint
+COPY --chown=root:root scripts/lib/process.mjs scripts/lib/stack.mjs scripts/lib/seed-data.mjs scripts/lib/stage.mjs scripts/lib/mail-address.mjs scripts/lib/scram.mjs scripts/lib/
+COPY --chown=root:root --chmod=0555 deploy/image/entrypoint.sh /usr/local/bin/congresa-entrypoint
 USER node
-ENTRYPOINT ["/usr/local/bin/confera-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/congresa-entrypoint"]
 CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
 
 # ---------------------------------------------------------------------------------------------
 # runtime: the API and the worker (the last stage, so the default target)
 # ---------------------------------------------------------------------------------------------
 FROM node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS runtime
-ARG CONFERA_REVISION=unknown
-LABEL org.opencontainers.image.title="confera-be" \
-      org.opencontainers.image.description="Confera API and worker (UdEkoM Balkans)" \
+ARG CONGRESA_REVISION=unknown
+LABEL org.opencontainers.image.title="congresa-be" \
+      org.opencontainers.image.description="Congresa API and worker (UdEkoM Balkans)" \
       org.opencontainers.image.source="https://github.com/stojanivanisevic/confera_be" \
-      org.opencontainers.image.revision="${CONFERA_REVISION}" \
+      org.opencontainers.image.revision="${CONGRESA_REVISION}" \
       org.opencontainers.image.licenses="UNLICENSED"
 ENV NODE_ENV=production
 # The package managers of the base image are development tools: the runtime image has none.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
            /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* \
- && install -d -o node -g node -m 0700 /var/lib/confera/files
+ && install -d -o node -g node -m 0700 /var/lib/congresa/files
 WORKDIR /app
 COPY --from=production-dependencies --chown=root:root /build/node_modules ./node_modules
 COPY --from=build --chown=root:root /build/dist ./dist
 COPY --chown=root:root package.json ./
-COPY --chown=root:root --chmod=0555 deploy/image/entrypoint.sh /usr/local/bin/confera-entrypoint
+COPY --chown=root:root --chmod=0555 deploy/image/entrypoint.sh /usr/local/bin/congresa-entrypoint
 USER node
 EXPOSE 3001
-ENTRYPOINT ["/usr/local/bin/confera-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/congresa-entrypoint"]
 CMD ["node", "dist/main.js"]

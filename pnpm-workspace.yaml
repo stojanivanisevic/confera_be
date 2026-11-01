@@ -42,12 +42,12 @@ allowBuilds:
 # ones a dependency pins. mysql2 and deepmerge-ts belong to the Prisma command line (prisma
 # 7.10.0), not to the running API. Remove an entry when the dependency pins a patched version.
 overrides:
-  # GHSA-3f6p-5ww8-9rcr (high), patched in 3.22.0. Confera never connects to MySQL.
+  # GHSA-3f6p-5ww8-9rcr (high), patched in 3.22.0. Congresa never connects to MySQL.
   'mysql2@<3.22.0': 3.24.5
   # GHSA-ggr8-5vv4-36mx (high), patched in 8.0.0. Used by @prisma/config to merge prisma.config.ts.
   'deepmerge-ts@<8.0.0': 8.0.2
   # GHSA-q7qp-rjg7-q26m (high, a DoS through a pending fileFilter), patched in 2.5.0.
-  # @nestjs/platform-express 12.1.2 (and 12.2.0) pins multer 2.4.0. Confera reads uploads
+  # @nestjs/platform-express 12.1.2 (and 12.2.0) pins multer 2.4.0. Congresa reads uploads
   # with busboy and never through multer, but the gate refuses the version.
   'multer@>=2.0.0 <2.5.0': 2.5.0
 

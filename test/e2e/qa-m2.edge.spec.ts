@@ -30,7 +30,7 @@ import { linkPath, mintLink } from './support/links';
  * of SMTP and of the database, time zones in the expiry of a session, pagination, and the
  * parts of ST-17, ST-20 and ST-23 that no other file asks.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
 const GOOD_PASSWORD = 'invented-Breza-Most-Polje-7';
 const SERVER_PASSWORD = 'invented-mail-server-password-2';
 

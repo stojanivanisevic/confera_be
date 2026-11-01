@@ -179,12 +179,12 @@ CREATE POLICY "tenant_isolation" ON "submission_revisions"
 -- A submission changes its status and the data an admin corrects; nothing else of it.
 GRANT UPDATE ("status", "version", "updated_at", "answers", "title", "participation_type",
   "first_author_name", "first_author_institution", "corresponding_email", "corresponding_domain",
-  "author_count", "search_text") ON "submissions" TO confera_app;
+  "author_count", "search_text") ON "submissions" TO congresa_app;
 -- A correction replaces the list of authors.
-GRANT DELETE ON "submission_authors" TO confera_app;
+GRANT DELETE ON "submission_authors" TO congresa_app;
 -- Notes and revisions only grow.
-GRANT SELECT, INSERT ON "submission_notes" TO confera_app;
-GRANT SELECT, INSERT ON "submission_revisions" TO confera_app;
+GRANT SELECT, INSERT ON "submission_notes" TO congresa_app;
+GRANT SELECT, INSERT ON "submission_revisions" TO congresa_app;
 
 -- The permissions of 0.4.0 (src/modules/access/permissions.ts): change submissions
 -- (statuses, notes, corrections), edit the email templates, resend from the mail log and

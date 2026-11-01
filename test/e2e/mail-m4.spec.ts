@@ -32,8 +32,8 @@ import { linkPath } from './support/links';
  * FR-MAIL-02, FR-SMTP-05, FR-SMTP-06; ST-58, ST-59, ST-60), on a developer's stage against
  * the mail catcher, with a fake ClamAV that finds everything clean.
  */
-const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONFERA_MAIL_WEB_PORT ?? '8025'}`;
-const MAILPIT_SMTP = Number(process.env.CONFERA_MAIL_SMTP_PORT ?? '1025');
+const MAILPIT_WEB = `http://127.0.0.1:${process.env.CONGRESA_MAIL_WEB_PORT ?? '8025'}`;
+const MAILPIT_SMTP = Number(process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025');
 
 interface MailpitMessage {
   ID: string;
@@ -456,9 +456,9 @@ describe('templates, email images and the mail log (M4-BE-03, 05, 06)', () => {
       );
       const content = await mailOf(mail?.ID ?? '');
       expect(content.Inline).toEqual([
-        expect.objectContaining({ ContentID: `${imageId}@confera`, ContentType: 'image/png' }),
+        expect.objectContaining({ ContentID: `${imageId}@congresa`, ContentType: 'image/png' }),
       ]);
-      expect(content.HTML).toContain(`src="cid:${imageId}@confera"`);
+      expect(content.HTML).toContain(`src="cid:${imageId}@congresa"`);
       expect(content.HTML).not.toMatch(/src="(https?:)?\/\//);
       expect(content.HTML).not.toMatch(/https?:\/\/[^"]*\.(png|gif|jpe?g)/);
       // The log keeps the body and the id of the image, not its bytes.

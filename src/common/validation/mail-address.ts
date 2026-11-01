@@ -1,7 +1,7 @@
 import { registerDecorator, type ValidationOptions } from 'class-validator';
 
 /**
- * The address rule (ADR-09, ADR-13, SEC-A-17, ST-23): an address that Confera stores or
+ * The address rule (ADR-09, ADR-13, SEC-A-17, ST-23): an address that Congresa stores or
  * sends to is ONE plain address, and nothing a mail header could read as more:
  *
  * - at most 254 characters, a local part of at most 64;

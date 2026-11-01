@@ -1,10 +1,11 @@
 import ts from 'typescript';
 
 /**
- * Two scans over TypeScript source text, used by the architecture tests of ST-09
- * (govcore matrix, row 2: "a second master-password variable outside the DEV_ prefix").
- * They work on the syntax tree, so an alias, a computed name or a copy cannot go around
- * them the way they go around a lint selector.
+ * Scans over TypeScript source text, used by the architecture tests of ST-09 (govcore
+ * matrix, row 2: "a second master-password variable outside the DEV_ prefix"; sections 1
+ * and 2) and of the cookie rule (cookies.spec.ts; section 3). They work on the syntax
+ * tree, so an alias, a computed name or a copy cannot go around them the way they go
+ * around a lint selector.
  *
  * Each scan takes a file name and its text and returns one line per finding.
  */
@@ -214,4 +215,111 @@ export function credentialComparisons(fileName: string, text: string): string[] 
   };
   visit(source);
   return findings;
+}
+
+// ---------------------------------------------------------------------------
+// 3. Who writes a cookie (condition 5 of the review of staging under congresa.com)
+// ---------------------------------------------------------------------------
+
+/** Libraries that make, sign or set cookies. The API writes its two cookies itself. */
+const COOKIE_MODULES = new Set([
+  'cookie',
+  'cookie-parser',
+  'cookie-session',
+  'cookie-signature',
+  'express-session',
+  'set-cookie-parser',
+  'tough-cookie',
+]);
+
+/** The cookie API of Express (and of the Nest platform on top of it). */
+const COOKIE_METHODS = new Set(['cookie', 'clearCookie']);
+
+/** The texts of a literal or of the fixed parts of a template, with their nodes. */
+function literalTexts(source: ts.SourceFile): { node: ts.Node; text: string }[] {
+  const texts: { node: ts.Node; text: string }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+    ) {
+      texts.push({ node, text: node.text });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return texts;
+}
+
+/**
+ * Every place where the text writes a cookie, or could: the header name `Set-Cookie` in any
+ * spelling (`append('Set-Cookie', …)`, `setHeader('set-cookie', …)`, `{ 'Set-Cookie': … }`,
+ * in a template too), the framework's cookie API (`response.cookie(…)`,
+ * `response.clearCookie(…)`, also as `response['cookie'](…)`), and a cookie library
+ * (import, re-export, require or dynamic import).
+ */
+export function cookieWrites(fileName: string, text: string): string[] {
+  const source = parse(fileName, text);
+  const findings: string[] = [];
+  const add = (node: ts.Node, what: string): void => {
+    findings.push(`${fileName}:${String(lineOf(source, node))}: ${what}`);
+  };
+
+  for (const { node, text: literal } of literalTexts(source)) {
+    if (/set-cookie/i.test(literal)) {
+      add(node, `the header Set-Cookie: ${shorten(node.parent.getText(source))}`);
+    }
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const method = ts.isPropertyAccessExpression(callee)
+        ? callee.name.text
+        : ts.isElementAccessExpression(callee) && ts.isStringLiteralLike(callee.argumentExpression)
+          ? callee.argumentExpression.text
+          : undefined;
+      if (method !== undefined && COOKIE_METHODS.has(method)) {
+        add(node, `the cookie API: ${shorten(node.getText(source))}`);
+      }
+      const argument = node.arguments[0];
+      if (
+        (callee.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(callee) && callee.text === 'require')) &&
+        argument !== undefined &&
+        ts.isStringLiteralLike(argument) &&
+        COOKIE_MODULES.has(argument.text)
+      ) {
+        add(node, `import of "${argument.text}"`);
+      }
+    }
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      COOKIE_MODULES.has(node.moduleSpecifier.text)
+    ) {
+      add(node, `import of "${node.moduleSpecifier.text}"`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return findings;
+}
+
+/**
+ * Every text in the source (a literal or the fixed part of a template) that carries a
+ * cookie's `Domain` attribute (`Domain=`, in any spelling and spacing). A cookie of
+ * Congresa has none: it belongs to the host that set it.
+ */
+export function cookieDomains(fileName: string, text: string): string[] {
+  const source = parse(fileName, text);
+  return literalTexts(source)
+    .filter(({ text: literal }) => /\bdomain\s*=/i.test(literal))
+    .map(
+      ({ node }) =>
+        `${fileName}:${String(lineOf(source, node))}: ${shorten(node.parent.getText(source))}`,
+    );
 }

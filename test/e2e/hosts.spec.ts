@@ -28,7 +28,7 @@ describe('odd Host headers', () => {
       ['with a port', `${ADMIN_HOST}:443`],
       ['with another port', `${ADMIN_HOST}:8443`],
       ['in upper case', ADMIN_HOST.toUpperCase()],
-      ['in mixed case with a port', `Admin.Confera.TEST:3001`],
+      ['in mixed case with a port', `Admin.Congresa.TEST:3001`],
     ])('%s is answered', async (_name, host) => {
       expect((await ask(host)).status).toBe(200);
     });
@@ -48,7 +48,7 @@ describe('odd Host headers', () => {
       ['the admin name with a trailing dot', `${ADMIN_HOST}.`],
       ['two names', `${ADMIN_HOST}, evil.example`],
       ['two names the other way', `evil.example, ${ADMIN_HOST}`],
-      ['a name with a space', `admin .confera.test`],
+      ['a name with a space', `admin .congresa.test`],
       ['a port that is not a number', `${ADMIN_HOST}:http`],
       ['a port that is too large', `${ADMIN_HOST}:99999`],
       ['a very long name', `${'a'.repeat(4000)}.${ADMIN_HOST}`],
@@ -104,12 +104,12 @@ describe('odd Host headers', () => {
       ['a port above the highest', `${ADMIN_HOST}:65536`],
       ['two ports', `${ADMIN_HOST}:80:80`],
       ['a parameter after the name', `${ADMIN_HOST};evil.example`],
-      ['a tab inside the name', 'admin.confera\t.test'],
+      ['a tab inside the name', 'admin.congresa\t.test'],
       ['a null escape after the name', `${ADMIN_HOST}%00`],
-      ['an encoded dot', 'admin%2Econfera.test'],
+      ['an encoded dot', 'admin%2Econgresa.test'],
       ['an encoded at sign', `evil.example%40${ADMIN_HOST}`],
-      ['an underscore in place of a dot', 'admin_confera.test'],
-      ['a double dot', 'admin..confera.test'],
+      ['an underscore in place of a dot', 'admin_congresa.test'],
+      ['a double dot', 'admin..congresa.test'],
       ['a leading dot', `.${ADMIN_HOST}`],
       ['a leading hyphen', `-${ADMIN_HOST}`],
       ['the name in square brackets', `[${ADMIN_HOST}]`],
@@ -119,7 +119,7 @@ describe('odd Host headers', () => {
         `${'a.'.repeat(140)}${ADMIN_HOST}`,
       ],
       ['an asterisk', '*'],
-      ['a wildcard name', '*.confera.test'],
+      ['a wildcard name', '*.congresa.test'],
     ])('%s is not found', async (_name, host) => {
       const response = await ask(host);
       expect(response.status).toBe(404);

@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Confera public API",
+    "title": "Congresa public API",
     "description": "The API of the public surface (forms, secure links). It answers only under the public host name and only ever gains things.",
     "version": "0.3.0"
   },
@@ -29,7 +29,7 @@
         "tags": [
           "CspReports"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -73,7 +73,7 @@
         "tags": [
           "PublicForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -117,7 +117,7 @@
         "tags": [
           "PublicForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -188,7 +188,7 @@
         "tags": [
           "PublicForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -242,7 +242,7 @@
         "tags": [
           "PublicForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -294,7 +294,7 @@
         "tags": [
           "PublicForms"
         ],
-        "x-confera-access": {
+        "x-congresa-access": {
           "public": true
         }
       }
@@ -534,7 +534,7 @@
             "type": "object",
             "additionalProperties": true
           },
-          "confera_hp": {
+          "congresa_hp": {
             "type": "string",
             "description": "The trap: a field no person sees, with a name no autofill fills (SEC-M3-07; the page\nrenders it `autocomplete=\"off\"` in an inert container). It must be empty.",
             "maxLength": 1000

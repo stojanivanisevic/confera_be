@@ -16,19 +16,19 @@ function required(name: string): string {
 
 export const testDatabase = {
   get name(): string {
-    return required('CONFERA_TEST_DATABASE');
+    return required('CONGRESA_TEST_DATABASE');
   },
-  /** Address as confera_app: no schema rights, bound by row-level security. */
+  /** Address as congresa_app: no schema rights, bound by row-level security. */
   get applicationUrl(): string {
-    return required('CONFERA_TEST_APPLICATION_URL');
+    return required('CONGRESA_TEST_APPLICATION_URL');
   },
-  /** Address as confera_system: may bypass the policies, few grants. */
+  /** Address as congresa_system: may bypass the policies, few grants. */
   get systemUrl(): string {
-    return required('CONFERA_TEST_SYSTEM_URL');
+    return required('CONGRESA_TEST_SYSTEM_URL');
   },
-  /** Address as confera_owner: owns the schema. */
+  /** Address as congresa_owner: owns the schema. */
   get ownerUrl(): string {
-    return required('CONFERA_TEST_OWNER_URL');
+    return required('CONGRESA_TEST_OWNER_URL');
   },
 };
 

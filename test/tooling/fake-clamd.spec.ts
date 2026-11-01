@@ -124,11 +124,11 @@ describe('the fake clamd of the development stack (scripts/fake-clamd.mjs)', () 
   it('is a service of the development stack only, started by stack:up, never in an image', () => {
     const compose = readFileSync(join(repoRoot, 'docker-compose.yml'), 'utf8');
     expect(compose).toMatch(/^ {2}fake-clamd:$/m);
-    expect(compose).toContain('./scripts/fake-clamd.mjs:/opt/confera/fake-clamd.mjs:ro');
+    expect(compose).toContain('./scripts/fake-clamd.mjs:/opt/congresa/fake-clamd.mjs:ro');
     expect(readFileSync(join(repoRoot, 'deploy', 'compose.yml'), 'utf8')).not.toMatch(/fake-clamd/);
     expect(readFileSync(join(repoRoot, '.dockerignore'), 'utf8')).not.toMatch(/fake-clamd/);
     const example = readFileSync(join(repoRoot, '.env.example'), 'utf8');
     expect(example).toMatch(/^CLAMAV_ADDRESS=127\.0\.0\.1:3310$/m);
-    expect(example).toMatch(/^CONFERA_CLAMD_PORT=3310$/m);
+    expect(example).toMatch(/^CONGRESA_CLAMD_PORT=3310$/m);
   });
 });

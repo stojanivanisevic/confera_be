@@ -109,7 +109,7 @@ export const REFUSED_NODE_KINDS: Readonly<Record<string, string>> = {
   svg: 'The SVG library reads any file that an <image> element names, outside the access policy of the renderer, and draws text with fonts of its own choice. Use a PNG or JPEG image, or the canvas node for lines and shapes.',
   section:
     'A section brings its own header, footer, background and watermark; none is needed yet. Add it to the document walk, with tests, before using it.',
-  attachment: 'A PDF with files inside is not something Confera issues.',
+  attachment: 'A PDF with files inside is not something Congresa issues.',
   textReference:
     'It copies the text of another node into this one; use the text itself, or pageReference for a page number.',
 };
@@ -143,8 +143,8 @@ export const SUPPORTED_DEFINITION_KEYS = [
 
 /** Properties of a definition that pdfmake has and the renderer refuses. */
 export const REFUSED_DEFINITION_KEYS: Readonly<Record<string, string>> = {
-  attachments: 'A PDF with files inside is not something Confera issues.',
-  files: 'A PDF with files inside is not something Confera issues.',
+  attachments: 'A PDF with files inside is not something Congresa issues.',
+  files: 'A PDF with files inside is not something Congresa issues.',
   patterns:
     'A fill pattern is raw PDF drawing code, which the renderer cannot read. Add it to the document walk, with tests, before using it.',
 };

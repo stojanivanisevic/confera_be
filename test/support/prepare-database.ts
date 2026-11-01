@@ -11,17 +11,17 @@ import { join } from 'node:path';
  * 3. creates the schema with `prisma migrate deploy`, as the owner role. Never `db push`.
  *
  * Each test tier has a database of its own, so the tiers cannot disturb each other, and
- * the development database `confera` is never touched.
+ * the development database `congresa` is never touched.
  */
 const repoRoot = join(__dirname, '..', '..');
 
 export interface TestDatabaseUrls {
   readonly name: string;
-  /** Address as confera_app: no schema rights, bound by row-level security. */
+  /** Address as congresa_app: no schema rights, bound by row-level security. */
   readonly application: string;
-  /** Address as confera_system: may bypass the policies, few grants. */
+  /** Address as congresa_system: may bypass the policies, few grants. */
   readonly system: string;
-  /** Address as confera_owner: owns the schema. */
+  /** Address as congresa_owner: owns the schema. */
   readonly owner: string;
 }
 

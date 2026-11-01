@@ -1,18 +1,30 @@
-# /etc/confera/deploy.conf: the settings of the deploy script (deploy/server/confera-deploy).
+# /etc/congresa/deploy.conf: the settings of the deploy script (deploy/server/congresa-deploy).
 # Owned by root, mode 0644. NAME=value lines only; the script reads them as data, never runs them.
 # It holds no secret.
 
 # Where compose.env, images.env, config/, secrets/ and deploy/ (a copy of this repository's
 # deploy/ folder, put there by the operator) live.
-CONFERA_ROOT=/srv/confera
+CONGRESA_ROOT=/srv/congresa
 
 # The Compose project name of the server.
-CONFERA_PROJECT=confera
+CONGRESA_PROJECT=congresa
+
+# staging or production: the same as CONGRESA_INSTANCE in compose.env (the script refuses to run
+# when they differ). staging adds deploy/compose.staging.yml, the mail catcher. No default.
+CONGRESA_INSTANCE=
 
 # The image repositories. A deploy key can name a digest, never a repository: these are fixed.
-CONFERA_BE_REPOSITORY=ghcr.io/stojanivanisevic/confera-be
-CONFERA_BE_JOBS_REPOSITORY=ghcr.io/stojanivanisevic/confera-be-jobs
-CONFERA_WEB_REPOSITORY=ghcr.io/stojanivanisevic/confera-web
+CONGRESA_BE_REPOSITORY=ghcr.io/stojanivanisevic/congresa-be
+CONGRESA_BE_JOBS_REPOSITORY=ghcr.io/stojanivanisevic/congresa-be-jobs
+CONGRESA_WEB_REPOSITORY=ghcr.io/stojanivanisevic/congresa-web
+
+# The application's database (the database of migration_database_url): a be deploy dumps it
+# before it migrates, and congresa-backup dumps it every night.
+CONGRESA_DATABASE=congresa
 
 # How long a restarted service may take to become healthy, in seconds.
-CONFERA_WAIT_SECONDS=240
+CONGRESA_WAIT_SECONDS=240
+
+# A be deploy and the nightly backup refuse to start when the file system of <root>/backups is
+# fuller than this, in per cent.
+CONGRESA_DISK_MAX_PERCENT=85

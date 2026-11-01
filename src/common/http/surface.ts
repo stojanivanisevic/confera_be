@@ -18,7 +18,7 @@ import { APP_CONFIG } from '../../config/config.module';
 import { parseHostHeader } from './host-header';
 
 /**
- * The two surfaces of Confera (ADR-02, finding SEC-A-50, test ST-66).
+ * The two surfaces of Congresa (ADR-02, finding SEC-A-50, test ST-66).
  *
  * - `admin`:  /api/v1/...     answers only under the host name of ADMIN_ORIGIN
  * - `public`: /public/v1/...  answers only under the host name of PUBLIC_ORIGIN
@@ -33,7 +33,7 @@ import { parseHostHeader } from './host-header';
  */
 export type Surface = 'admin' | 'public' | 'ops';
 
-export const SURFACE_KEY = 'confera:surface';
+export const SURFACE_KEY = 'congresa:surface';
 
 export const SURFACE_PREFIX = {
   admin: 'api/v1',

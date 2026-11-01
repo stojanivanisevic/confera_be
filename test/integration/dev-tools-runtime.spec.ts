@@ -82,7 +82,7 @@ describe('dev tools at run time', () => {
     expect(publicPage.status).toBe(200);
     const json = await development.request(`/${DEV_TOOLS_ROUTES.apiDocs}-json`);
     expect(JSON.parse(json.text)).toEqual(
-      expect.objectContaining({ info: expect.objectContaining({ title: 'Confera admin API' }) }),
+      expect.objectContaining({ info: expect.objectContaining({ title: 'Congresa admin API' }) }),
     );
   });
 

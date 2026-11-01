@@ -34,7 +34,7 @@ const ALLOWED_STAGES = ['local', 'dev', 'test'];
 const EXIT_CONFIGURATION = 78;
 const EICAR = 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE';
 /** The version line; deploy/checks/topology.mjs refuses a scanner that answers with it. */
-const FAKE_CLAMD_VERSION = 'ClamAV 0.0.0-confera-fake-clamd/0/development stack only';
+const FAKE_CLAMD_VERSION = 'ClamAV 0.0.0-congresa-fake-clamd/0/development stack only';
 /** At most this much of a stream is kept: the API sends at most 51 MB. */
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 

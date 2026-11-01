@@ -6,14 +6,14 @@ import { SURFACE_PREFIX } from '../../../common/http/surface';
 import { APP_VERSION } from '../../../common/version';
 
 /**
- * Builds the two OpenAPI documents of Confera from the running code (ADR-19):
+ * Builds the two OpenAPI documents of Congresa from the running code (ADR-19):
  * the admin API (`/api/v1`) and the public API (`/public/v1`).
  *
  * The documents are a contract: `openapi/openapi.json` and `openapi/openapi.public.json`
  * are committed, the frontend vendors a copy, and `pnpm openapi:check` fails when the
  * code and the committed files differ.
  */
-export interface ConferaDocuments {
+export interface CongresaDocuments {
   readonly admin: OpenAPIObject;
   readonly public: OpenAPIObject;
 }
@@ -122,10 +122,10 @@ function assertUniqueOperationIds(document: OpenAPIObject): void {
   }
 }
 
-export function buildDocuments(app: INestApplication): ConferaDocuments {
+export function buildDocuments(app: INestApplication): CongresaDocuments {
   const full = SwaggerModule.createDocument(
     app,
-    new DocumentBuilder().setTitle('Confera').setVersion(APP_VERSION).build(),
+    new DocumentBuilder().setTitle('Congresa').setVersion(APP_VERSION).build(),
     {
       // Stable operation ids: the method name of the controller, without the class name.
       operationIdFactory: (_controllerKey: string, methodKey: string) => methodKey,
@@ -133,17 +133,17 @@ export function buildDocuments(app: INestApplication): ConferaDocuments {
     },
   );
 
-  const documents: ConferaDocuments = {
+  const documents: CongresaDocuments = {
     admin: slice(
       full,
       SURFACE_PREFIX.admin,
-      'Confera admin API',
+      'Congresa admin API',
       'The API of the admin surface. It answers only under the admin host name.',
     ),
     public: slice(
       full,
       SURFACE_PREFIX.public,
-      'Confera public API',
+      'Congresa public API',
       'The API of the public surface (forms, secure links). It answers only under the public host name and only ever gains things.',
     ),
   };

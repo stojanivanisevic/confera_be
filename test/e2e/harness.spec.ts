@@ -83,8 +83,8 @@ describe('the end-to-end harness', () => {
     it('is the database of this tier, not the development one', async () => {
       const [current] = await rows<{ name: string }>(owner, 'SELECT current_database() AS name');
       expect(current?.name).toBe(e2eDatabase.name);
-      expect(e2eDatabase.name).toMatch(/^confera_[a-z0-9_]*test$/);
-      expect(e2eDatabase.name).not.toBe('confera');
+      expect(e2eDatabase.name).toMatch(/^congresa_[a-z0-9_]*test$/);
+      expect(e2eDatabase.name).not.toBe('congresa');
     });
 
     it('runs on PostgreSQL 18', async () => {
@@ -99,8 +99,8 @@ describe('the end-to-end harness', () => {
         expect.arrayContaining([
           expect.objectContaining({
             msg: 'database.roles.checked',
-            application: 'confera_app',
-            system: 'confera_system',
+            application: 'congresa_app',
+            system: 'congresa_system',
           }),
         ]),
       );
@@ -118,7 +118,7 @@ describe('the end-to-end harness', () => {
                          WHERE n.nspname = 'public' AND pg_has_role(current_user, c.relowner, 'MEMBER')) AS "owns"
           FROM pg_roles r WHERE r.rolname = current_user`,
       );
-      expect(role).toEqual({ name: 'confera_app', superuser: false, bypass: false, owns: false });
+      expect(role).toEqual({ name: 'congresa_app', superuser: false, bypass: false, owns: false });
     });
 
     it('runs with the configuration of a server', () => {

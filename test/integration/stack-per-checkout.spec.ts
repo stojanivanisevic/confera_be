@@ -34,11 +34,11 @@ function docker(args: string[]): string {
 /** The addresses of a database at `port`, with the roles and placeholder passwords of .env.example. */
 function addressesAt(port: number): Record<string, string> {
   const at = (role: string, password: string) =>
-    `postgresql://${role}:${password}@127.0.0.1:${String(port)}/confera`;
+    `postgresql://${role}:${password}@127.0.0.1:${String(port)}/congresa`;
   return {
-    DATABASE_URL: at('confera_app', 'local-only-app'),
-    SYSTEM_DATABASE_URL: at('confera_system', 'local-only-system'),
-    MIGRATION_DATABASE_URL: at('confera_owner', 'local-only-owner'),
+    DATABASE_URL: at('congresa_app', 'local-only-app'),
+    SYSTEM_DATABASE_URL: at('congresa_system', 'local-only-system'),
+    MIGRATION_DATABASE_URL: at('congresa_owner', 'local-only-owner'),
     POSTGRES_PASSWORD: 'local-only-superuser',
   };
 }
@@ -63,7 +63,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
         '--detach',
         '--rm',
         '--label',
-        'com.docker.compose.project=confera-another-checkout',
+        'com.docker.compose.project=congresa-another-checkout',
         '--label',
         `com.docker.compose.project.working_dir=${ELSEWHERE}`,
         '--publish',
@@ -71,7 +71,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
         image,
       ]),
     );
-    // A container that is no Confera stack at all.
+    // A container that is no Congresa stack at all.
     started.push(
       docker([
         'run',
@@ -94,7 +94,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     ['db:provision', [join('scripts', 'db-provision.mjs')], {}],
     [
       'db:provision of a test database with --reset',
-      [join('scripts', 'db-provision.mjs'), '--database', 'confera_integration_test', '--reset'],
+      [join('scripts', 'db-provision.mjs'), '--database', 'congresa_integration_test', '--reset'],
       {},
     ],
     ['seed:e2e', [join('scripts', 'seed-e2e.mjs')], { STAGE: 'test' }],
@@ -130,7 +130,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain('did not run: the database of');
       expect(result.stderr).toContain(
-        `at 127.0.0.1:${String(foreignPort)} belongs to the stack "confera-another-checkout" of another checkout, ${ELSEWHERE}`,
+        `at 127.0.0.1:${String(foreignPort)} belongs to the stack "congresa-another-checkout" of another checkout, ${ELSEWHERE}`,
       );
       expect(result.stderr).toContain('corepack pnpm stack:ports');
       // It stopped before a connection: no sentence about PostgreSQL itself, no password.
@@ -139,7 +139,7 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     },
   );
 
-  it('refuses a database that a container of no Confera stack serves', async () => {
+  it('refuses a database that a container of no Congresa stack serves', async () => {
     const result = await runNode([join('scripts', 'db-provision.mjs')], {
       env: addressesAt(plainPort),
     });
@@ -181,24 +181,24 @@ describe('one development stack per checkout (M1-ISS-13)', () => {
     /** The ports of this checkout's own stack, which is up while these tests run. */
     const ownPorts = () => ({
       ...addressesAt(Number(new URL(testDatabase.ownerUrl).port || 5432)),
-      CONFERA_MAIL_WEB_PORT: process.env.CONFERA_MAIL_WEB_PORT ?? '8025',
-      CONFERA_MAIL_SMTP_PORT: process.env.CONFERA_MAIL_SMTP_PORT ?? '1025',
+      CONGRESA_MAIL_WEB_PORT: process.env.CONGRESA_MAIL_WEB_PORT ?? '8025',
+      CONGRESA_MAIL_SMTP_PORT: process.env.CONGRESA_MAIL_SMTP_PORT ?? '1025',
     });
 
     it('refuses a port that the stack of another checkout publishes, before Compose runs', async () => {
       const result = await runNode([join('scripts', 'stack.mjs'), 'up'], {
-        env: { ...ownPorts(), CONFERA_MAIL_SMTP_PORT: String(foreignPort) },
+        env: { ...ownPorts(), CONGRESA_MAIL_SMTP_PORT: String(foreignPort) },
       });
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain(
-        `stack:up did not run: the SMTP port of the mail catcher at 127.0.0.1:${String(foreignPort)} belongs to the stack "confera-another-checkout" of another checkout`,
+        `stack:up did not run: the SMTP port of the mail catcher at 127.0.0.1:${String(foreignPort)} belongs to the stack "congresa-another-checkout" of another checkout`,
       );
       expect(result.output).not.toMatch(/Container .* (Started|Created)/);
     });
 
     it('refuses a port that another program listens on', async () => {
       const result = await runNode([join('scripts', 'stack.mjs'), 'up'], {
-        env: { ...ownPorts(), CONFERA_MAIL_WEB_PORT: String(squattedPort) },
+        env: { ...ownPorts(), CONGRESA_MAIL_WEB_PORT: String(squattedPort) },
       });
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain(

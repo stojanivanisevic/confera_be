@@ -1,6 +1,6 @@
 // Jest transformer for ESM-only dependencies (NestJS 12).
 //
-// Jest can `require()` an ES module natively only on Node 24.9 and later. Confera runs on
+// Jest can `require()` an ES module natively only on Node 24.9 and later. Congresa runs on
 // Node 22 LTS (ADR-01), where the application itself loads these packages with Node's own
 // require(esm), but Jest's module sandbox cannot. This transformer turns the ESM-only
 // packages named in jest.config.cjs into CommonJS for the test run only.

@@ -240,17 +240,17 @@ async function plantedSecrets() {
     {
       what: 'a database address with a real-looking password, in a test',
       file: 'test/planted/database.spec.ts',
-      text: `export const url = '${'postgresql://confera_app'}:${random(20, ALNUM)}@db.confera.example.org:5432/confera';\n`,
+      text: `export const url = '${'postgresql://congresa_app'}:${random(20, ALNUM)}@db.congresa.example.org:5432/congresa';\n`,
     },
     {
       what: 'a database address on the loopback address whose password is not a placeholder',
       file: 'test/planted/loopback.spec.ts',
-      text: `export const url = '${'postgresql://confera_app'}:${random(20, ALNUM)}@127.0.0.1:5432/confera';\n`,
+      text: `export const url = '${'postgresql://congresa_app'}:${random(20, ALNUM)}@127.0.0.1:5432/congresa';\n`,
     },
     {
       what: 'a web address with a user and a password, in a workflow file',
       file: '.github/workflows/planted.yml',
-      text: `url: ${'https://deploy'}:${random(16, ALNUM)}@registry.example.org/confera\n`,
+      text: `url: ${'https://deploy'}:${random(16, ALNUM)}@registry.example.org/congresa\n`,
     },
     {
       what: 'a mail password in the environment file of a server (no known token format)',
@@ -445,8 +445,8 @@ async function plantedSecrets() {
   const placeholders = {
     file: 'test/planted/placeholders.spec.ts',
     text: [
-      `export const a = '${address('confera_app', 'invented-app-password', '127.0.0.1:5432', 'confera_unit')}';`,
-      `export const b = '${address('confera_owner', 'local-only-owner', 'localhost:5432', 'confera')}';`,
+      `export const a = '${address('congresa_app', 'invented-app-password', '127.0.0.1:5432', 'congresa_unit')}';`,
+      `export const b = '${address('congresa_owner', 'local-only-owner', 'localhost:5432', 'congresa')}';`,
       '',
     ].join('\n'),
   };

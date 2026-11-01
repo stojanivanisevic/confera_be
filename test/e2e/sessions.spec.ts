@@ -84,8 +84,8 @@ describe('sessions', () => {
     it('a cookie planted for the parent domain under another name is ignored (ST-66)', async () => {
       const token = actors.sessions.adminA.cookie.slice(SESSION_COOKIE.length + 1);
       for (const planted of [
-        `confera_session=${token}`,
-        `__Secure-confera_session=${token}`,
+        `congresa_session=${token}`,
+        `__Secure-congresa_session=${token}`,
         `${SESSION_COOKIE.replace('__Host-', '')}=${token}`,
       ]) {
         const response = await e2e.admin('/api/v1/session').set('Cookie', planted);
@@ -335,7 +335,7 @@ describe('sessions', () => {
         ),
       );
       await as(e2e, signedIn, 'get', '/api/v1/session')
-        .set('X-Confera-Background', '1')
+        .set('X-Congresa-Background', '1')
         .expect(200);
       const [untouched] = await sessionIds(actors.a.admin.id).then((list) =>
         list.filter((row) => row.token_hash === signedIn.tokenHash),

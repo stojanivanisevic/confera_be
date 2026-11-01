@@ -43,7 +43,7 @@ describe('cookies', () => {
     expect(cookieValue(request(`a=b; ${SESSION_COOKIE}=${token}; c=d`), SESSION_COOKIE)).toBe(
       token,
     );
-    expect(cookieValue(request(`confera_session=${token}`), SESSION_COOKIE)).toBeNull();
+    expect(cookieValue(request(`congresa_session=${token}`), SESSION_COOKIE)).toBeNull();
     expect(cookieValue(request(), SESSION_COOKIE)).toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe('a kept CSP report', () => {
           'effective-directive': 'img-src',
           'blocked-uri': 'https://x.example/a.png?sig=secret#f',
           'document-uri':
-            'https://forms.confera.test/s/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/view?x=1',
+            'https://forms.congresa.test/s/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/view?x=1',
           'script-sample': 'x'.repeat(100),
           'status-code': 200,
         },
@@ -157,7 +157,7 @@ describe('a kept CSP report', () => {
     ).toEqual({
       directive: 'img-src',
       blocked: 'https://x.example/a.png',
-      document: 'https://forms.confera.test/s/[token]/view',
+      document: 'https://forms.congresa.test/s/[token]/view',
       disposition: 'report',
       status: 200,
       sample: 'x'.repeat(40),
@@ -167,10 +167,10 @@ describe('a kept CSP report', () => {
         body: {
           effectiveDirective: 'script-src',
           blockedURL: 'inline',
-          documentURL: 'https://admin.confera.test/pay/tok',
+          documentURL: 'https://admin.congresa.test/pay/tok',
         },
       }),
-    ).toEqual(expect.objectContaining({ document: 'https://admin.confera.test/pay/[token]' }));
+    ).toEqual(expect.objectContaining({ document: 'https://admin.congresa.test/pay/[token]' }));
     expect(keptReport({ 'csp-report': { 'blocked-uri': 'x' } })).toBeNull();
     expect(keptReport('text')).toBeNull();
     expect(keptReport(null)).toBeNull();

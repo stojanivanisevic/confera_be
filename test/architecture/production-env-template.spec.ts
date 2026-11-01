@@ -88,18 +88,18 @@ describe('deploy/api.env.example, the environment template of a server', () => {
   it('is a valid server configuration with the compose file and the secret files', () => {
     const result = parseEnvironment({
       ...active,
-      ADMIN_ORIGIN: 'https://admin.confera.test',
-      PUBLIC_ORIGIN: 'https://forms.confera.test',
+      ADMIN_ORIGIN: 'https://admin.congresa.test',
+      PUBLIC_ORIGIN: 'https://forms.congresa.test',
       // deploy/compose.yml
       INSTANCE: 'staging',
       PORT: '3001',
       LISTEN_HOST: '0.0.0.0',
       // the secret files, read by deploy/image/entrypoint.sh
-      DATABASE_URL: 'postgresql://confera_app:invented-app@127.0.0.1:5432/confera',
-      SYSTEM_DATABASE_URL: 'postgresql://confera_system:invented-system@127.0.0.1:5432/confera',
+      DATABASE_URL: 'postgresql://congresa_app:invented-app@127.0.0.1:5432/congresa',
+      SYSTEM_DATABASE_URL: 'postgresql://congresa_system:invented-system@127.0.0.1:5432/congresa',
       DATA_KEY: 'invented-data-key-of-the-server-template-0123456789ab',
       // deploy/compose.yml
-      FILE_STORAGE_DIR: '/var/lib/confera/files',
+      FILE_STORAGE_DIR: '/var/lib/congresa/files',
       CLAMAV_ADDRESS: 'clamav:3310',
       STAGING_MAIL_CATCHER: 'mailpit:1025',
     });

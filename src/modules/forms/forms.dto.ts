@@ -253,7 +253,7 @@ export class SubmitDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  confera_hp?: string;
+  congresa_hp?: string;
 
   /** The counter that answers the token's challenge (a decimal number as text). */
   @IsOptional()

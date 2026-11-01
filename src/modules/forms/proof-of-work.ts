@@ -7,7 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
  *
  *   SHA-256( UTF-8( challenge + ":" + counter ) )
  *
- * begins with at least `difficulty` zero bits. Nothing leaves Confera. The browser finds the
+ * begins with at least `difficulty` zero bits. Nothing leaves Congresa. The browser finds the
  * counter with Web Crypto; contracts/form-rule-vectors.json holds vectors for both sides.
  */
 // 13 bits: about 8 000 hashes on average, measured at about 1.5 s in WebKit, 0.8 s in Firefox

@@ -15,7 +15,7 @@ import { APP_CONFIG } from '../../config/config.module';
  */
 const VERSION = 'v1';
 const KEY_ID = 'k1';
-const INFO = 'confera data key v1';
+const INFO = 'congresa data key v1';
 const TAG_BYTES = 16;
 
 export class SecretBoxError extends Error {

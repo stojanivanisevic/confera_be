@@ -34,7 +34,7 @@ describe('AppLogger', () => {
       expect.objectContaining({
         level: 'info',
         msg: 'mail.sent',
-        service: 'confera-api',
+        service: 'congresa-api',
         messageId: 'm-1',
         time: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       }),
@@ -54,7 +54,7 @@ describe('AppLogger', () => {
 
   it('scrubs credentials out of messages and texts', () => {
     const { logger, text } = capture();
-    logger.error(`cannot connect to postgresql://confera_app:${CANARY}@db:5432/confera`);
+    logger.error(`cannot connect to postgresql://congresa_app:${CANARY}@db:5432/congresa`);
     logger.warn('driver said', { detail: `password=${CANARY}` });
     logger.log(`smtp://office:${CANARY}@mail.example.test`, 'MailService');
     expect(text()).not.toContain(CANARY);

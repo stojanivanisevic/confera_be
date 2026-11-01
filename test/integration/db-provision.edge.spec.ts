@@ -17,7 +17,7 @@ import { connectAsSuperuser } from './support/database';
  * starting. The README says the command is "safe to run again"; at the same time is again.
  */
 
-const DATABASES = ['confera_edgea_test', 'confera_edgeb_test'] as const;
+const DATABASES = ['congresa_edgea_test', 'congresa_edgeb_test'] as const;
 const ROUNDS = 10;
 
 describe('edge case (M1-REV-01): two db:provision at the same moment', () => {

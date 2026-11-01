@@ -101,7 +101,7 @@ describe('deploy/compose.yml, the production topology (M4-BE-07)', () => {
   });
 
   it('runs the API and the worker from one image', () => {
-    expect(value('api', 'image')).toMatch(/^\$\{CONFERA_API_IMAGE:\?/);
+    expect(value('api', 'image')).toMatch(/^\$\{CONGRESA_API_IMAGE:\?/);
     expect(value('worker', 'image')).toBe(value('api', 'image'));
   });
 
@@ -112,12 +112,12 @@ describe('deploy/compose.yml, the production topology (M4-BE-07)', () => {
     expect((all.get('worker') ?? []).join('\n')).not.toContain('INTERVAL_SECONDS');
   });
 
-  it('pins every other image by digest; the Confera images come from images.env', () => {
+  it('pins every other image by digest; the Congresa images come from images.env', () => {
     for (const service of all.keys()) {
       const image = value(service, 'image') ?? '';
       expect(
         /@sha256:[0-9a-f]{64}$/.test(image) ||
-          /^\$\{CONFERA_(API|JOBS|WEB)_IMAGE:\?[^}]+\}$/.test(image),
+          /^\$\{CONGRESA_(API|JOBS|WEB)_IMAGE:\?[^}]+\}$/.test(image),
       ).toBe(true);
     }
   });
@@ -166,8 +166,8 @@ describe('deploy/compose.yml, the production topology (M4-BE-07)', () => {
       const publishes = body.some((line) => /^ {4}ports:/.test(line));
       expect([service, publishes]).toEqual([service, service === 'proxy']);
     }
-    expect(text).toContain("- '${CONFERA_HTTP_PORT:-80}:8080'");
-    expect(text).toContain("- '${CONFERA_HTTPS_PORT:-443}:8443'");
+    expect(text).toContain("- '${CONGRESA_HTTP_PORT:-80}:8080'");
+    expect(text).toContain("- '${CONGRESA_HTTPS_PORT:-443}:8443'");
   });
 
   it('scans with the real ClamAV, never with the fake clamd of the development stack', () => {
@@ -183,7 +183,7 @@ describe('deploy/compose.yml, the production topology (M4-BE-07)', () => {
 
   it('mounts the file volume into the API and the worker only', () => {
     for (const [service, body] of all) {
-      const mounts = body.some((line) => line.includes('files:/var/lib/confera/files'));
+      const mounts = body.some((line) => line.includes('files:/var/lib/congresa/files'));
       expect([service, mounts]).toEqual([service, service === 'api' || service === 'worker']);
     }
   });

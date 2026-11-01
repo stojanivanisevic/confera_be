@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ConferaDocuments } from './document';
+import type { CongresaDocuments } from './document';
 
 /** The committed OpenAPI files (ADR-19). The frontend vendors `openapi.json` with a lock. */
 export const OPENAPI_FILES = {
@@ -65,7 +65,7 @@ export function compare(
   return undefined;
 }
 
-export function findDrift(directory: string, documents: ConferaDocuments): Drift[] {
+export function findDrift(directory: string, documents: CongresaDocuments): Drift[] {
   const drift: Drift[] = [];
   for (const name of Object.keys(OPENAPI_FILES) as DocumentName[]) {
     const path = join(directory, OPENAPI_FILES[name]);
@@ -78,7 +78,7 @@ export function findDrift(directory: string, documents: ConferaDocuments): Drift
   return drift;
 }
 
-export function writeDocuments(directory: string, documents: ConferaDocuments): string[] {
+export function writeDocuments(directory: string, documents: CongresaDocuments): string[] {
   mkdirSync(directory, { recursive: true });
   return (Object.keys(OPENAPI_FILES) as DocumentName[]).map((name) => {
     const path = join(directory, OPENAPI_FILES[name]);

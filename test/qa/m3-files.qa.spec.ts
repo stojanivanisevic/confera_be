@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { detectFileType } from '../../src/modules/files/file-type';
 import { safeFileName } from '../../src/modules/files/file-names';
@@ -8,6 +8,8 @@ import { repoRoot } from '../support/run-node';
 /**
  * Probes of the file checks of 0.3.0 (M3-QA-03, ST-38, ST-39, G2-22) with files that lie.
  */
+// tmp/ is not in git: a fresh checkout (CI) has none until something makes it.
+mkdirSync(join(repoRoot, 'tmp'), { recursive: true });
 const folder = mkdtempSync(join(repoRoot, 'tmp', 'qa-m3-files-'));
 afterAll(() => {
   rmSync(folder, { recursive: true, force: true });

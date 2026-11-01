@@ -79,13 +79,15 @@ export const securityRulesWithEnvironment = {
  * The only files that may read the environment:
  * - src/config: the configuration module (its tests are NOT included);
  * - prisma.config.ts: configuration of the Prisma CLI, used by the migration job;
- * - scripts and the test harness: tools that start child processes.
+ * - scripts, the checks of deploy/checks and the test harness: tools that start child
+ *   processes.
  */
 export const environmentReaders = {
   files: [
     'src/config/**/*.ts',
     'prisma.config.ts',
     'scripts/**/*.mjs',
+    'deploy/checks/**/*.mjs',
     'test/**/*.ts',
     'test/**/*.cjs',
   ],

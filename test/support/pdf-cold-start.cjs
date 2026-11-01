@@ -1,4 +1,4 @@
-// Measures the first document of a fresh Node process, as a process of Confera makes it,
+// Measures the first document of a fresh Node process, as a process of Congresa makes it,
 // and prints one line of JSON with the times in milliseconds.
 //
 //   node test/support/pdf-cold-start.cjs        (needs `pnpm build:dev`)

@@ -25,9 +25,9 @@ export function setupApiDocs(app: NestExpressApplication): void {
   const documents = buildDocuments(app);
   app.use(`/${DEV_TOOLS_ROUTES.apiDocs}`, docsPolicy);
   SwaggerModule.setup(`${DEV_TOOLS_ROUTES.apiDocs}/public`, app, documents.public, {
-    customSiteTitle: 'Confera public API',
+    customSiteTitle: 'Congresa public API',
   });
   SwaggerModule.setup(DEV_TOOLS_ROUTES.apiDocs, app, documents.admin, {
-    customSiteTitle: 'Confera admin API',
+    customSiteTitle: 'Congresa admin API',
   });
 }

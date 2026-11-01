@@ -47,7 +47,7 @@ export const BILINGUAL_SAMPLE_LINES: readonly string[] = [
 ];
 
 export const BILINGUAL_SAMPLE: PdfDocument = {
-  info: { title: 'Confera: bilingual PDF sample', author: 'Confera' },
+  info: { title: 'Congresa: bilingual PDF sample', author: 'Congresa' },
   pageSize: 'A4',
   pageMargins: [48, 56, 48, 56],
   defaultStyle: { fontSize: 10, lineHeight: 1.25 },

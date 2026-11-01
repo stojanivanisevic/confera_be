@@ -210,7 +210,7 @@ export const TEST_FAILURE_CAUSES = [
 ] as const;
 
 /**
- * The result of a test message (ADR-11): generic. `refused` names a rule of Confera that
+ * The result of a test message (ADR-11): generic. `refused` names a rule of Congresa that
  * stopped it before any connection; a failure of the server is only `failed`, with no
  * word of the server's answer, so that the test is no scanner of the network.
  */

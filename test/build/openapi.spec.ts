@@ -35,7 +35,7 @@ describe('OpenAPI pipeline', () => {
   let copy: string;
 
   beforeEach(() => {
-    copy = mkdtempSync(join(tmpdir(), 'confera-openapi-'));
+    copy = mkdtempSync(join(tmpdir(), 'congresa-openapi-'));
     cpSync(COMMITTED, copy, { recursive: true });
   });
 
@@ -79,7 +79,7 @@ describe('OpenAPI pipeline', () => {
   });
 
   it('writes the same files again, byte for byte', async () => {
-    const target = mkdtempSync(join(tmpdir(), 'confera-openapi-write-'));
+    const target = mkdtempSync(join(tmpdir(), 'congresa-openapi-write-'));
     try {
       const result = await runNode([GENERATOR, '--write', '--dir', target]);
       expect(result.exitCode).toBe(0);

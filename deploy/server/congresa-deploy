@@ -1,0 +1,418 @@
+#!/bin/bash
+# The deploy script of a Congresa server (M4-BE-08; ADR-27). ST-63.
+#
+#   congresa-deploy be  sha256:<64 hex>    the API and worker image of confera_be (and its jobs image)
+#   congresa-deploy web sha256:<64 hex>    the web image of confera_fe
+#   congresa-deploy rollback be|web        back to the version before the last deploy, WITHOUT
+#                                         migrating (the operator only; see "Rollback" below)
+#
+# Installed as /usr/local/sbin/congresa-deploy (root:root, 0700). On STAGING the pipeline reaches
+# it only through the forced command (congresa-deploy-gate) and sudo, which pass `<target> <digest>`
+# and nothing else, so a deploy key can never start a rollback; on PRODUCTION the operator runs it
+# by hand with the digest that staging ran (ADR-27, rule 5). It takes an image digest and nothing
+# else: the repository of each target is fixed in /etc/congresa/deploy.conf, which root owns. A
+# tag, a repository, an option or a second digest is refused before anything runs.
+#
+# A deploy does, in this order, and nothing more:
+#   0. be: refuse when the file system of the backups is fuller than CONGRESA_DISK_MAX_PERCENT
+#      (85 % by default);
+#   1. pull the image by digest (be: also the jobs image the API image names in its label
+#      org.udekom.congresa.jobs-image, itself a digest of the fixed jobs repository);
+#   2. be: refuse an image OLDER than the database: when a migration applied to the database
+#      (_prisma_migrations) is missing from the jobs image's prisma/migrations, the image would
+#      run on a schema it does not know, and its migrations cannot run backwards. Nothing is
+#      changed (exit 65); going back one version is `congresa-deploy rollback be`;
+#   3. be: dump the database (pg_dump, custom format) into
+#      <root>/backups/pre-deploy-<UTC time>-<first 12 hex of the digest>.dump (root, 0600),
+#      check the dump with pg_restore --list, and stop before migrating if the dump fails, is
+#      empty or does not read back (exit 74); then run the migration job with the new jobs
+#      image; a failed migration ends here, with the running version untouched. The dump's path
+#      is printed, so that a schema restore can name it;
+#   4. write the new digest into images.env (the file before is kept as images.env.previous,
+#      and the target's own lines before as images.<target>.previous, for a later rollback);
+#   5. restart the services of the target and wait until their health checks pass;
+#   6. smoke test: be: the API's readiness (it reaches the database); web: the web application
+#      answers;
+#   7. on a failure in 5 or 6: put images.env.previous back and restart the previous version.
+#
+# Rollback (`congresa-deploy rollback be|web`): writes the target's lines of
+# images.<target>.previous into images.env, restarts the target's services, waits for health and
+# smoke-tests, and NEVER migrates: the schema stays as it is. This is safe for one version back
+# only, because migrations are written expand-then-contract (README section 15): the previous
+# version runs on the schema of the current one. A failed rollback puts the current version back.
+# After a rollback, images.<target>.previous holds the version rolled back from, so a second
+# rollback goes FORWARD again: it is refused when that image holds a migration the database has
+# not applied (after a restore of the pre-deploy dump, for example), because a rollback never
+# migrates; that version comes back only by a deploy of its digest, which migrates (SEC-M4I-14).
+# The rule, both ways: an image runs on the database only when it knows every applied migration
+# (else: older, refused by a deploy) and the database has every migration of the image (else:
+# newer, which only a deploy may fix, by migrating first; a rollback refuses it).
+#
+# A dropped session does not stop a deploy halfway (SEC-M4I-13). Once the request is checked,
+# the script runs again in a session of its own (setsid), with no terminal and its output in
+# /var/log/congresa-deploy/<UTC time>-<target>.log (root, 0600; 30 days kept), and this first
+# process only shows that log to the caller and waits for the end. Both ignore SIGHUP and
+# SIGPIPE. When the SSH session drops (network, the job's timeout, a cancelled run), the deploy
+# goes on to its end or its rollback. Every line it says also goes to the journal
+# (`journalctl -t congresa-deploy`). A failed or interrupted dump leaves no .partial file.
+#
+# Exit codes: 0 deployed or rolled back; 64 refused (usage, or no previous version recorded);
+# 65 the image is not what it must be, or is older than the database (deploy) or newer than it
+# (rollback); 74 the backup before the migration failed, or the disk is too full for one (nothing
+# was changed); 75 another deploy or
+# a backup runs; 78 the configuration of this script is missing or unsafe; 1 the deploy or
+# rollback failed (the version it started from was put back).
+set -euo pipefail
+umask 077
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+# A closed SSH channel must not end the sequence (SEC-M4I-13); a TERM still ends it, through
+# the EXIT trap below.
+trap '' HUP PIPE
+partial=''
+trap '[ -z "$partial" ] || rm -f -- "$partial"' EXIT
+trap 'exit 1' TERM INT
+unset DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
+
+readonly CONF=/etc/congresa/deploy.conf
+readonly DIGEST_RE='^sha256:[0-9a-f]{64}$'
+readonly JOBS_LABEL=org.udekom.congresa.jobs-image
+readonly MIGRATION_RE='^[0-9]{14}_[a-z0-9_]+$'
+
+# Each line to the caller (when it is still there) and to the journal.
+journal() { logger --tag congresa-deploy -- "$*" 2>/dev/null || true; }
+say() {
+  printf 'congresa-deploy: %s\n' "$*" || true
+  journal "$*"
+}
+refuse() {
+  printf 'congresa-deploy: refused: %s\n' "$1" >&2 || true
+  journal "refused: $1"
+  exit "${2:-64}"
+}
+readonly USAGE="usage: congresa-deploy be|web sha256:<64 hex digits>, or congresa-deploy rollback be|web"
+
+# ---- The request: a target and a digest, or a rollback of a target; nothing else ---------------
+[ "$#" -eq 2 ] || refuse "$USAGE"
+if [ "$1" = rollback ]; then
+  mode=rollback
+  target=$2
+  digest=''
+else
+  mode=deploy
+  target=$1
+  digest=$2
+fi
+case "$target" in
+  be | web) ;;
+  *) refuse "unknown target; $USAGE" ;;
+esac
+if [ "$mode" = deploy ]; then
+  [[ "$digest" =~ $DIGEST_RE ]] || refuse "not an image digest (sha256: and 64 lower-case hex digits)"
+fi
+
+# ---- The rest runs in a session of its own, which a dropped SSH session cannot end --------------
+readonly RUN_LOGS=/var/log/congresa-deploy
+if [ "${CONGRESA_DEPLOY_DETACHED-}" != 1 ]; then
+  install -d -m 0700 -o root -g root "$RUN_LOGS"
+  find "$RUN_LOGS" -maxdepth 1 -type f -name '*.log' -mtime +30 -delete 2>/dev/null || true
+  run_log="$RUN_LOGS/$(date -u +%Y%m%dT%H%M%SZ)-$target-$$.log"
+  : >"$run_log"
+  CONGRESA_DEPLOY_DETACHED=1 setsid "$(readlink -f "$0")" "$@" </dev/null >>"$run_log" 2>&1 &
+  child=$!
+  # Shows the log to the caller; when the caller is gone, tail ends and the deploy does not.
+  tail --pid="$child" --sleep-interval=0.2 --lines=+1 --follow "$run_log" 2>/dev/null || true
+  code=0
+  wait "$child" || code=$?
+  exit "$code"
+fi
+
+# ---- The configuration: root's own file, read as data -----------------------------------------
+[ -f "$CONF" ] || refuse "$CONF is missing" 78
+conf_owner=$(stat -c '%u' "$CONF")
+conf_mode=$(stat -c '%a' "$CONF")
+[ "$conf_owner" = 0 ] || refuse "$CONF must be owned by root" 78
+case "$conf_mode" in
+  600 | 640 | 644) ;;
+  *) refuse "$CONF must not be writable by anyone but root (mode $conf_mode)" 78 ;;
+esac
+
+declare -A setting=()
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in '' | '#'*) continue ;; esac
+  [[ "$line" =~ ^([A-Z_]+)=([A-Za-z0-9._/:-]*)$ ]] || refuse "$CONF: a line is not NAME=value" 78
+  setting[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+done <"$CONF"
+
+need() {
+  local value=${setting[$1]-}
+  [ -n "$value" ] || refuse "$CONF: $1 is not set" 78
+  printf '%s' "$value"
+}
+root=$(need CONGRESA_ROOT)
+project=$(need CONGRESA_PROJECT)
+instance=$(need CONGRESA_INSTANCE)
+be_repository=$(need CONGRESA_BE_REPOSITORY)
+jobs_repository=$(need CONGRESA_BE_JOBS_REPOSITORY)
+web_repository=$(need CONGRESA_WEB_REPOSITORY)
+database=$(need CONGRESA_DATABASE)
+[[ "$database" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || refuse "$CONF: CONGRESA_DATABASE is not a database name" 78
+wait_seconds=${setting[CONGRESA_WAIT_SECONDS]:-240}
+[[ "$wait_seconds" =~ ^[0-9]+$ ]] || refuse "$CONF: CONGRESA_WAIT_SECONDS is not a number" 78
+disk_max=${setting[CONGRESA_DISK_MAX_PERCENT]:-85}
+[[ "$disk_max" =~ ^[0-9]{1,2}$ ]] || refuse "$CONF: CONGRESA_DISK_MAX_PERCENT is not a number below 100" 78
+
+readonly images="$root/images.env"
+readonly previous="$root/images.env.previous"
+readonly target_previous="$root/images.$target.previous"
+readonly backups="$root/backups"
+
+# The instance: staging adds deploy/compose.staging.yml (the mail catcher, ADR-27); production
+# never names it. compose.env must say the same, so a file copied from the other server stops here.
+case "$instance" in
+  staging | production) ;;
+  *) refuse "$CONF: CONGRESA_INSTANCE must be staging or production" 78 ;;
+esac
+grep -qx "CONGRESA_INSTANCE=$instance" "$root/compose.env" ||
+  refuse "$root/compose.env does not say CONGRESA_INSTANCE=$instance, as $CONF does" 78
+compose=(docker compose --project-name "$project"
+  --env-file "$root/compose.env" --env-file "$images"
+  --file "$root/deploy/compose.yml")
+[ "$instance" = staging ] && compose+=(--file "$root/deploy/compose.staging.yml")
+
+case "$target" in
+  be)
+    services=(api worker)
+    names=(CONGRESA_API_IMAGE CONGRESA_JOBS_IMAGE)
+    ;;
+  web)
+    services=(web)
+    names=(CONGRESA_WEB_IMAGE)
+    ;;
+esac
+
+# ---- One deploy at a time ---------------------------------------------------------------------
+# congresa-backup takes the same lock: a migration never runs beside the nightly dump.
+exec 9>/run/lock/congresa-deploy.lock
+flock --nonblock 9 || refuse "another deploy or a backup is running" 75
+
+# Sets NAME=value in images.env through a new file that replaces it in one rename.
+write_images() {
+  local name=$1 value=$2 next="$images.next"
+  if [ -f "$images" ]; then
+    grep -v "^$name=" "$images" >"$next" || true
+  else
+    : >"$next"
+  fi
+  printf '%s=%s\n' "$name" "$value" >>"$next"
+  chmod 0644 "$next"
+  mv -f "$next" "$images"
+}
+
+# The target's lines of images.env (NAME=value), as they are now.
+target_lines() {
+  local name
+  [ -f "$images" ] || return 0
+  for name in "${names[@]}"; do
+    grep -m 1 "^$name=" "$images" || true
+  done
+}
+
+# Writes NAME=value lines (of this target's names only) into images.env.
+apply_lines() {
+  local line
+  while IFS= read -r line; do
+    [ -n "$line" ] && write_images "${line%%=*}" "${line#*=}"
+  done <<<"$1"
+}
+
+restart() {
+  "${compose[@]}" up --detach --no-deps --wait --wait-timeout "$wait_seconds" "${services[@]}"
+}
+
+smoke() {
+  local probe
+  case "$target" in
+    be)
+      probe="fetch('http://127.0.0.1:3001/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      "${compose[@]}" exec --no-TTY api node -e "$probe"
+      ;;
+    web)
+      probe="fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))"
+      "${compose[@]}" exec --no-TTY web node -e "$probe"
+      ;;
+  esac
+}
+
+# Sets in_image (the migrations of a jobs image) and applied (those the database has applied),
+# each sorted, one per line. Ends the script, changing nothing, when either cannot be read.
+read_migrations() {
+  local listing has_table
+  listing=$(docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --user 1000:1000 --entrypoint ls "$1" \
+    /app/prisma/migrations) || refuse "cannot list the migrations of $1" 65
+  in_image=$(grep -E "$MIGRATION_RE" <<<"$listing" | sort -u || true)
+  [ -n "$in_image" ] || refuse "$1 holds no migration" 65
+  local psql=("${compose[@]}" exec --no-TTY postgres psql --username postgres --dbname "$database"
+    --no-psqlrc --no-password --tuples-only --no-align --quiet --set ON_ERROR_STOP=1)
+  has_table=$("${psql[@]}" --command "SELECT to_regclass('public._prisma_migrations') IS NOT NULL") ||
+    { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
+  applied=''
+  if [ "$(tr -d '[:space:]' <<<"$has_table")" = t ]; then
+    applied=$("${psql[@]}" --command "SELECT migration_name FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1") ||
+      { say "FAILED: cannot read the applied migrations of $database; nothing was changed"; exit 1; }
+    applied=$(grep -E "$MIGRATION_RE" <<<"$applied" | sort -u || true)
+  fi
+}
+
+# ---- Rollback: the previous version of the target, without migrating ---------------------------
+if [ "$mode" = rollback ]; then
+  say "rollback of $target"
+  [ -f "$target_previous" ] || refuse "no previous version of $target is recorded ($target_previous)"
+  [ "$(stat -c '%u' "$target_previous")" = 0 ] || refuse "$target_previous must be owned by root" 78
+  wanted=$(cat "$target_previous")
+  # Every line must be one of the target's names with a digest of its fixed repository.
+  for name in "${names[@]}"; do
+    case "$name" in
+      CONGRESA_API_IMAGE) repository=$be_repository ;;
+      CONGRESA_JOBS_IMAGE) repository=$jobs_repository ;;
+      CONGRESA_WEB_IMAGE) repository=$web_repository ;;
+    esac
+    line_re="^$name=${repository//./\\.}@sha256:[0-9a-f]{64}$"
+    [ "$(grep -c "^$name=" <<<"$wanted")" -eq 1 ] && [[ "$(grep "^$name=" <<<"$wanted")" =~ $line_re ]] ||
+      refuse "$target_previous: $name is not one digest of $repository" 78
+  done
+  [ "$(grep -c . <<<"$wanted")" -eq "${#names[@]}" ] || refuse "$target_previous holds other lines" 78
+  # Never an image NEWER than the database: a rollback does not migrate (SEC-M4I-14).
+  if [ "$target" = be ]; then
+    wanted_jobs=$(grep -m 1 '^CONGRESA_JOBS_IMAGE=' <<<"$wanted" | cut -d= -f2-)
+    read_migrations "$wanted_jobs"
+    unapplied=$(comm -13 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
+    if [ -n "$unapplied" ]; then
+      refuse "the recorded version is newer than the database: migrations it holds that the database has not applied: $(tr '\n' ' ' <<<"$unapplied")- a rollback never migrates; to run that version, deploy its digest (congresa-deploy be <digest>), which migrates first; nothing was changed" 65
+    fi
+  fi
+  current=$(target_lines)
+  apply_lines "$wanted"
+  say "restarting ${services[*]} on the previous version; no migration runs (the schema stays)"
+  if restart && smoke; then
+    printf '%s\n' "$current" >"$target_previous.next"
+    chmod 0644 "$target_previous.next"
+    mv -f "$target_previous.next" "$target_previous"
+    say "rolled back $target to $(grep -m 1 "^${names[0]}=" <<<"$wanted" | cut -d= -f2)"
+    exit 0
+  fi
+  say "FAILED: the previous version did not become healthy; putting the current version back"
+  apply_lines "$current"
+  restart || say "the current version did not come back healthy either: the operator must look now"
+  exit 1
+fi
+
+say "target $target, digest $digest"
+
+dump=''
+rollback() {
+  say "FAILED: $1"
+  [ -z "$dump" ] || say "the database as it was before this deploy's migration: $dump"
+  if [ -f "$previous" ]; then
+    say "putting the previous version back"
+    cp -f "$previous" "$images"
+    restart || say "the previous version did not come back healthy either: the operator must look now"
+  fi
+  exit 1
+}
+
+# ---- 0. Room for the backup (be) -----------------------------------------------------------------
+if [ "$target" = be ]; then
+  install -d -m 0700 -o root -g root "$backups"
+  [ "$(stat -c '%u %a' "$backups")" = "0 700" ] || refuse "$backups must be root's, mode 0700" 78
+  used=$(df --output=pcent "$backups" | tail -n 1 | tr -dc '0-9')
+  [[ "$used" =~ ^[0-9]+$ ]] || refuse "cannot read how full the disk of $backups is" 74
+  [ "$used" -le "$disk_max" ] ||
+    refuse "the disk of $backups is ${used} % full (more than ${disk_max} %): no room for the backup before the migration; nothing was changed" 74
+fi
+
+# ---- 1. Pull by digest ------------------------------------------------------------------------
+case "$target" in
+  be) image="$be_repository@$digest" ;;
+  web) image="$web_repository@$digest" ;;
+esac
+say "pulling $image"
+docker pull --quiet "$image" >/dev/null
+
+if [ "$target" = be ]; then
+  jobs_image=$(docker image inspect --format "{{ index .Config.Labels \"$JOBS_LABEL\" }}" "$image")
+  jobs_re="^${jobs_repository//./\\.}@sha256:[0-9a-f]{64}$"
+  [[ "$jobs_image" =~ $jobs_re ]] ||
+    refuse "the image does not name a jobs image of $jobs_repository by digest ($JOBS_LABEL)" 65
+  say "pulling $jobs_image"
+  docker pull --quiet "$jobs_image" >/dev/null
+fi
+
+# ---- 2. Never an image older than the database (be) ---------------------------------------------
+if [ "$target" = be ]; then
+  read_migrations "$jobs_image"
+  unknown=$(comm -23 <(printf '%s\n' "$applied" | sed '/^$/d') <(printf '%s\n' "$in_image")) || true
+  if [ -n "$unknown" ]; then
+    refuse "the image is older than the database: applied migrations it does not hold: $(tr '\n' ' ' <<<"$unknown")- migrations never run backwards; to go back one version, run congresa-deploy rollback be (no migration); nothing was changed" 65
+  fi
+fi
+
+# ---- 3. Back up, then migrate (be) ----------------------------------------------------------------
+# The dump runs in the postgres container as its superuser over the local socket; the file is
+# written by this script (root, umask 077) and kept only once pg_restore has read it back.
+backup_failed() {
+  rm -f -- "$partial"
+  partial=''
+  refuse "the backup before the migration failed: $1; nothing was migrated or restarted" 74
+}
+before=$(target_lines)
+[ -f "$images" ] && cp -f "$images" "$previous"
+if [ "$target" = be ]; then
+  dump="$backups/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${digest:7:12}.dump"
+  partial="$dump.partial"
+  say "dumping the database $database before the migration"
+  "${compose[@]}" exec --no-TTY postgres pg_dump --username postgres --dbname "$database" \
+    --format custom --no-password >"$partial" || backup_failed "pg_dump"
+  [ -s "$partial" ] || backup_failed "the dump is empty"
+  listing=$("${compose[@]}" exec --no-TTY postgres pg_restore --list <"$partial") ||
+    backup_failed "pg_restore --list cannot read the dump"
+  [[ "$listing" == *"Format: CUSTOM"* ]] || backup_failed "pg_restore --list does not show a custom-format archive"
+  chmod 0600 "$partial"
+  mv -f "$partial" "$dump"
+  partial=''
+  say "backup $dump (read back with pg_restore --list)"
+
+  write_images CONGRESA_JOBS_IMAGE "$jobs_image"
+  say "migrating the database"
+  if ! "${compose[@]}" run --rm --no-TTY migrate; then
+    say "FAILED: the migration; nothing was restarted"
+    say "the database as it was before the migration: $dump"
+    [ -f "$previous" ] && cp -f "$previous" "$images"
+    exit 1
+  fi
+fi
+
+# ---- 4., 5. The new digest, restart, health -----------------------------------------------------
+case "$target" in
+  be) write_images CONGRESA_API_IMAGE "$image" ;;
+  web) write_images CONGRESA_WEB_IMAGE "$image" ;;
+esac
+say "restarting ${services[*]}"
+restart || rollback "the new version did not become healthy"
+
+# ---- 6. Smoke test ----------------------------------------------------------------------------
+case "$target" in
+  be) smoke || rollback "the API is not ready (database)" ;;
+  web) smoke || rollback "the web application does not answer" ;;
+esac
+
+# The version before, for `congresa-deploy rollback <target>` (only when there was one).
+if [ "$(grep -c . <<<"$before")" -eq "${#names[@]}" ] && [ "$before" != "$(target_lines)" ]; then
+  printf '%s\n' "$before" >"$target_previous.next"
+  chmod 0644 "$target_previous.next"
+  mv -f "$target_previous.next" "$target_previous"
+fi
+
+say "deployed $image"
+[ -z "$dump" ] || say "the backup before its migration: $dump"

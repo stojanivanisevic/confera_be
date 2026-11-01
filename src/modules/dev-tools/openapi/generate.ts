@@ -24,7 +24,7 @@ import {
   formDefinitionSchemaDocument,
   formRuleVectorsDocument,
 } from '../contracts/form-contracts-file';
-import { buildDocuments, type ConferaDocuments } from './document';
+import { buildDocuments, type CongresaDocuments } from './document';
 import { compare, findDrift, formatDrift, OPENAPI_FILES, serialise, writeDocuments } from './files';
 import { formatFindings, lintResponseSchemas } from './schema-lint';
 
@@ -36,9 +36,9 @@ function toolingConfig() {
     STAGE: 'local',
     ADMIN_ORIGIN: 'http://localhost:3000',
     PUBLIC_ORIGIN: 'http://127.0.0.1:3000',
-    DATABASE_URL: 'postgresql://confera_app:invented-openapi@127.0.0.1:5432/confera_openapi',
+    DATABASE_URL: 'postgresql://congresa_app:invented-openapi@127.0.0.1:5432/congresa_openapi',
     SYSTEM_DATABASE_URL:
-      'postgresql://confera_system:invented-openapi@127.0.0.1:5432/confera_openapi',
+      'postgresql://congresa_system:invented-openapi@127.0.0.1:5432/congresa_openapi',
     DATA_KEY: 'invented-data-key-of-the-openapi-generator-0123456789ab',
   });
   if (!result.ok) {
@@ -47,7 +47,7 @@ function toolingConfig() {
   return result.config;
 }
 
-async function documentsFromCode(): Promise<ConferaDocuments> {
+async function documentsFromCode(): Promise<CongresaDocuments> {
   const app = await createApp(toolingConfig(), { logDestination: { write: () => undefined } });
   try {
     return buildDocuments(app);

@@ -168,7 +168,7 @@ describe('0.3.0 edge probes of the public forms (Q3)', () => {
     const incoming = join(TEST_FILE_DIRECTORY, 'incoming');
     const before = new Set(await readdir(incoming).catch(() => [] as string[]));
     const url = new URL(`${e2e.baseUrl}/public/v1/forms/${form.slug}/uploads`);
-    const boundary = `----confera${randomUUID()}`;
+    const boundary = `----congresa${randomUUID()}`;
     await new Promise<void>((resolve) => {
       const call = httpRequest({
         host: url.hostname,
@@ -290,7 +290,7 @@ describe('0.3.0 edge probes of the public forms (Q3)', () => {
     const body = {
       language: 'en',
       answers: abstractAnswers(),
-      confera_hp: 'https://spam.example.test',
+      congresa_hp: 'https://spam.example.test',
     };
     const fake = await submit(e2e, form.slug, trapped.formToken, body, { address, key });
     expect(fake.status).toBe(201);
